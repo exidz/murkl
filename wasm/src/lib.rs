@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 // Import the murkl-prover SDK
 use murkl_prover::prelude::*;
-use murkl_prover::air::{FibonacciAir, ConstraintEvaluator, Trace, TraceColumn};
+use murkl_prover::air::{ConstraintEvaluator, Trace, TraceColumn};
 use murkl_prover::prover::{Prover as StarkProver, ProverConfig};
 use murkl_prover::types::PublicInputs;
 
@@ -183,13 +183,11 @@ fn build_murkl_trace(
 
 /// Simple AIR for Murkl WASM proofs
 /// Constraints: values propagate unchanged (consistency check)
-struct MurklWasmAir {
-    num_rows: usize,
-}
+struct MurklWasmAir;
 
 impl MurklWasmAir {
-    fn new(num_rows: usize) -> Self {
-        Self { num_rows }
+    fn new(_num_rows: usize) -> Self {
+        Self
     }
 }
 
