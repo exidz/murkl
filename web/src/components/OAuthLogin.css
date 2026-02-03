@@ -1,0 +1,92 @@
+.oauth-login {
+  text-align: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  border: 1px solid #2a2a4a;
+}
+
+.oauth-login h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  color: #fff;
+}
+
+.oauth-subtitle {
+  color: #888;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.oauth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--provider-color);
+  color: white;
+}
+
+.oauth-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.oauth-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.oauth-twitter {
+  background: #000;
+  border: 1px solid #333;
+}
+
+.oauth-discord {
+  background: #5865F2;
+}
+
+.oauth-google {
+  background: #fff;
+  color: #333;
+  border: 1px solid #ddd;
+}
+
+.oauth-icon {
+  font-size: 1.25rem;
+}
+
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.oauth-divider::before,
+.oauth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #333;
+}
+
+.oauth-divider span {
+  padding: 0 1rem;
+}

@@ -3,7 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { WalletProvider } from './providers/WalletProvider';
 import { Header } from './components/Header';
 import { SendTab } from './components/SendTab';
-import { ClaimTab } from './components/ClaimTab';
+import { ClaimTabNew as ClaimTab } from './components/ClaimTabNew';
 import './App.css';
 
 // WASM module

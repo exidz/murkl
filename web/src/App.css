@@ -4,10 +4,12 @@
   --bg-card: #1a1a24;
   --text-primary: #ffffff;
   --text-secondary: #a0a0b0;
-  --accent: #8b5cf6;
-  --accent-hover: #7c3aed;
-  --success: #22c55e;
+  --accent: #9945FF;
+  --accent-hover: #7B3FE4;
+  --accent-secondary: #14F195;
+  --success: #14F195;
   --border: #2a2a3a;
+  --gradient: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
 }
 
 * {
@@ -43,11 +45,13 @@ body {
 }
 
 .header h1 {
-  font-size: 2rem;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  font-size: 2.5rem;
+  font-weight: 800;
+  background: var(--gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
