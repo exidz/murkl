@@ -154,7 +154,7 @@ pub trait ConstraintEvaluator {
 
 /// Fibonacci constraint system (example)
 ///
-/// Proves: f[i+2] = f[i+1] + f[i] for all i
+/// Proves: f\[i+2\] = f\[i+1\] + f\[i\] for all i
 #[derive(Clone, Debug)]
 pub struct FibonacciAir {
     /// Number of rows
