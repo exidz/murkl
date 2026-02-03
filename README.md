@@ -104,6 +104,46 @@ Solana's compute model is uniquely suited for STARK verification:
 
 Our verifier uses **~11,000 CU** per claim — well within limits!
 
+## 📦 SDK Components
+
+Murkl provides a complete SDK for integrating STARK proofs into your applications:
+
+| Crate | Description |
+|-------|-------------|
+| [`murkl-prover`](./crates/murkl-prover) | Core STARK prover library (Rust) |
+| [`murkl-wasm`](./wasm) | Browser prover (WASM) |
+| [`murkl-cli`](./cli) | Command-line prover tool |
+| [`murkl-program`](./programs/murkl) | On-chain verifier (Solana) |
+| [`example-integration`](./programs/example-integration) | CPI integration example |
+
+### Using the Prover (Rust)
+
+```rust
+use murkl_prover::prelude::*;
+use murkl_prover::prover::{Prover, ProverConfig};
+
+// Create prover with fast config (for development)
+let prover = Prover::new(ProverConfig::fast());
+
+// Build trace and generate proof
+let proof = prover.prove(&air, &trace, public_inputs)?;
+
+// Serialize for on-chain verification
+let proof_bytes = proof.to_bytes();
+```
+
+### Using the Verifier (On-chain CPI)
+
+External programs can integrate Murkl's verifier. See [`docs/INTEGRATION.md`](./docs/INTEGRATION.md) for complete examples.
+
+```rust
+use murkl_program::verifier::{verify_proof_cpi, bytes_to_m31};
+
+// Verify a proof
+let result = verify_proof_cpi(&proof_data, &commitment, &nullifier)?;
+require!(result.valid, YourError::ProofInvalid);
+```
+
 ## CLI Usage
 
 ```bash
