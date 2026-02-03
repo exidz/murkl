@@ -29,10 +29,10 @@ pub struct MurklProverConfig {
 impl Default for MurklProverConfig {
     fn default() -> Self {
         Self {
-            log_trace_size: 8,        // 256 rows
-            log_blowup_factor: 3,     // 8x blowup (fast config)
-            n_queries: 25,            // 25 queries
-            log_last_layer_degree: 2, // degree 4 final poly
+            log_trace_size: 6,        // 64 rows (smaller for demo)
+            log_blowup_factor: 2,     // 4x blowup (smaller proofs)
+            n_queries: 8,             // 8 queries (demo security)
+            log_last_layer_degree: 1, // degree 2 final poly
         }
     }
 }
@@ -515,7 +515,7 @@ mod tests {
     #[test]
     fn test_prover_creation() {
         let prover = MurklProver::new();
-        assert_eq!(prover.config.log_trace_size, 8);
+        assert_eq!(prover.config.log_trace_size, 6); // 64 rows for demo
     }
 
     #[test]
