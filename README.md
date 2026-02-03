@@ -65,15 +65,44 @@ WITHDRAW: Funds released to fresh address (unlinkable)
 🚧 Under construction — Colosseum Agent Hackathon 2026
 
 **Progress:**
-- [x] M31 field implementation
-- [x] Circle group operations
-- [ ] Poseidon hash over M31
-- [ ] Merkle tree
-- [ ] ZK circuit (STWO)
+- [x] M31 field implementation (circuits/m31.rs)
+- [x] Circle group operations (circuits/circle.rs)
+- [x] Poseidon hash over M31 (circuits/poseidon.rs)
+- [x] Merkle tree (circuits/merkle.rs)
+- [x] ZK circuit with STWO integration (circuits/stark_circuit.rs, prover.rs)
+- [x] **End-to-end proof generation & verification working!** 🎉
 - [ ] Solana verifier program
 - [ ] Deposit/claim contracts
 - [ ] CLI prover
 - [ ] Frontend
+
+### Test Results
+```
+running 26 tests
+test circle::tests::test_double_equals_add ... ok
+test circle::tests::test_generator_on_circle ... ok
+test circle::tests::test_group_identity ... ok
+test m31::tests::test_basic_arithmetic ... ok
+test m31::tests::test_inverse ... ok
+test poseidon::tests::test_hash_deterministic ... ok
+test merkle::tests::test_merkle_path_verification ... ok
+test stark_circuit::tests::test_claim_consistency ... ok
+test prover::tests::test_full_proof_generation_and_verification ... ok
+... (26 total)
+
+test result: ok. 26 passed; 0 failed
+```
+
+## Building
+
+```bash
+# Requires Rust nightly-2025-07-14 for STWO compatibility
+rustup install nightly-2025-07-14
+rustup default nightly-2025-07-14
+
+cargo build
+cargo test
+```
 
 ## Links & Research
 
@@ -84,3 +113,7 @@ WITHDRAW: Funds released to fresh address (unlinkable)
 ### Key Insight
 Classical STARKs require p-1 divisible by 2^k. M31 has p-1 = 2(2³⁰-1) which fails this.
 But M31 has **p+1 = 2³¹** — Circle STARKs use the circle curve x²+y²=1 to provide FFT/FRI structure when p+1 is a power of 2.
+
+## License
+
+MIT

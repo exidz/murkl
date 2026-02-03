@@ -7,7 +7,7 @@ use super::m31::M31;
 use super::poseidon::hash2;
 
 /// Merkle tree depth (supports 2^DEPTH leaves)
-pub const TREE_DEPTH: usize = 20; // ~1 million leaves
+pub const TREE_DEPTH: usize = 16; // 65536 leaves (adjustable for production)
 
 /// A Merkle tree path (sibling hashes from leaf to root)
 #[derive(Clone, Debug)]
