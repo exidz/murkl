@@ -1,0 +1,35 @@
+[package]
+name = "murkl"
+version = "0.1.0"
+edition = "2021"
+description = "Anonymous social transfers on Solana via Circle STARKs (M31)"
+license = "MIT"
+repository = "https://github.com/exidz/murkl"
+
+[lib]
+path = "circuits/mod.rs"
+
+[[bin]]
+name = "murkl-cli"
+path = "cli/main.rs"
+
+[dependencies]
+# Will add STWO and other deps as needed
+
+[dev-dependencies]
+# Testing
+
+[features]
+default = []
+solana = []  # For Solana-compatible builds (no_std, etc.)
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[workspace]
+members = [
+    ".",
+    # "verifier",   # Solana program (coming soon)
+    # "contracts",  # Anchor programs (coming soon)
+]
