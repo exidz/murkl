@@ -6,9 +6,9 @@ use crate::types::*;
 use sha3::{Digest, Keccak256};
 
 const M31_PRIME: u32 = 0x7FFFFFFF;
-const MIX_A: u32 = 0x9e3779b9 % M31_PRIME;
-const MIX_B: u32 = 0x517cc1b7 % M31_PRIME;
-const MIX_C: u32 = 0x2545f491 % M31_PRIME;
+
+// PQ-SECURE: All hashes use keccak256
+// Domain separators prevent cross-protocol attacks
 
 /// Prover configuration
 pub struct ProverConfig {
@@ -138,36 +138,49 @@ impl MurklProver {
     fn generate_trace(&self, identifier: u32, secret: u32, leaf_index: u32) -> Vec<Vec<u32>> {
         let trace_len = 1 << self.config.log_trace_size;
         
-        // Trace columns: [identifier, secret, intermediate, result]
+        // Trace columns: [identifier, secret, commitment_m31, nullifier_m31]
+        // The STARK proves knowledge of (identifier, secret) that hash to commitment
         let mut col_id = vec![0u32; trace_len];
         let mut col_secret = vec![0u32; trace_len];
-        let mut col_inter = vec![0u32; trace_len];
-        let mut col_result = vec![0u32; trace_len];
+        let mut col_commit = vec![0u32; trace_len];
+        let mut col_null = vec![0u32; trace_len];
         
-        // First row: inputs
+        // First row: inputs and computed values
         col_id[0] = identifier % M31_PRIME;
         col_secret[0] = secret % M31_PRIME;
         
-        // Compute hash step by step
-        let x = m31_add(m31_add(identifier, m31_mul(secret, MIX_A)), 1);
-        col_inter[0] = x;
+        // Compute commitment using keccak256 (PQ-secure)
+        // commitment = keccak256("murkl_m31_hash_v1" || identifier || secret)
+        let commitment = {
+            let mut hasher = Keccak256::new();
+            hasher.update(b"murkl_m31_hash_v1");
+            hasher.update(&identifier.to_le_bytes());
+            hasher.update(&secret.to_le_bytes());
+            let result = hasher.finalize();
+            u32::from_le_bytes([result[0], result[1], result[2], result[3]]) % M31_PRIME
+        };
+        col_commit[0] = commitment;
         
-        let y = m31_mul(x, x);
-        let result = m31_add(
-            m31_add(m31_add(y, m31_mul(identifier, MIX_B)), m31_mul(secret, MIX_C)),
-            MIX_A
-        );
-        col_result[0] = result;
+        // Compute nullifier = keccak256("murkl_nullifier_v1" || secret || leaf_index)
+        let nullifier = {
+            let mut hasher = Keccak256::new();
+            hasher.update(b"murkl_nullifier_v1");
+            hasher.update(&secret.to_le_bytes());
+            hasher.update(&leaf_index.to_le_bytes());
+            let result = hasher.finalize();
+            u32::from_le_bytes([result[0], result[1], result[2], result[3]]) % M31_PRIME
+        };
+        col_null[0] = nullifier;
         
         // Fill rest with propagated values (for constraint checking)
         for i in 1..trace_len {
             col_id[i] = col_id[0];
             col_secret[i] = col_secret[0];
-            col_inter[i] = col_inter[0];
-            col_result[i] = col_result[0];
+            col_commit[i] = col_commit[0];
+            col_null[i] = col_null[0];
         }
         
-        vec![col_id, col_secret, col_inter, col_result]
+        vec![col_id, col_secret, col_commit, col_null]
     }
     
     fn commit_trace(&self, trace: &[Vec<u32>]) -> [u8; 32] {

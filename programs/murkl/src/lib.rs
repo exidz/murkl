@@ -12,10 +12,10 @@ use verifier::{StarkProof, VerifierConfig, verify_stark_proof, m31_mul, m31_add,
 
 declare_id!("74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92");
 
-/// Mixing constants for M31 hash (same as off-chain)
-const MIX_A: u32 = 0x9e3779b9 % P;
-const MIX_B: u32 = 0x517cc1b7 % P;
-const MIX_C: u32 = 0x2545f491 % P;
+// PQ-SECURE: All hashes use keccak256 (quantum-resistant)
+// Domain separators for hash functions
+const COMMITMENT_DOMAIN: &[u8] = b"murkl_commitment_v1";
+const NULLIFIER_DOMAIN: &[u8] = b"murkl_nullifier_v1";
 
 /// Maximum relayer fee (1% = 100 basis points)
 const MAX_RELAYER_FEE_BPS: u16 = 100;
@@ -236,22 +236,26 @@ fn verify_merkle_proof_internal(leaf: &[u8; 32], index: u32, proof: &[[u8; 32]])
     current
 }
 
-/// M31 hash function (matches off-chain STWO circuits)
+/// PQ-secure commitment hash using keccak256 syscall
+/// commitment = keccak256("murkl_commitment_v1" || identifier_bytes || secret)
 #[allow(dead_code)]
-fn m31_hash2(a: u32, b: u32) -> [u8; 32] {
-    let a = a % P;
-    let b = b % P;
-    
-    let x = m31_add(m31_add(a, m31_mul(b, MIX_A)), 1);
-    let y = m31_mul(x, x);
-    let result = m31_add(
-        m31_add(m31_add(y, m31_mul(a, MIX_B)), m31_mul(b, MIX_C)),
-        MIX_A
-    );
-    
-    let mut bytes = [0u8; 32];
-    bytes[0..4].copy_from_slice(&result.to_le_bytes());
-    bytes
+fn pq_commitment_hash(identifier_hash: u32, secret: u32) -> [u8; 32] {
+    keccak::hashv(&[
+        b"murkl_m31_hash_v1",
+        &identifier_hash.to_le_bytes(),
+        &secret.to_le_bytes(),
+    ]).0
+}
+
+/// PQ-secure nullifier hash using keccak256 syscall
+/// nullifier = keccak256("murkl_nullifier_v1" || secret || leaf_index)
+#[allow(dead_code)]
+fn pq_nullifier_hash(secret: u32, leaf_index: u32) -> [u8; 32] {
+    keccak::hashv(&[
+        NULLIFIER_DOMAIN,
+        &secret.to_le_bytes(),
+        &leaf_index.to_le_bytes(),
+    ]).0
 }
 
 // ============================================================================

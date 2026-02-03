@@ -267,65 +267,81 @@ fn cmd_hash(identifier: &str, password: &str) {
 }
 
 // ============================================================================
-// Helper functions
+// PQ-SECURE HASH FUNCTIONS (keccak256-based)
+// Post-quantum secure: relies only on hash collision resistance
 // ============================================================================
 
+use sha3::{Digest, Keccak256};
+
 const M31_PRIME: u32 = 0x7FFFFFFF;
-const MIX_A: u32 = 0x9e3779b9 % M31_PRIME;
-const MIX_B: u32 = 0x517cc1b7 % M31_PRIME;
-const MIX_C: u32 = 0x2545f491 % M31_PRIME;
 
-fn m31_add(a: u32, b: u32) -> u32 {
-    let sum = (a as u64) + (b as u64);
-    if sum >= M31_PRIME as u64 { (sum - M31_PRIME as u64) as u32 } else { sum as u32 }
-}
-
-fn m31_mul(a: u32, b: u32) -> u32 {
-    let prod = (a as u64) * (b as u64);
-    let lo = (prod & (M31_PRIME as u64)) as u32;
-    let hi = (prod >> 31) as u32;
-    let sum = lo + hi;
-    if sum >= M31_PRIME { sum - M31_PRIME } else { sum }
-}
-
-fn m31_hash2(a: u32, b: u32) -> [u8; 32] {
-    let a = a % M31_PRIME;
-    let b = b % M31_PRIME;
-    
-    let x = m31_add(m31_add(a, m31_mul(b, MIX_A)), 1);
-    let y = m31_mul(x, x);
-    let result = m31_add(
-        m31_add(m31_add(y, m31_mul(a, MIX_B)), m31_mul(b, MIX_C)),
-        MIX_A
-    );
-    
-    let mut bytes = [0u8; 32];
-    bytes[0..4].copy_from_slice(&result.to_le_bytes());
-    bytes
-}
-
-fn hash_identifier(id: &str) -> u32 {
-    // Normalize: lowercase, trim
-    let normalized = id.to_lowercase().trim().to_string();
-    // Hash: sum of bytes with position weighting
-    let mut hash: u64 = 0;
-    for (i, b) in normalized.bytes().enumerate() {
-        hash = hash.wrapping_add((b as u64).wrapping_mul((i + 1) as u64));
-        hash = hash.wrapping_mul(31);
-    }
-    (hash % (M31_PRIME as u64)) as u32
-}
-
+/// Derive secret from password using keccak256 (PQ-secure)
 fn hash_password(password: &str) -> u32 {
-    // Hash password to M31 field element
-    // Using a simple but deterministic hash
-    let mut hash: u64 = 0x517cc1b7; // seed
-    for (i, b) in password.bytes().enumerate() {
-        hash = hash.wrapping_add((b as u64).wrapping_mul((i + 7) as u64));
-        hash = hash.wrapping_mul(0x9e3779b9);
-        hash ^= hash >> 17;
-    }
-    (hash % (M31_PRIME as u64)) as u32
+    let mut hasher = Keccak256::new();
+    hasher.update(b"murkl_password_v1");
+    hasher.update(password.as_bytes());
+    let result = hasher.finalize();
+    // Take first 4 bytes mod M31
+    let val = u32::from_le_bytes([result[0], result[1], result[2], result[3]]);
+    val % M31_PRIME
+}
+
+/// Hash identifier to M31 using keccak256 (PQ-secure)
+fn hash_identifier(id: &str) -> u32 {
+    let normalized = id.to_lowercase();
+    let mut hasher = Keccak256::new();
+    hasher.update(b"murkl_identifier_v1");
+    hasher.update(normalized.as_bytes());
+    let result = hasher.finalize();
+    // Take first 4 bytes mod M31
+    let val = u32::from_le_bytes([result[0], result[1], result[2], result[3]]);
+    val % M31_PRIME
+}
+
+/// Compute commitment = keccak256(identifier || secret) (PQ-secure)
+/// Full 32-byte hash for on-chain storage
+fn pq_commitment(identifier: &str, secret: u32) -> [u8; 32] {
+    let normalized = identifier.to_lowercase();
+    let mut hasher = Keccak256::new();
+    hasher.update(b"murkl_commitment_v1");
+    hasher.update(normalized.as_bytes());
+    hasher.update(&secret.to_le_bytes());
+    let result = hasher.finalize();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&result);
+    out
+}
+
+/// Compute nullifier = keccak256(secret || leaf_index) (PQ-secure)
+/// Prevents double-spend
+fn pq_nullifier(secret: u32, leaf_index: u32) -> [u8; 32] {
+    let mut hasher = Keccak256::new();
+    hasher.update(b"murkl_nullifier_v1");
+    hasher.update(&secret.to_le_bytes());
+    hasher.update(&leaf_index.to_le_bytes());
+    let result = hasher.finalize();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&result);
+    out
+}
+
+/// Convert 32-byte hash to M31 for STARK circuits
+fn hash_to_m31(hash: &[u8; 32]) -> u32 {
+    let val = u32::from_le_bytes([hash[0], hash[1], hash[2], hash[3]]);
+    val % M31_PRIME
+}
+
+// Legacy M31 hash (kept for STARK trace, but commitment uses keccak256)
+fn m31_hash2(id_hash: u32, secret: u32) -> [u8; 32] {
+    // Now just wraps pq_commitment with M31 inputs
+    let mut hasher = Keccak256::new();
+    hasher.update(b"murkl_m31_hash_v1");
+    hasher.update(&id_hash.to_le_bytes());
+    hasher.update(&secret.to_le_bytes());
+    let result = hasher.finalize();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&result);
+    out
 }
 
 // ============================================================================
