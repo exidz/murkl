@@ -3,13 +3,13 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-murkl_program = "GV7iSh8Lz55VEPbgVuTyAaSfETsMNwdeW4Mg8nTWQTuH"
+murkl_program = "74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

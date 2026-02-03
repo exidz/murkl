@@ -190,7 +190,7 @@ nullifier  = keccak256("murkl_nullifier_v1" || secret || leaf_index)
 | **Extension** | QM31 (degree 4) |
 | **Hash** | keccak256 (syscall) |
 | **Proof Size** | ~6 KB |
-| **Verification CU** | ~11,000 |
+| **Verification CU** | ~40,000 |
 | **Program Size** | ~320 KB |
 | **Security** | 128-bit post-quantum |
 
@@ -199,6 +199,19 @@ nullifier  = keccak256("murkl_nullifier_v1" || secret || leaf_index)
 - **ID**: `74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92`
 - **Network**: Solana Mainnet-compatible
 - **Relayer fee**: Max 1% (configurable)
+
+### 🌐 Live Devnet Deployment
+
+Try it now on Solana Devnet:
+
+| Component | Address |
+|-----------|---------|
+| **Program** | `74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92` |
+| **Test Pool** | `Gjw5fS9TvtaZracqD31QSBcJ2SBP84jyASNFaDF7VSY4` |
+| **Test Token** | `77s7rE6jC85uF1R1697qivEEqbU1ZifcvCFZzJ6vvfDV` |
+| **Vault** | `AeUR23inL7jac6Qr1u14ibrAzjfcV2Qr2gZxJgP9TjJH` |
+
+**View transactions:** [Solana Explorer (Devnet)](https://explorer.solana.com/?cluster=devnet)
 
 ## Instructions
 
@@ -223,11 +236,83 @@ Claim tokens with STARK proof via relayer.
 cargo build --release -p murkl-cli
 
 # On-chain program (Anchor)
-cd programs && anchor build
+anchor build
+
+# WASM prover (for web)
+cd wasm && wasm-pack build --target web --out-dir ../web/src/wasm
+
+# Relayer
+cd relayer && npm install && npm run build
 
 # Web frontend
-cd web && npm install && npm run dev
+cd web && npm install && npm run build
 ```
+
+## Deployment
+
+### Local Development
+
+```bash
+# 1. Start local validator
+surfpool
+
+# 2. Deploy program
+anchor deploy
+
+# 3. Setup test pool
+npx ts-node scripts/setup-pool.ts
+
+# 4. Make a deposit
+npx ts-node scripts/deposit.ts "@alice" "secretpassword" 100
+
+# 5. Start relayer (serves frontend)
+cd relayer && npm run dev
+```
+
+### Production Deployment
+
+1. **Deploy program to devnet/mainnet:**
+   ```bash
+   solana config set --url devnet
+   anchor deploy
+   ```
+
+2. **Configure relayer:**
+   ```bash
+   cp relayer/.env.example relayer/.env
+   # Edit .env with:
+   # - RPC_URL (your RPC endpoint)
+   # - PROGRAM_ID (deployed program)
+   # - RELAYER_KEYPAIR (funded keypair)
+   # - CORS_ORIGINS (your frontend domain)
+   ```
+
+3. **Deploy frontend:**
+   ```bash
+   cd web
+   cp .env.example .env
+   # Set VITE_POOL_ADDRESS and VITE_DEPOSIT_ADDRESS
+   npm run build
+   # Deploy dist/ to Vercel/Netlify/etc.
+   ```
+
+4. **Run relayer:**
+   ```bash
+   cd relayer
+   npm run build
+   NODE_ENV=production node dist/index.js
+   ```
+
+### Security Checklist
+
+- [ ] Use dedicated relayer keypair (not personal wallet)
+- [ ] Keep relayer balance minimal (SOL for tx fees only)
+- [ ] Set restrictive CORS origins
+- [ ] Enable HTTPS (via reverse proxy)
+- [ ] Set up monitoring/alerting
+- [ ] Review [SECURITY.md](./SECURITY.md) before production
+
+See [SECURITY.md](./SECURITY.md) for full security documentation.
 
 ## References
 
