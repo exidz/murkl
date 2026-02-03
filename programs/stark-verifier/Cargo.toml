@@ -19,3 +19,7 @@ idl-build = ["anchor-lang/idl-build"]
 [dependencies]
 anchor-lang = "0.30"
 
+
+# Pin blake3 to avoid edition2024 requirement
+[dependencies.blake3]
+version = "=1.5.0"

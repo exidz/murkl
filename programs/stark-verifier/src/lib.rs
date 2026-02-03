@@ -30,8 +30,8 @@ declare_id!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
 /// M31 prime: 2^31 - 1
 pub const P: u32 = 0x7FFFFFFF;
 
-/// Maximum proof size (8KB)
-pub const MAX_PROOF_SIZE: usize = 8192;
+/// Maximum proof size per buffer chunk (1KB to fit in stack)
+pub const MAX_PROOF_CHUNK: usize = 900;
 
 /// Number of FRI queries for security
 pub const NUM_FRI_QUERIES: usize = 20;
@@ -117,7 +117,7 @@ pub mod stark_verifier {
         let offset = offset as usize;
         let end = offset + data.len();
         
-        require!(end <= MAX_PROOF_SIZE, VerifierError::ProofTooLarge);
+        require!(end <= MAX_PROOF_CHUNK, VerifierError::ProofTooLarge);
         
         // Copy data into buffer
         buffer.data[offset..end].copy_from_slice(&data);
@@ -717,11 +717,11 @@ pub struct ProofBuffer {
     pub size: u32,
     pub expected_size: u32,
     pub finalized: bool,
-    pub data: [u8; MAX_PROOF_SIZE],
+    pub data: [u8; MAX_PROOF_CHUNK],
 }
 
 impl ProofBuffer {
-    pub const SIZE: usize = 32 + 4 + 4 + 1 + MAX_PROOF_SIZE;
+    pub const SIZE: usize = 32 + 4 + 4 + 1 + MAX_PROOF_CHUNK;
 }
 
 // ============================================================================
