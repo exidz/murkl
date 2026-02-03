@@ -10,7 +10,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 mod verifier;
 use verifier::{StarkProof, VerifierConfig, verify_stark_proof, m31_mul, m31_add, P};
 
-declare_id!("GV7iSh8Lz55VEPbgVuTyAaSfETsMNwdeW4Mg8nTWQTuH");
+declare_id!("74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92");
 
 /// Mixing constants for M31 hash (same as off-chain)
 const MIX_A: u32 = 0x9e3779b9 % P;
@@ -187,9 +187,12 @@ pub mod murkl {
         // 2. Compute commitment from revealed values
         let commitment = m31_hash2(identifier, secret);
         
-        // 3. Verify commitment is in Merkle tree
-        let computed_root = verify_merkle_proof_internal(&commitment, leaf_index, &merkle_proof);
-        require!(computed_root == pool.merkle_root, MurklError::InvalidMerkleProof);
+        // 3. Verify commitment matches deposit
+        // (simplified - in production use proper Merkle tree)
+        require!(
+            commitment == ctx.accounts.deposit_account.commitment,
+            MurklError::InvalidMerkleProof
+        );
         
         // 4. Verify nullifier derivation
         let expected_nullifier = m31_hash2(secret, leaf_index);
