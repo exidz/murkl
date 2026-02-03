@@ -4,407 +4,322 @@ This guide explains how to integrate Murkl's Circle STARK verifier into your Sol
 
 ## Overview
 
-Murkl provides three ways to integrate:
+Murkl provides a complete SDK for STARK-based privacy:
 
-1. **Direct Library Use** — Import verifier functions directly (recommended)
-2. **CPI Interface** — Call Murkl program via Cross-Program Invocation
-3. **Off-chain Only** — Use prover for off-chain proof generation
+| Component | Description |
+|-----------|-------------|
+| **stark-verifier** | On-chain STARK verification program |
+| **murkl-prover** | Core Rust prover library |
+| **murkl-wasm** | Browser prover (WASM) |
+| **murkl-cli** | Command-line prover |
+| **example-integration** | Working CPI example |
 
-## Quick Start
+## Architecture
 
-### Add Dependency
-
-```toml
-# Cargo.toml
-[dependencies]
-murkl-program = { path = "../murkl/programs/murkl", features = ["cpi"] }
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     MURKL SDK ARCHITECTURE                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  OFF-CHAIN (Prover)              ON-CHAIN (Verifier)           │
+│  ┌─────────────────┐             ┌─────────────────┐           │
+│  │  murkl-prover   │             │ stark-verifier  │           │
+│  │  murkl-wasm     │ ──proof──►  │                 │           │
+│  │  murkl-cli      │             │ verify_proof()  │           │
+│  └─────────────────┘             └────────┬────────┘           │
+│                                           │                    │
+│                                     CPI   │                    │
+│                                           ▼                    │
+│                                  ┌─────────────────┐           │
+│                                  │  Your Program   │           │
+│                                  │                 │           │
+│                                  │ • Check proof   │           │
+│                                  │ • Take action   │           │
+│                                  └─────────────────┘           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Basic Verification
+## Integration Patterns
+
+### Pattern 1: Buffer-Based Verification (Recommended)
+
+For proofs > 1KB, use stark-verifier's proof buffer:
+
+```
+1. init_proof_buffer() → Create buffer account
+2. upload_chunk() → Upload proof in chunks
+3. finalize_and_verify() → Verify proof, set finalized=true
+4. Your program checks buffer.finalized flag
+```
+
+**Your program:**
 
 ```rust
-use murkl_program::verifier::{verify_proof_cpi, VerificationResult};
+use anchor_lang::prelude::*;
 
-pub fn verify_user_proof(
-    proof_data: &[u8],
-    commitment: &[u8; 32],
-    nullifier: &[u8; 32],
-) -> Result<VerificationResult> {
-    let result = verify_proof_cpi(proof_data, commitment, nullifier)?;
-    require!(result.valid, YourError::InvalidProof);
-    Ok(result)
+pub const STARK_VERIFIER_ID: Pubkey = pubkey!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
+
+#[derive(Accounts)]
+pub struct VerifyAndAct<'info> {
+    /// CHECK: stark-verifier's proof buffer
+    #[account(
+        constraint = verifier_buffer.owner == &STARK_VERIFIER_ID
+    )]
+    pub verifier_buffer: UncheckedAccount<'info>,
+    
+    // ... your accounts
+}
+
+pub fn verify_and_act(ctx: Context<VerifyAndAct>) -> Result<()> {
+    // Check the proof buffer is finalized (proof was verified)
+    let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
+    
+    // ProofBuffer layout: discriminator(8) + owner(32) + size(4) + expected_size(4) + finalized(1)
+    require!(data.len() >= 49, YourError::InvalidBuffer);
+    let finalized = data[8 + 32 + 4 + 4] == 1;
+    require!(finalized, YourError::ProofNotVerified);
+    
+    // Proof is valid! Take your action
+    msg!("Proof verified, executing action...");
+    
+    Ok(())
+}
+```
+
+### Pattern 2: Direct CPI (Small Proofs)
+
+For proofs < 1KB, call verify_proof directly:
+
+```rust
+pub fn verify_direct(
+    ctx: Context<VerifyDirect>,
+    proof_data: Vec<u8>,
+    public_inputs: Vec<u8>,
+) -> Result<()> {
+    // Build CPI instruction
+    let ix = solana_program::instruction::Instruction {
+        program_id: STARK_VERIFIER_ID,
+        accounts: vec![
+            AccountMeta::new(ctx.accounts.payer.key(), true),
+        ],
+        data: build_verify_proof_data(&proof_data, &public_inputs),
+    };
+    
+    // Execute CPI - will fail if proof invalid
+    solana_program::program::invoke(
+        &ix,
+        &[ctx.accounts.payer.to_account_info()],
+    )?;
+    
+    // If we get here, proof is valid
+    Ok(())
+}
+
+fn build_verify_proof_data(proof: &[u8], inputs: &[u8]) -> Vec<u8> {
+    // Anchor discriminator for "verify_proof"
+    let disc: [u8; 8] = [0x40, 0x9d, 0x08, 0x6c, 0x7a, 0x98, 0x9b, 0x8a];
+    let mut data = Vec::new();
+    data.extend_from_slice(&disc);
+    data.extend_from_slice(&(proof.len() as u32).to_le_bytes());
+    data.extend_from_slice(proof);
+    data.extend_from_slice(&(inputs.len() as u32).to_le_bytes());
+    data.extend_from_slice(inputs);
+    data
 }
 ```
 
 ## Complete Example
 
-See [`programs/example-integration`](../programs/example-integration/src/lib.rs) for a working example program that demonstrates:
+See [`programs/example-integration`](../programs/example-integration/src/lib.rs) for a full working example demonstrating:
 
-- `verify_and_record` — Basic proof verification with on-chain record
-- `verify_with_raw_ops` — Using low-level field operations
-- `verify_and_mint` — Gating NFT minting on proof verification
+- **verify_and_record** — Buffer-based verification with on-chain record
+- **verify_direct_cpi** — Direct CPI for small proofs
+- **verify_and_mint** — Gating NFT minting on proof verification
 
-## API Reference
+## Proof Generation
 
-### Core Functions
+### Browser (WASM)
 
-#### `verify_proof_cpi`
+```typescript
+import init, { generate_proof } from 'murkl-wasm';
 
-Verify a STARK proof against commitment and nullifier.
+await init();
 
-```rust
-pub fn verify_proof_cpi(
-    proof_data: &[u8],
-    commitment: &[u8; 32],
-    nullifier: &[u8; 32],
-) -> Result<VerificationResult>
+// Generate proof for claiming
+const result = generate_proof(identifier, password, leafIndex, merklePathJson);
+// result.proof (Uint8Array), result.commitment, result.nullifier
 ```
 
-**Parameters:**
-- `proof_data` — Serialized STARK proof bytes
-- `commitment` — 32-byte commitment hash
-- `nullifier` — 32-byte nullifier (prevents double-spend)
+### CLI
 
-**Returns:** `VerificationResult` with `valid`, `fri_layers`, `oods_values`
+```bash
+# Generate commitment (for deposit)
+murkl commit -i "@alice" -p "secretpass"
+# Output: commitment hex
 
-**Example:**
-```rust
-let result = verify_proof_cpi(&proof_bytes, &commitment, &nullifier)?;
-if result.valid {
-    msg!("Proof verified with {} FRI layers", result.fri_layers);
-}
+# Generate proof (for claim)
+murkl prove -i "@alice" -p "secretpass" -l 0 -m merkle.json -o proof.bin
+# Output: proof.bin file
+
+# Verify locally
+murkl verify -p proof.bin -c <commitment_hex>
 ```
 
-#### `verify_stark_proof`
-
-Lower-level verification with custom config.
+### Rust
 
 ```rust
-pub fn verify_stark_proof(
-    proof: &StarkProof,
-    config: &VerifierConfig,
-    public_input: &[u32],
-) -> bool
+use murkl_prover::prelude::*;
+
+// Build the AIR and trace
+let air = TransferAir::new(/* ... */);
+let trace = build_trace(&air, /* ... */);
+
+// Generate proof
+let proof = prover::prove(&air, &trace, &public_inputs)?;
+let proof_bytes = proof.serialize();
 ```
 
-**Parameters:**
-- `proof` — Deserialized `StarkProof` struct
-- `config` — `VerifierConfig` (log_trace_size, n_queries, etc.)
-- `public_input` — Array of M31 field elements
+## Public Inputs Format
 
-#### `bytes_to_m31`
+Public inputs are serialized as 96 bytes:
 
-Convert 32-byte hash to M31 field element.
-
-```rust
-pub fn bytes_to_m31(bytes: &[u8; 32]) -> u32
+```
+┌─────────────────────────────────────────────┐
+│ commitment (32 bytes)                       │
+├─────────────────────────────────────────────┤
+│ nullifier (32 bytes)                        │
+├─────────────────────────────────────────────┤
+│ merkle_root (32 bytes)                      │
+└─────────────────────────────────────────────┘
 ```
 
-Takes first 4 bytes as little-endian u32, reduces mod M31 prime.
-
-#### `compute_commitment`
-
-Compute commitment hash matching WASM/CLI format.
-
 ```rust
-pub fn compute_commitment(id_hash: u32, secret: u32) -> [u8; 32]
-```
-
-**Computation:** `keccak256("murkl_m31_hash_v1" || id_hash || secret)`
-
-#### `compute_nullifier`
-
-Compute nullifier hash matching WASM/CLI format.
-
-```rust
-pub fn compute_nullifier(secret: u32, leaf_index: u32) -> [u8; 32]
-```
-
-**Computation:** `keccak256("murkl_nullifier_v1" || secret || leaf_index)`
-
-### Field Operations
-
-For advanced use cases, you can access M31/QM31 field operations:
-
-```rust
-use murkl_program::verifier::{
-    m31_add, m31_sub, m31_mul, m31_inv, m31_neg,
-    QM31, P,
-};
-
-// M31 arithmetic
-let sum = m31_add(a, b);
-let product = m31_mul(a, b);
-let inverse = m31_inv(a);
-
-// QM31 extension field
-let x = QM31::from_m31(42);
-let y = QM31::one();
-let z = x.mul(&y);
-```
-
-### Merkle Verification
-
-```rust
-use murkl_program::verifier::verify_merkle_path;
-
-let valid = verify_merkle_path(
-    &merkle_root,
-    &leaf_hash,
-    leaf_index,
-    &merkle_path,
-);
-```
-
-### Channel (Fiat-Shamir)
-
-```rust
-use murkl_program::verifier::Channel;
-
-let mut channel = Channel::new();
-channel.mix(b"domain_separator");
-channel.mix_commitment(&commitment);
-let challenge = channel.draw_felt();
+let mut public_inputs = Vec::with_capacity(96);
+public_inputs.extend_from_slice(&commitment);
+public_inputs.extend_from_slice(&nullifier);
+public_inputs.extend_from_slice(&merkle_root);
 ```
 
 ## Use Cases
 
 ### Privacy-Preserving Airdrops
 
-Gate token distribution on proof of eligibility without revealing identity:
-
 ```rust
 pub fn claim_airdrop(
     ctx: Context<ClaimAirdrop>,
-    proof_data: Vec<u8>,
     commitment: [u8; 32],
     nullifier: [u8; 32],
 ) -> Result<()> {
-    // Verify user knows the secret for this commitment
-    let result = verify_proof_cpi(&proof_data, &commitment, &nullifier)?;
-    require!(result.valid, AirdropError::InvalidProof);
+    // Check verifier buffer is finalized
+    let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
+    let finalized = data[48] == 1;
+    require!(finalized, AirdropError::InvalidProof);
     
     // Check nullifier not used (prevent double-claim)
-    require!(
-        !ctx.accounts.nullifier_tracker.is_used(&nullifier),
-        AirdropError::AlreadyClaimed
-    );
+    let nullifier_pda = &ctx.accounts.nullifier_record;
+    require!(!nullifier_pda.used, AirdropError::AlreadyClaimed);
     
     // Mark nullifier used and transfer tokens
-    ctx.accounts.nullifier_tracker.mark_used(&nullifier);
-    transfer_tokens(&ctx, airdrop_amount)?;
+    let nullifier_pda = &mut ctx.accounts.nullifier_record;
+    nullifier_pda.used = true;
+    nullifier_pda.nullifier = nullifier;
     
+    transfer_tokens(ctx, airdrop_amount)?;
     Ok(())
 }
 ```
 
 ### Anonymous Voting
 
-Prove membership in voter set without revealing identity:
-
 ```rust
 pub fn cast_vote(
     ctx: Context<CastVote>,
-    proof_data: Vec<u8>,
-    voter_commitment: [u8; 32],
-    vote_nullifier: [u8; 32],
+    nullifier: [u8; 32],
     vote_choice: u8,
 ) -> Result<()> {
-    // Verify voter is eligible (knows preimage of commitment in voter set)
-    let result = verify_proof_cpi(&proof_data, &voter_commitment, &vote_nullifier)?;
-    require!(result.valid, VoteError::NotEligible);
+    // Verify proof via buffer
+    let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
+    require!(data[48] == 1, VoteError::NotEligible);
     
     // Check this nullifier hasn't voted
-    require!(
-        !ctx.accounts.ballot.has_voted(&vote_nullifier),
-        VoteError::AlreadyVoted
-    );
+    require!(!ctx.accounts.ballot.has_voted(&nullifier), VoteError::AlreadyVoted);
     
     // Record vote
-    ctx.accounts.ballot.record_vote(vote_nullifier, vote_choice);
-    
+    ctx.accounts.ballot.record_vote(nullifier, vote_choice);
     Ok(())
 }
 ```
 
 ### Proof-Gated NFT Minting
 
-Mint NFTs only to users who can prove something:
-
 ```rust
 pub fn mint_exclusive_nft(
     ctx: Context<MintNFT>,
-    proof_data: Vec<u8>,
-    commitment: [u8; 32],
     nullifier: [u8; 32],
 ) -> Result<()> {
     // Verify proof
-    let result = verify_proof_cpi(&proof_data, &commitment, &nullifier)?;
-    require!(result.valid, MintError::InvalidProof);
+    let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
+    require!(data[48] == 1, MintError::InvalidProof);
+    
+    // Track nullifier (one mint per proof)
+    let nullifier_pda = &mut ctx.accounts.nullifier_record;
+    require!(!nullifier_pda.used, MintError::AlreadyMinted);
+    nullifier_pda.used = true;
     
     // Mint NFT
-    mint_to(
-        CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            MintTo {
-                mint: ctx.accounts.nft_mint.to_account_info(),
-                to: ctx.accounts.recipient.to_account_info(),
-                authority: ctx.accounts.mint_authority.to_account_info(),
-            },
-            &[&[b"authority", &[ctx.bumps.mint_authority]]],
-        ),
-        1,
-    )?;
-    
+    token::mint_to(/* ... */, 1)?;
     Ok(())
 }
 ```
 
-## Proof Generation
-
-### WASM (Browser)
-
-```typescript
-import init, { generate_proof, generate_commitment, generate_nullifier } from 'murkl-wasm';
-
-await init();
-
-// Generate commitment for deposit
-const commitment = generate_commitment("user@email.com", "password123");
-
-// Generate proof for claim
-const proofBundle = generate_proof("user@email.com", "password123", leafIndex);
-// proofBundle.proof, proofBundle.commitment, proofBundle.nullifier
-```
-
-### CLI
-
-```bash
-# Generate commitment
-murkl commit -i "user@email.com" -p "password123"
-
-# Generate proof
-murkl prove -i "user@email.com" -p "password123" -l 0 -m merkle.json
-```
-
-### Rust (Native)
-
-```rust
-use murkl_prover::prelude::*;
-use murkl_prover::prover::{Prover, ProverConfig};
-
-// Create prover
-let prover = Prover::new(ProverConfig::default());
-
-// Generate proof
-let proof = prover.prove(&air, &trace, public_inputs)?;
-let proof_bytes = proof.to_bytes();
-```
-
-## Testing
-
-### Unit Tests
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_commitment_computation() {
-        let commitment = compute_commitment(12345, 67890);
-        assert_eq!(commitment.len(), 32);
-        
-        // Should be deterministic
-        let commitment2 = compute_commitment(12345, 67890);
-        assert_eq!(commitment, commitment2);
-    }
-    
-    #[test]
-    fn test_nullifier_different_indices() {
-        let n1 = compute_nullifier(12345, 0);
-        let n2 = compute_nullifier(12345, 1);
-        assert_ne!(n1, n2);
-    }
-}
-```
-
-### Integration Tests (Anchor)
-
-```typescript
-import * as anchor from "@coral-xyz/anchor";
-
-describe("murkl-integration", () => {
-  it("verifies proof and records", async () => {
-    // Generate proof off-chain
-    const proofBundle = await generateProof(identifier, password, leafIndex);
-    
-    // Submit to on-chain verifier
-    await program.methods
-      .verifyAndRecord(
-        Buffer.from(proofBundle.proof),
-        Array.from(proofBundle.commitment),
-        Array.from(proofBundle.nullifier),
-      )
-      .accounts({
-        config: configPda,
-        verificationRecord: recordPda,
-        verifier: wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-    
-    // Check record
-    const record = await program.account.verificationRecord.fetch(recordPda);
-    expect(record.commitment).to.deep.equal(proofBundle.commitment);
-  });
-});
-```
-
 ## Compute Units
-
-Typical CU consumption:
 
 | Operation | CU |
 |-----------|-----|
-| Verify STARK proof | ~40,000 |
+| STARK proof verification | ~40,000 |
 | Merkle path (depth 20) | ~5,000 |
-| Commitment/nullifier hash | ~100 |
-| Transfer tokens | ~2,000 |
-| **Total claim** | ~50,000 |
+| keccak256 hash (syscall) | ~100 |
+| Token transfer | ~2,000 |
+| **Total typical claim** | ~50,000 |
 
-Well within Solana's 1.4M CU limit per transaction.
+Well within Solana's 1.4M CU limit.
+
+## Program Addresses
+
+| Program | Address |
+|---------|---------|
+| **stark-verifier** | `StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw` |
+| **murkl** (transfer pools) | `74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92` |
 
 ## Security Considerations
 
-1. **Nullifier Tracking** — Always track nullifiers to prevent double-spend
-2. **Commitment Uniqueness** — Check commitments aren't reused across pools
-3. **Domain Separation** — Use consistent hash prefixes matching WASM/CLI
-4. **Input Validation** — Validate proof size and format before deserialization
+1. **Always Track Nullifiers** — Store nullifiers in PDAs to prevent double-spend
+2. **Verify Buffer Ownership** — Check `verifier_buffer.owner == STARK_VERIFIER_ID`
+3. **Check Finalized Flag** — Never trust a buffer that isn't finalized
+4. **Match Public Inputs** — Ensure commitment/nullifier in your logic match the proof
 
 ## Troubleshooting
 
-### "InvalidProofFormat" Error
+### "Proof not verified"
+- Buffer wasn't finalized yet
+- Call `finalize_and_verify` before your instruction
 
-- Check proof bytes are correctly serialized
-- Ensure proof was generated with compatible WASM/CLI version
-- Verify proof size is within limits (max 8KB)
+### "Invalid verifier buffer"
+- Buffer owned by wrong program
+- Verify `verifier_buffer.owner == STARK_VERIFIER_ID`
 
-### "VerificationFailed" Error
+### CPI fails with proof
+- Proof too large for single transaction
+- Use buffer pattern instead of direct CPI
 
-- Check commitment matches the one used in proof generation
-- Verify nullifier is computed correctly
-- Ensure identifier normalization (lowercase) matches
-
-### High CU Usage
-
-- Use `ProverConfig::fast()` for smaller proofs
-- Reduce trace size if possible
-- Consider batching multiple verifications
+### High CU usage
+- Proof has many FRI layers
+- Use faster prover config for smaller proofs
 
 ## Resources
 
-- [Murkl GitHub](https://github.com/exidz/murkl)
+- [Example Integration](../programs/example-integration/src/lib.rs)
+- [Stark Verifier](../programs/stark-verifier/src/lib.rs)
+- [WASM Prover](../wasm/)
 - [Circle STARKs Paper](https://eprint.iacr.org/2024/278)
-- [Example Integration](../programs/example-integration)
-- [WASM Package](../wasm)

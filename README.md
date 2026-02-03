@@ -113,7 +113,8 @@ Murkl provides a complete SDK for integrating STARK proofs into your application
 | [`murkl-prover`](./crates/murkl-prover) | Core STARK prover library (Rust) |
 | [`murkl-wasm`](./wasm) | Browser prover (WASM) |
 | [`murkl-cli`](./cli) | Command-line prover tool |
-| [`murkl-program`](./programs/murkl) | On-chain verifier (Solana) |
+| [`stark-verifier`](./programs/stark-verifier) | On-chain STARK verifier (CPI-ready) |
+| [`murkl-program`](./programs/murkl) | Anonymous transfer pools |
 | [`example-integration`](./programs/example-integration) | CPI integration example |
 
 ### Using the Prover (Rust)
@@ -121,27 +122,38 @@ Murkl provides a complete SDK for integrating STARK proofs into your application
 ```rust
 use murkl_prover::prelude::*;
 use murkl_prover::prover::{Prover, ProverConfig};
+use murkl_prover::air::FibonacciAir;
 
 // Create prover with fast config (for development)
 let prover = Prover::new(ProverConfig::fast());
 
-// Build trace and generate proof
-let proof = prover.prove(&air, &trace, public_inputs)?;
+// Build AIR and trace
+let air = FibonacciAir::new(64);
+let trace = air.generate_trace(M31::ONE, M31::ONE);
+
+// Generate proof
+let proof = prover.prove(&air, &trace, PublicInputs::empty())?;
 
 // Serialize for on-chain verification
 let proof_bytes = proof.to_bytes();
+println!("Proof size: {} bytes", proof.size());
 ```
 
-### Using the Verifier (On-chain CPI)
+### Integrating the Verifier (On-chain CPI)
 
 External programs can integrate Murkl's verifier. See [`docs/INTEGRATION.md`](./docs/INTEGRATION.md) for complete examples.
 
-```rust
-use murkl_program::verifier::{verify_proof_cpi, bytes_to_m31};
+**Pattern: Buffer-based verification (recommended)**
 
-// Verify a proof
-let result = verify_proof_cpi(&proof_data, &commitment, &nullifier)?;
-require!(result.valid, YourError::ProofInvalid);
+```rust
+pub const STARK_VERIFIER_ID: Pubkey = pubkey!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
+
+// Check stark-verifier's proof buffer is finalized
+let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
+let finalized = data[48] == 1;  // ProofBuffer.finalized flag
+require!(finalized, YourError::ProofNotVerified);
+
+// Proof is valid! Take your action...
 ```
 
 ## CLI Usage

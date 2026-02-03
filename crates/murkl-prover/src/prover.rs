@@ -1,6 +1,40 @@
 //! Proof generation for Circle STARKs
 //!
-//! The prover generates proofs of correct execution.
+//! The prover generates STARK proofs of correct constraint satisfaction.
+//!
+//! # Overview
+//!
+//! The proving process:
+//! 1. Commit to trace columns via Merkle trees
+//! 2. Evaluate AIR constraints at all rows
+//! 3. Compose constraints with random coefficients
+//! 4. Run FRI (Fast Reed-Solomon IOPP) on the composition
+//! 5. Generate query proofs for soundness
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use murkl_prover::prelude::*;
+//! use murkl_prover::prover::{Prover, ProverConfig};
+//! use murkl_prover::air::FibonacciAir;
+//!
+//! // Create prover with fast config
+//! let prover = Prover::new(ProverConfig::fast());
+//!
+//! // Build trace for Fibonacci
+//! let air = FibonacciAir::new(64);
+//! let trace = air.generate_trace(M31::ONE, M31::ONE);
+//!
+//! // Generate proof
+//! let proof = prover.prove(&air, &trace, PublicInputs::empty())?;
+//! println!("Proof size: {} bytes", proof.size());
+//! ```
+//!
+//! # Configuration
+//!
+//! - [`ProverConfig::fast()`] — Lower security, smaller proofs (~4KB)
+//! - [`ProverConfig::default()`] — Balanced security/size (~6KB)
+//! - [`ProverConfig::high_security()`] — Maximum security (~10KB)
 
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
