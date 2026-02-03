@@ -12,6 +12,9 @@ declare_id!("74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92");
 /// STARK Verifier program ID  
 pub const STARK_VERIFIER_ID: Pubkey = pubkey!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
 
+/// Global config seed
+pub const CONFIG_SEED: &[u8] = b"config";
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -30,7 +33,17 @@ const MIN_DEPOSIT_AMOUNT: u64 = 1;
 pub mod murkl {
     use super::*;
 
-    /// Initialize a new token pool for anonymous transfers
+    /// Initialize global config (only callable once by deployer)
+    pub fn initialize_config(ctx: Context<InitializeConfig>) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+        config.admin = ctx.accounts.admin.key();
+        config.bump = ctx.bumps.config;
+        
+        msg!("Global config initialized, admin: {}", config.admin);
+        Ok(())
+    }
+
+    /// Initialize a new token pool (admin only)
     pub fn initialize_pool(
         ctx: Context<InitializePool>,
         config: PoolConfig,
@@ -196,7 +209,31 @@ pub mod murkl {
 // ============================================================================
 
 #[derive(Accounts)]
+pub struct InitializeConfig<'info> {
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + GlobalConfig::SIZE,
+        seeds = [CONFIG_SEED],
+        bump
+    )]
+    pub config: Account<'info, GlobalConfig>,
+    
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct InitializePool<'info> {
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = config.bump,
+        constraint = config.admin == admin.key() @ MurklError::Unauthorized
+    )]
+    pub config: Account<'info, GlobalConfig>,
+    
     #[account(
         init,
         payer = admin,
@@ -318,6 +355,16 @@ pub struct AdminAction<'info> {
 // ============================================================================
 // State
 // ============================================================================
+
+#[account]
+pub struct GlobalConfig {
+    pub admin: Pubkey,
+    pub bump: u8,
+}
+
+impl GlobalConfig {
+    pub const SIZE: usize = 32 + 1;
+}
 
 #[account]
 pub struct Pool {
