@@ -1,0 +1,531 @@
+/* SendTab - Venmo-inspired design */
+
+.send-tab {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 1rem;
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Connect Prompt */
+.connect-prompt {
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.prompt-icon {
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+}
+
+.connect-prompt h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin-bottom: 0.5rem;
+}
+
+.connect-prompt p {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+}
+
+.feature-icon {
+  font-size: 1.25rem;
+}
+
+/* Step Views */
+.step-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 0;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+  margin-bottom: 1rem;
+  align-self: flex-start;
+  transition: color 0.2s;
+}
+
+.back-btn:hover {
+  color: var(--text-primary, #fff);
+}
+
+.step-header {
+  margin-bottom: 2rem;
+}
+
+.step-amount {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.step-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+/* Amount Input - The Hero */
+.amount-input-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.amount-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+}
+
+.currency {
+  font-size: 3rem;
+  font-weight: 300;
+  color: var(--text-secondary, #a1a1aa);
+  margin-right: 0.25rem;
+}
+
+.amount-input {
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  background: transparent;
+  border: none;
+  outline: none;
+  text-align: center;
+  width: 100%;
+  max-width: 280px;
+  caret-color: var(--accent-primary, #3d95ce);
+}
+
+.amount-input::placeholder {
+  color: var(--text-muted, #52525b);
+}
+
+.amount-label {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 1.125rem;
+  margin-top: 0.5rem;
+}
+
+/* Text Inputs */
+.input-container {
+  margin-bottom: 2rem;
+}
+
+.text-input {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  font-size: 1.125rem;
+  color: var(--text-primary, #fff);
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.text-input:focus {
+  border-color: var(--border-focus, #3d95ce);
+}
+
+.text-input::placeholder {
+  color: var(--text-muted, #52525b);
+}
+
+.input-hint {
+  color: var(--text-muted, #52525b);
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+  padding-left: 0.25rem;
+}
+
+/* Password Input Row */
+.password-input-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.password-input-row .text-input {
+  flex: 1;
+}
+
+.regenerate-btn {
+  width: 52px;
+  height: 52px;
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 12px;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.regenerate-btn:hover {
+  background: var(--bg-secondary, #14141f);
+  transform: scale(1.05);
+}
+
+.regenerate-btn:active {
+  transform: scale(0.95);
+}
+
+/* Action Button */
+.action-btn {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: auto;
+  min-height: 56px;
+}
+
+.action-btn.primary {
+  background: var(--accent-primary, #3d95ce);
+  color: white;
+}
+
+.action-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.action-btn.primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.action-btn.primary:disabled {
+  background: var(--text-muted, #52525b);
+  cursor: not-allowed;
+}
+
+.action-btn.secondary {
+  background: var(--bg-tertiary, #1e1e2e);
+  color: var(--text-primary, #fff);
+  border: 1px solid var(--border, #27272a);
+  margin-top: 1rem;
+}
+
+.action-btn.secondary:hover {
+  background: var(--bg-secondary, #14141f);
+}
+
+/* Help Link */
+.help-link {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 1.5rem;
+  transition: color 0.2s;
+}
+
+.help-link:hover {
+  color: var(--text-primary, #fff);
+}
+
+/* Confirm Card */
+.confirm-card {
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.confirm-label {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+.confirm-amount {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin-bottom: 0.25rem;
+}
+
+.confirm-to {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 1rem;
+}
+
+.confirm-details {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border, #27272a);
+}
+
+.confirm-row {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+}
+
+/* Spinner */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.wasm-loading {
+  color: var(--accent-warning, #f59e0b);
+  font-size: 0.85rem;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+/* Success View */
+.success-view {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.success-header {
+  margin-bottom: 2rem;
+}
+
+.success-check {
+  width: 64px;
+  height: 64px;
+  background: var(--accent-success, #22c55e);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: white;
+  margin: 0 auto 1rem;
+}
+
+.success-view h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin-bottom: 0.5rem;
+}
+
+.success-amount {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin: 0;
+}
+
+.success-to {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Share Section */
+.share-section {
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin: 2rem 0;
+  text-align: left;
+}
+
+.share-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin-bottom: 0.25rem;
+}
+
+.share-hint {
+  color: var(--text-muted, #52525b);
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.share-field {
+  margin-bottom: 1rem;
+}
+
+.share-field label {
+  display: block;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.copy-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+
+.copy-row code {
+  flex: 1;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  color: var(--text-primary, #fff);
+  word-break: break-all;
+}
+
+.copy-row code.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover {
+  opacity: 1;
+}
+
+/* QR Section */
+.qr-section {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.qr-section p {
+  color: var(--text-muted, #52525b);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.qr-code {
+  display: inline-block;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 12px;
+}
+
+/* Transaction Link */
+.tx-link {
+  display: block;
+  color: var(--accent-primary, #3d95ce);
+  font-size: 0.9rem;
+  text-decoration: none;
+  margin-bottom: 1rem;
+}
+
+.tx-link:hover {
+  text-decoration: underline;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 480px) {
+  .send-tab {
+    padding: 0.75rem;
+  }
+  
+  .amount-input {
+    font-size: 3rem;
+    max-width: 200px;
+  }
+  
+  .currency {
+    font-size: 2.25rem;
+  }
+  
+  .confirm-amount {
+    font-size: 2rem;
+  }
+  
+  .action-btn {
+    padding: 1rem;
+    font-size: 1rem;
+  }
+  
+  .share-section {
+    padding: 1.25rem;
+  }
+  
+  .copy-row code {
+    font-size: 0.8rem;
+  }
+}
+
+/* Small devices */
+@media (max-width: 360px) {
+  .amount-input {
+    font-size: 2.5rem;
+  }
+  
+  .currency {
+    font-size: 1.75rem;
+  }
+}
+
+/* Touch-friendly: ensure 44px minimum tap targets */
+.action-btn,
+.back-btn,
+.copy-btn,
+.regenerate-btn,
+.help-link {
+  min-height: 44px;
+  min-width: 44px;
+}

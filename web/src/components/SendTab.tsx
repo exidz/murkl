@@ -1,11 +1,13 @@
-import { useState, useCallback } from 'react';
-import type { FC } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import type { FC, ChangeEvent } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 import { buildDepositTransaction, generatePassword, createShareLink } from '../lib/deposit';
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
-import { POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
+import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
+import './SendTab.css';
 
 interface Props {
   wasmReady: boolean;
@@ -20,37 +22,41 @@ interface DepositSuccess {
   amount: number;
 }
 
+type Step = 'amount' | 'recipient' | 'password' | 'confirm' | 'success';
+
 export const SendTab: FC<Props> = ({ wasmReady }) => {
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   
+  // Form state
+  const [amount, setAmount] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [amount, setAmount] = useState('');
+  const [step, setStep] = useState<Step>('amount');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<DepositSuccess | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  
+  // Refs
+  const amountInputRef = useRef<HTMLInputElement>(null);
+  const identifierInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
-  // Validate inputs
-  const validateInputs = useCallback((): string | null => {
-    if (!isValidIdentifier(identifier)) {
-      return 'Identifier must be 1-256 characters';
-    }
-    if (!isValidPassword(password)) {
-      return `Password must be 8-128 characters`;
-    }
-    if (!isValidAmount(amount)) {
-      return 'Amount must be a positive number';
-    }
-    return null;
-  }, [identifier, password, amount]);
+  // Focus input on step change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (step === 'amount') amountInputRef.current?.focus();
+      if (step === 'recipient') identifierInputRef.current?.focus();
+      if (step === 'password') passwordInputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [step]);
 
-  // Auto-generate password
-  const handleGeneratePassword = useCallback(() => {
-    const newPassword = generatePassword(16);
-    setPassword(newPassword);
-    setShowPassword(true);
+  // Auto-generate password on mount
+  useEffect(() => {
+    if (!password) {
+      setPassword(generatePassword(16));
+    }
   }, []);
 
   // Copy to clipboard
@@ -58,12 +64,59 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(field);
-      toast.success(`${field} copied!`);
+      toast.success(`Copied!`);
       setTimeout(() => setCopiedField(null), 2000);
     } catch {
       toast.error('Failed to copy');
     }
   }, []);
+
+  // Handle amount change with formatting
+  const handleAmountChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^0-9.]/g, '');
+    // Allow only one decimal point
+    const parts = value.split('.');
+    if (parts.length > 2) return;
+    if (parts[1]?.length > 9) return; // Max 9 decimals for SOL
+    setAmount(value);
+  };
+
+  // Navigation
+  const goNext = useCallback(() => {
+    if (step === 'amount') {
+      if (!isValidAmount(amount)) {
+        toast.error('Enter a valid amount');
+        return;
+      }
+      setStep('recipient');
+    } else if (step === 'recipient') {
+      if (!isValidIdentifier(identifier)) {
+        toast.error('Enter a valid recipient');
+        return;
+      }
+      setStep('password');
+    } else if (step === 'password') {
+      if (!isValidPassword(password)) {
+        toast.error('Password must be 8-128 characters');
+        return;
+      }
+      setStep('confirm');
+    }
+  }, [step, amount, identifier, password]);
+
+  const goBack = useCallback(() => {
+    if (step === 'recipient') setStep('amount');
+    else if (step === 'password') setStep('recipient');
+    else if (step === 'confirm') setStep('password');
+  }, [step]);
+
+  // Handle key press for navigation
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      goNext();
+    }
+  }, [goNext]);
 
   // Handle deposit
   const handleDeposit = useCallback(async () => {
@@ -72,14 +125,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       return;
     }
     
-    const validationError = validateInputs();
-    if (validationError) {
-      toast.error(validationError);
-      return;
-    }
-    
     setLoading(true);
-    setSuccess(null);
     
     try {
       const cleanIdentifier = sanitizeInput(identifier);
@@ -101,22 +147,22 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       depositResult.transaction.feePayer = publicKey;
       
       // Sign transaction
-      toast.loading('Please sign the transaction...', { id: 'signing' });
+      toast.loading('Approve in wallet...', { id: 'tx' });
       const signed = await signTransaction(depositResult.transaction);
-      toast.dismiss('signing');
+      toast.dismiss('tx');
       
       // Send transaction
-      toast.loading('Sending transaction...', { id: 'sending' });
+      toast.loading('Sending...', { id: 'tx' });
       const signature = await connection.sendRawTransaction(signed.serialize());
       
       // Confirm transaction
-      toast.loading('Confirming transaction...', { id: 'sending' });
+      toast.loading('Confirming...', { id: 'tx' });
       await connection.confirmTransaction({
         blockhash,
         lastValidBlockHeight,
         signature,
       }, 'confirmed');
-      toast.dismiss('sending');
+      toast.dismiss('tx');
       
       // Generate share link
       const shareLink = createShareLink(
@@ -150,239 +196,334 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           }),
         });
       } catch (e) {
-        // Non-critical, deposit still succeeded
+        // Non-critical
         console.warn('Failed to register deposit with relayer:', e);
       }
       
-      toast.success('Deposit successful!');
+      setStep('success');
+      toast.success('Sent! 🎉');
       
     } catch (error) {
       console.error('Deposit error:', error);
-      toast.error(error instanceof Error ? error.message : 'Deposit failed');
+      toast.error(error instanceof Error ? error.message : 'Failed to send');
     } finally {
       setLoading(false);
     }
-  }, [connected, publicKey, signTransaction, connection, identifier, password, amount, validateInputs]);
+  }, [connected, publicKey, signTransaction, connection, identifier, password, amount]);
 
   // Reset form
-  const handleNewDeposit = useCallback(() => {
+  const handleNewSend = useCallback(() => {
     setSuccess(null);
     setIdentifier('');
-    setPassword('');
     setAmount('');
-    setShowPassword(false);
+    setPassword(generatePassword(16));
+    setStep('amount');
   }, []);
 
+  // Not connected state
   if (!connected) {
     return (
-      <div className="card">
-        <div className="connect-prompt">
-          <h2>🔐 Connect Wallet to Send</h2>
-          <p>Connect your Solana wallet to make a deposit and send tokens anonymously.</p>
-          <div className="wallet-features">
+      <div className="send-tab">
+        <motion.div 
+          className="connect-prompt"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="prompt-icon">🔐</div>
+          <h2>Connect to Send</h2>
+          <p>Connect your wallet to send tokens privately</p>
+          
+          <div className="features">
             <div className="feature">
               <span className="feature-icon">🔒</span>
-              <span>Privacy-preserving deposits</span>
+              <span>Completely private</span>
             </div>
             <div className="feature">
               <span className="feature-icon">⚡</span>
-              <span>Recipient doesn't need to sign</span>
+              <span>No signature needed to claim</span>
             </div>
             <div className="feature">
               <span className="feature-icon">🛡️</span>
               <span>Post-quantum secure</span>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
 
-  if (success) {
+  // Success state
+  if (step === 'success' && success) {
     return (
-      <div className="card success-card">
-        <div className="success-header">
-          <span className="success-icon">✅</span>
-          <h2>Deposit Successful!</h2>
-        </div>
-        
-        <div className="success-details">
-          <div className="detail-row">
-            <span className="label">Amount:</span>
-            <span className="value">{success.amount} tokens</span>
-          </div>
-          <div className="detail-row">
-            <span className="label">Recipient:</span>
-            <span className="value">{success.identifier}</span>
-          </div>
-          <div className="detail-row">
-            <span className="label">Leaf Index:</span>
-            <span className="value">{success.leafIndex}</span>
-          </div>
-          <div className="detail-row">
-            <span className="label">Transaction:</span>
-            <a 
-              href={getExplorerUrl(success.signature)} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="tx-link"
+      <div className="send-tab">
+        <motion.div 
+          className="success-view"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <div className="success-header">
+            <motion.div 
+              className="success-check"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', delay: 0.1 }}
             >
-              {success.signature.slice(0, 16)}...
-            </a>
+              ✓
+            </motion.div>
+            <h2>Sent!</h2>
+            <p className="success-amount">{success.amount} SOL</p>
+            <p className="success-to">to {success.identifier}</p>
           </div>
-        </div>
-        
-        <div className="share-section">
-          <h3>📨 Share with Recipient</h3>
-          <p className="share-description">
-            Send the password securely (call, Signal, etc). The recipient needs:
-          </p>
-          
-          <div className="share-item">
-            <label>Password (keep secret!):</label>
-            <div className="copy-field">
-              <code>{showPassword ? success.password : '••••••••••••••••'}</code>
-              <button 
-                className="icon-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                title={showPassword ? 'Hide' : 'Show'}
-              >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
-              </button>
-              <button 
-                className="icon-btn"
-                onClick={() => copyToClipboard(success.password, 'Password')}
-                title="Copy"
-              >
-                {copiedField === 'Password' ? '✓' : '📋'}
-              </button>
+
+          <div className="share-section">
+            <h3>Share with recipient</h3>
+            <p className="share-hint">Send them the password securely (call, Signal, etc)</p>
+            
+            <div className="share-field">
+              <label>Password</label>
+              <div className="copy-row">
+                <code>{success.password}</code>
+                <button 
+                  className="copy-btn"
+                  onClick={() => copyToClipboard(success.password, 'password')}
+                >
+                  {copiedField === 'password' ? '✓' : '📋'}
+                </button>
+              </div>
+            </div>
+
+            <div className="share-field">
+              <label>Claim link</label>
+              <div className="copy-row">
+                <code className="truncate">{success.shareLink}</code>
+                <button 
+                  className="copy-btn"
+                  onClick={() => copyToClipboard(success.shareLink, 'link')}
+                >
+                  {copiedField === 'link' ? '✓' : '📋'}
+                </button>
+              </div>
+            </div>
+
+            <div className="qr-section">
+              <p>Or scan to claim</p>
+              <div className="qr-code">
+                <QRCodeSVG 
+                  value={success.shareLink} 
+                  size={160}
+                  bgColor="#ffffff"
+                  fgColor="#0a0a0f"
+                  level="M"
+                />
+              </div>
             </div>
           </div>
-          
-          <div className="share-item">
-            <label>Share Link:</label>
-            <div className="copy-field">
-              <code className="link">{success.shareLink}</code>
-              <button 
-                className="icon-btn"
-                onClick={() => copyToClipboard(success.shareLink, 'Link')}
-                title="Copy"
-              >
-                {copiedField === 'Link' ? '✓' : '📋'}
-              </button>
-            </div>
-          </div>
-          
-          <div className="qr-section">
-            <p>Or scan QR code:</p>
-            <div className="qr-code">
-              <QRCodeSVG 
-                value={success.shareLink} 
-                size={180}
-                bgColor="#1a1a24"
-                fgColor="#ffffff"
-              />
-            </div>
-          </div>
-        </div>
-        
-        <button className="primary-btn" onClick={handleNewDeposit}>
-          ➕ Make Another Deposit
-        </button>
+
+          <a 
+            href={getExplorerUrl(success.signature)} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="tx-link"
+          >
+            View transaction ↗
+          </a>
+
+          <button className="action-btn secondary" onClick={handleNewSend}>
+            Send another
+          </button>
+        </motion.div>
       </div>
     );
   }
 
+  // Main send flow
   return (
-    <div className="card">
-      <h2>📤 Send Tokens</h2>
-      <p className="description">
-        Send tokens to anyone using their social identifier.
-        They'll claim without revealing their identity on-chain.
-      </p>
-      
-      <div className="form-group">
-        <label htmlFor="send-identifier">Recipient Identifier</label>
-        <input 
-          id="send-identifier"
-          type="text"
-          placeholder="@twitter, email, discord..."
-          value={identifier}
-          onChange={e => setIdentifier(e.target.value)}
-          maxLength={256}
-          autoComplete="off"
-          spellCheck={false}
-          disabled={loading}
-        />
-        <span className="hint">Their social handle or email - only they can claim</span>
-      </div>
-      
-      <div className="form-group">
-        <label htmlFor="send-password">Password</label>
-        <div className="input-with-btn">
-          <input 
-            id="send-password"
-            type={showPassword ? 'text' : 'password'}
-            placeholder="Create a password to share"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            maxLength={128}
-            autoComplete="new-password"
-            disabled={loading}
-          />
-          <button 
-            type="button"
-            className="input-btn"
-            onClick={() => setShowPassword(!showPassword)}
-            disabled={loading}
+    <div className="send-tab">
+      <AnimatePresence mode="wait">
+        {/* Step 1: Amount */}
+        {step === 'amount' && (
+          <motion.div 
+            key="amount"
+            className="step-view"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
           >
-            {showPassword ? '👁️' : '👁️‍🗨️'}
-          </button>
-          <button 
-            type="button"
-            className="input-btn generate"
-            onClick={handleGeneratePassword}
-            disabled={loading}
-            title="Generate random password"
+            <div className="amount-input-container">
+              <div className="amount-display">
+                <span className="currency">◎</span>
+                <input
+                  ref={amountInputRef}
+                  type="text"
+                  inputMode="decimal"
+                  className="amount-input"
+                  placeholder="0"
+                  value={amount}
+                  onChange={handleAmountChange}
+                  onKeyDown={handleKeyDown}
+                  autoComplete="off"
+                />
+              </div>
+              <p className="amount-label">SOL</p>
+            </div>
+
+            <button 
+              className="action-btn primary"
+              onClick={goNext}
+              disabled={!amount || parseFloat(amount) <= 0}
+            >
+              Continue
+            </button>
+
+            <button className="help-link" onClick={() => {}}>
+              How it works →
+            </button>
+          </motion.div>
+        )}
+
+        {/* Step 2: Recipient */}
+        {step === 'recipient' && (
+          <motion.div 
+            key="recipient"
+            className="step-view"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
           >
-            🎲
-          </button>
-        </div>
-        <span className="hint">Share this with the recipient securely (Signal, call, etc.)</span>
-      </div>
-      
-      <div className="form-group">
-        <label htmlFor="send-amount">Amount</label>
-        <input 
-          id="send-amount"
-          type="number"
-          placeholder="100"
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
-          min="0.000000001"
-          step="any"
-          disabled={loading}
-        />
-        <span className="hint">Tokens to send (will be deducted from your wallet)</span>
-      </div>
-      
-      <button 
-        className="primary-btn"
-        onClick={handleDeposit}
-        disabled={!identifier || !password || !amount || loading || !wasmReady}
-      >
-        {loading ? '⏳ Processing...' : '🚀 Send Tokens'}
-      </button>
-      
-      <div className="privacy-note">
-        <h4>🔒 How it works</h4>
-        <ul>
-          <li>Your deposit creates a commitment on-chain</li>
-          <li>Only identifier + password reveals the secret</li>
-          <li>Recipient proves knowledge without revealing identity</li>
-          <li>STARK proof ensures zero-knowledge guarantee</li>
-        </ul>
-      </div>
+            <button className="back-btn" onClick={goBack}>
+              ← Back
+            </button>
+
+            <div className="step-header">
+              <p className="step-amount">Sending {amount} SOL</p>
+              <h2>Who's it for?</h2>
+            </div>
+
+            <div className="input-container">
+              <input
+                ref={identifierInputRef}
+                type="text"
+                className="text-input"
+                placeholder="@twitter, email, discord..."
+                value={identifier}
+                onChange={e => setIdentifier(e.target.value)}
+                onKeyDown={handleKeyDown}
+                maxLength={256}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <p className="input-hint">Their handle — only they can claim</p>
+            </div>
+
+            <button 
+              className="action-btn primary"
+              onClick={goNext}
+              disabled={!identifier}
+            >
+              Continue
+            </button>
+          </motion.div>
+        )}
+
+        {/* Step 3: Password */}
+        {step === 'password' && (
+          <motion.div 
+            key="password"
+            className="step-view"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <button className="back-btn" onClick={goBack}>
+              ← Back
+            </button>
+
+            <div className="step-header">
+              <p className="step-amount">Sending {amount} SOL to {identifier}</p>
+              <h2>Create a password</h2>
+            </div>
+
+            <div className="input-container">
+              <div className="password-input-row">
+                <input
+                  ref={passwordInputRef}
+                  type="text"
+                  className="text-input"
+                  placeholder="Enter password..."
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  maxLength={128}
+                  autoComplete="off"
+                />
+                <button 
+                  className="regenerate-btn"
+                  onClick={() => setPassword(generatePassword(16))}
+                  title="Generate new password"
+                >
+                  🎲
+                </button>
+              </div>
+              <p className="input-hint">Share this with the recipient secretly</p>
+            </div>
+
+            <button 
+              className="action-btn primary"
+              onClick={goNext}
+              disabled={password.length < 8}
+            >
+              Review
+            </button>
+          </motion.div>
+        )}
+
+        {/* Step 4: Confirm */}
+        {step === 'confirm' && (
+          <motion.div 
+            key="confirm"
+            className="step-view"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <button className="back-btn" onClick={goBack}>
+              ← Back
+            </button>
+
+            <div className="confirm-card">
+              <p className="confirm-label">You're sending</p>
+              <p className="confirm-amount">{amount} SOL</p>
+              <p className="confirm-to">to {identifier}</p>
+              
+              <div className="confirm-details">
+                <div className="confirm-row">
+                  <span>Network fee</span>
+                  <span>~0.00001 SOL</span>
+                </div>
+              </div>
+            </div>
+
+            <button 
+              className="action-btn primary"
+              onClick={handleDeposit}
+              disabled={loading || !wasmReady}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner" />
+                  Sending...
+                </>
+              ) : (
+                'Send privately'
+              )}
+            </button>
+
+            {!wasmReady && (
+              <p className="wasm-loading">Loading prover...</p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

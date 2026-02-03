@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import type { FC } from 'react';
 import './ProofProgress.css';
 
 interface Props {
@@ -13,7 +13,7 @@ const stages = [
   { id: 'claiming', label: 'Claiming', icon: '💰' },
 ];
 
-export const ProofProgress: FC<Props> = ({ stage, progress }) => {
+export const ProofProgress: FC<Props> = ({ stage, progress: _progress }) => {
   const currentIndex = stages.findIndex(s => s.id === stage);
   
   return (

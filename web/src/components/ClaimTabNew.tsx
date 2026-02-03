@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import type { FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import toast from 'react-hot-toast';
 import { OAuthLogin } from './OAuthLogin';
-import { RELAYER_URL, getExplorerUrl, FEE_BPS } from '../lib/constants';
+import { RELAYER_URL, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
 
 // WASM imports
