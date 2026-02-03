@@ -128,12 +128,12 @@ pub mod murkl {
         // The stark-verifier sets finalized=true after successful verification
         let verifier_buffer = &ctx.accounts.verifier_buffer;
         
-        // Parse verifier buffer data (skip 8-byte discriminator)
+        // Parse verifier buffer data (raw format, no discriminator)
         let data = verifier_buffer.try_borrow_data()?;
-        require!(data.len() >= 73, MurklError::InvalidVerifierBuffer);
+        require!(data.len() >= 41, MurklError::InvalidVerifierBuffer);
         
-        // ProofBuffer layout: owner(32) + size(4) + expected_size(4) + finalized(1) + data...
-        let finalized = data[8 + 32 + 4 + 4] == 1;
+        // Raw ProofBuffer layout: owner(32) + size(4) + expected_size(4) + finalized(1) + data...
+        let finalized = data[40] == 1;
         require!(finalized, MurklError::ProofNotVerified);
         
         // TODO: Also verify commitment/nullifier match in buffer
