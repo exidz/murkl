@@ -38,9 +38,8 @@ overflow-checks = true
 
 [workspace]
 members = [
-    "programs/stark-verifier",
     ".",
     "cli",
     "crates/murkl-prover",
-    # Note: programs/murkl has its own workspace due to dependency conflicts with STWO
 ]
+# Note: programs/ and wasm/ have their own workspaces due to dependency conflicts

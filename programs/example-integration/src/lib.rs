@@ -15,17 +15,16 @@
 //! 1. User generates a commitment off-chain (WASM or CLI)
 //! 2. User generates a STARK proof proving knowledge of preimage
 //! 3. User submits proof to this program
-//! 4. Program verifies proof using Murkl's CPI interface
+//! 4. Program CPI into stark-verifier to verify the proof
 //! 5. If valid, program takes some action (mint, unlock, etc.)
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Mint, MintTo};
-use murkl_program::verifier::{
-    verify_proof_cpi, bytes_to_m31, compute_commitment,
-    StarkProof, VerifierConfig, verify_stark_proof,
-};
 
 declare_id!("ExmpLe1111111111111111111111111111111111111");
+
+/// STARK Verifier program ID
+pub const STARK_VERIFIER_ID: Pubkey = pubkey!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
 
 // ============================================================================
 // Program
@@ -46,22 +45,36 @@ pub mod example_integration {
         Ok(())
     }
 
-    /// Verify a proof and record the verification
+    /// Verify a proof using stark-verifier's proof buffer
     /// 
-    /// This demonstrates the simplest CPI pattern: deserialize proof,
-    /// call verify_proof_cpi, and record result.
+    /// This demonstrates the CPI pattern:
+    /// 1. User uploads proof to stark-verifier's buffer
+    /// 2. User calls stark-verifier::finalize_and_verify (proof is verified)
+    /// 3. User calls this instruction with the verified buffer
+    /// 4. We check the buffer is finalized (proof was valid)
+    /// 5. We record the verification and take action
+    ///
+    /// The stark-verifier sets finalized=true only after successful verification,
+    /// so checking that flag is sufficient.
     pub fn verify_and_record(
         ctx: Context<VerifyAndRecord>,
-        proof_data: Vec<u8>,
         commitment: [u8; 32],
         nullifier: [u8; 32],
     ) -> Result<()> {
-        msg!("Verifying proof ({} bytes)...", proof_data.len());
+        msg!("Checking stark-verifier proof buffer...");
         
-        // Call Murkl verifier via the library (not CPI instruction)
-        let result = verify_proof_cpi(&proof_data, &commitment, &nullifier)?;
+        // Verify the proof buffer from stark-verifier is finalized
+        let verifier_buffer = &ctx.accounts.verifier_buffer;
         
-        require!(result.valid, ExampleError::ProofInvalid);
+        // Parse verifier buffer data (skip 8-byte discriminator)
+        let data = verifier_buffer.try_borrow_data()?;
+        require!(data.len() >= 73, ExampleError::InvalidVerifierBuffer);
+        
+        // ProofBuffer layout: owner(32) + size(4) + expected_size(4) + finalized(1) + data...
+        let finalized = data[8 + 32 + 4 + 4] == 1;
+        require!(finalized, ExampleError::ProofNotVerified);
+        
+        msg!("✅ Proof buffer verified!");
         
         // Record successful verification
         let record = &mut ctx.accounts.verification_record;
@@ -69,15 +82,12 @@ pub mod example_integration {
         record.commitment = commitment;
         record.nullifier = nullifier;
         record.verified_at = Clock::get()?.unix_timestamp;
-        record.fri_layers = result.fri_layers;
-        record.oods_values = result.oods_values;
         
         // Update stats
         let config = &mut ctx.accounts.config;
         config.total_verified = config.total_verified.saturating_add(1);
         
-        msg!("✅ Proof verified! ({} FRI layers, {} OODS values)", 
-            result.fri_layers, result.oods_values);
+        msg!("Verification recorded! Total: {}", config.total_verified);
         
         emit!(VerificationEvent {
             verifier: ctx.accounts.verifier.key(),
@@ -89,44 +99,46 @@ pub mod example_integration {
         Ok(())
     }
 
-    /// Verify a proof using raw field operations
-    /// 
-    /// This demonstrates using Murkl's lower-level APIs for
-    /// more control over the verification process.
-    pub fn verify_with_raw_ops(
-        ctx: Context<VerifyRaw>,
+    /// Alternative: Direct CPI into stark-verifier::verify_proof
+    ///
+    /// This shows how to call the verifier instruction directly via CPI
+    /// instead of using the proof buffer flow.
+    ///
+    /// Note: For large proofs, use the buffer flow above. Direct CPI
+    /// is limited by transaction size (~1KB for proof data).
+    pub fn verify_direct_cpi(
+        ctx: Context<VerifyDirectCpi>,
         proof_data: Vec<u8>,
-        id_hash: u32,
-        secret: u32,
-        leaf_index: u32,
+        public_inputs: Vec<u8>,
     ) -> Result<()> {
-        msg!("Verifying with raw ops...");
+        msg!("Calling stark-verifier via CPI ({} bytes proof)...", proof_data.len());
         
-        // Compute expected commitment and nullifier using Murkl's functions
-        let expected_commitment = compute_commitment(id_hash, secret);
-        let expected_nullifier = murkl_program::verifier::compute_nullifier(secret, leaf_index);
+        // Build the CPI instruction
+        let ix = anchor_lang::solana_program::instruction::Instruction {
+            program_id: STARK_VERIFIER_ID,
+            accounts: vec![
+                anchor_lang::solana_program::instruction::AccountMeta::new(
+                    ctx.accounts.payer.key(),
+                    true,
+                ),
+            ],
+            // Discriminator for verify_proof + serialized args
+            data: build_verify_proof_data(&proof_data, &public_inputs),
+        };
         
-        // Deserialize and verify proof
-        let proof: StarkProof = StarkProof::try_from_slice(&proof_data)
-            .map_err(|_| ExampleError::InvalidProofFormat)?;
+        // Execute CPI
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[ctx.accounts.payer.to_account_info()],
+        )?;
         
-        let config = VerifierConfig::default();
-        let commitment_m31 = bytes_to_m31(&expected_commitment);
-        let nullifier_m31 = bytes_to_m31(&expected_nullifier);
+        msg!("✅ Direct CPI verification succeeded!");
         
-        let valid = verify_stark_proof(&proof, &config, &[commitment_m31, nullifier_m31]);
-        require!(valid, ExampleError::ProofInvalid);
-        
-        // Store verification
-        let record = &mut ctx.accounts.verification_record;
-        record.verifier = ctx.accounts.verifier.key();
-        record.commitment = expected_commitment;
-        record.nullifier = expected_nullifier;
-        record.verified_at = Clock::get()?.unix_timestamp;
-        record.fri_layers = proof.fri_layers.len() as u8;
-        record.oods_values = proof.oods_values.len() as u8;
-        
-        msg!("✅ Raw verification passed!");
+        emit!(DirectVerificationEvent {
+            verifier: ctx.accounts.payer.key(),
+            proof_size: proof_data.len() as u32,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
         
         Ok(())
     }
@@ -137,21 +149,29 @@ pub mod example_integration {
     /// on proof of some secret knowledge.
     pub fn verify_and_mint(
         ctx: Context<VerifyAndMint>,
-        proof_data: Vec<u8>,
         commitment: [u8; 32],
         nullifier: [u8; 32],
     ) -> Result<()> {
         msg!("Verifying proof for NFT mint...");
         
-        // Verify the proof
-        let result = verify_proof_cpi(&proof_data, &commitment, &nullifier)?;
-        require!(result.valid, ExampleError::ProofInvalid);
-        
         // Check nullifier not already used (prevent double-mint)
-        // In production, you'd use a nullifier PDA like Murkl does
+        let nullifier_record = &ctx.accounts.nullifier_record;
+        require!(!nullifier_record.used, ExampleError::NullifierUsed);
+        
+        // Verify the proof buffer is finalized
+        let verifier_buffer = &ctx.accounts.verifier_buffer;
+        let data = verifier_buffer.try_borrow_data()?;
+        require!(data.len() >= 73, ExampleError::InvalidVerifierBuffer);
+        let finalized = data[8 + 32 + 4 + 4] == 1;
+        require!(finalized, ExampleError::ProofNotVerified);
+        
+        // Mark nullifier as used
+        let nullifier_record = &mut ctx.accounts.nullifier_record;
+        nullifier_record.nullifier = nullifier;
+        nullifier_record.used = true;
+        nullifier_record.used_at = Clock::get()?.unix_timestamp;
         
         // Mint NFT to recipient
-        let config_key = ctx.accounts.config.key();
         let seeds = &[b"config".as_ref(), &[ctx.accounts.config.bump]];
         
         token::mint_to(
@@ -181,6 +201,28 @@ pub mod example_integration {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/// Build the verify_proof instruction data
+fn build_verify_proof_data(proof_data: &[u8], public_inputs: &[u8]) -> Vec<u8> {
+    // Anchor discriminator for "verify_proof" = first 8 bytes of sha256("global:verify_proof")
+    let discriminator: [u8; 8] = [0x40, 0x9d, 0x08, 0x6c, 0x7a, 0x98, 0x9b, 0x8a];
+    
+    let mut data = Vec::with_capacity(8 + 4 + proof_data.len() + 4 + public_inputs.len());
+    data.extend_from_slice(&discriminator);
+    
+    // Vec<u8> is serialized as u32 length + bytes
+    data.extend_from_slice(&(proof_data.len() as u32).to_le_bytes());
+    data.extend_from_slice(proof_data);
+    
+    data.extend_from_slice(&(public_inputs.len() as u32).to_le_bytes());
+    data.extend_from_slice(public_inputs);
+    
+    data
+}
+
+// ============================================================================
 // Accounts
 // ============================================================================
 
@@ -201,12 +243,21 @@ pub struct VerificationRecord {
     pub commitment: [u8; 32],
     pub nullifier: [u8; 32],
     pub verified_at: i64,
-    pub fri_layers: u8,
-    pub oods_values: u8,
 }
 
 impl VerificationRecord {
-    pub const SIZE: usize = 8 + 32 + 32 + 32 + 8 + 1 + 1;
+    pub const SIZE: usize = 8 + 32 + 32 + 32 + 8;
+}
+
+#[account]
+pub struct NullifierRecord {
+    pub nullifier: [u8; 32],
+    pub used: bool,
+    pub used_at: i64,
+}
+
+impl NullifierRecord {
+    pub const SIZE: usize = 8 + 32 + 1 + 8;
 }
 
 // ============================================================================
@@ -231,10 +282,16 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(proof_data: Vec<u8>, commitment: [u8; 32], nullifier: [u8; 32])]
+#[instruction(commitment: [u8; 32], nullifier: [u8; 32])]
 pub struct VerifyAndRecord<'info> {
     #[account(mut)]
     pub config: Account<'info, Config>,
+    
+    /// CHECK: stark-verifier's proof buffer (verified via finalized flag)
+    #[account(
+        constraint = verifier_buffer.owner == &STARK_VERIFIER_ID @ ExampleError::InvalidVerifierBuffer
+    )]
+    pub verifier_buffer: UncheckedAccount<'info>,
     
     #[account(
         init,
@@ -252,29 +309,17 @@ pub struct VerifyAndRecord<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(proof_data: Vec<u8>, id_hash: u32, secret: u32, leaf_index: u32)]
-pub struct VerifyRaw<'info> {
+pub struct VerifyDirectCpi<'info> {
     #[account(mut)]
-    pub config: Account<'info, Config>,
+    pub payer: Signer<'info>,
     
-    #[account(
-        init,
-        payer = verifier,
-        space = VerificationRecord::SIZE,
-        // Use id_hash + leaf_index as seed (nullifier derived from these)
-        seeds = [b"raw_record", id_hash.to_le_bytes().as_ref(), leaf_index.to_le_bytes().as_ref()],
-        bump
-    )]
-    pub verification_record: Account<'info, VerificationRecord>,
-    
-    #[account(mut)]
-    pub verifier: Signer<'info>,
-    
-    pub system_program: Program<'info, System>,
+    /// CHECK: stark-verifier program
+    #[account(address = STARK_VERIFIER_ID)]
+    pub verifier_program: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
-#[instruction(proof_data: Vec<u8>, commitment: [u8; 32], nullifier: [u8; 32])]
+#[instruction(commitment: [u8; 32], nullifier: [u8; 32])]
 pub struct VerifyAndMint<'info> {
     #[account(
         mut,
@@ -282,6 +327,21 @@ pub struct VerifyAndMint<'info> {
         bump = config.bump
     )]
     pub config: Account<'info, Config>,
+    
+    /// CHECK: stark-verifier's proof buffer (verified via finalized flag)
+    #[account(
+        constraint = verifier_buffer.owner == &STARK_VERIFIER_ID @ ExampleError::InvalidVerifierBuffer
+    )]
+    pub verifier_buffer: UncheckedAccount<'info>,
+    
+    #[account(
+        init,
+        payer = payer,
+        space = NullifierRecord::SIZE,
+        seeds = [b"nullifier", nullifier.as_ref()],
+        bump
+    )]
+    pub nullifier_record: Account<'info, NullifierRecord>,
     
     #[account(
         mut,
@@ -315,6 +375,13 @@ pub struct VerificationEvent {
 }
 
 #[event]
+pub struct DirectVerificationEvent {
+    pub verifier: Pubkey,
+    pub proof_size: u32,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct MintEvent {
     pub recipient: Pubkey,
     pub commitment: [u8; 32],
@@ -334,4 +401,8 @@ pub enum ExampleError {
     InvalidProofFormat,
     #[msg("Nullifier already used")]
     NullifierUsed,
+    #[msg("Proof not verified")]
+    ProofNotVerified,
+    #[msg("Invalid verifier buffer")]
+    InvalidVerifierBuffer,
 }
