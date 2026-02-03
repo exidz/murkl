@@ -1,14 +1,29 @@
 # 🐈‍⬛ Murkl
 
-**Anonymous Social Transfers on Solana — First Full STARK Verifier On-Chain**
+**Anonymous Social Transfers on Solana — Experimental Circle STARK Infrastructure**
 
-> **ZK-STARKs are possible on Solana.** Murkl proves it with a fully on-chain Circle STARK verifier using the M31 (Mersenne-31) field. No optimistic verification, no trusted setup, post-quantum secure.
+> **ZK-STARKs are possible on Solana.** Murkl is an experimental Circle STARK verifier using the M31 (Mersenne-31) field. No optimistic verification, no trusted setup, post-quantum secure.
 
 Send tokens to anyone using their social identifier (email, @twitter, Discord) — they claim with a password you share out-of-band. Full privacy, no KYC.
 
+## 🚀 Status (Colosseum Hackathon)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **stark-verifier** | ✅ Deployed | `StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw` |
+| **murkl app** | ✅ Deployed | `74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92` |
+| **Deposit flow** | ✅ Working | Tested on devnet |
+| **Proof generation** | ✅ Working | CLI + WASM prover |
+| **Proof upload** | ✅ Working | Buffer upload tested |
+| **Full E2E claim** | 🔄 In progress | Proof size optimization needed |
+
+**Devnet addresses:**
+- WSOL Pool: `HBdNYy8ChUY2KJGf5qTXETXCpeX7kt7aok4XuXk6vbCd`
+- Test Token Pool: `6ujDMwXXwEBwxmmKG6TD6cMhfw8g9XU33AHrJmEAEYzn`
+
 ## 🏆 Key Innovation
 
-This is the **first implementation of a full STARK verifier running on Solana**. Previous ZK implementations on Solana used SNARKs (Groth16) which require trusted setup and are vulnerable to quantum computers. Murkl uses **Circle STARKs** which are:
+This is an **experimental Circle STARK verifier for Solana**. Previous ZK implementations on Solana used SNARKs (Groth16) which require trusted setup and are vulnerable to quantum computers. Murkl uses **Circle STARKs** which are:
 
 - **Transparent** — No trusted setup ceremony
 - **Post-Quantum Secure** — Based on hash functions, not elliptic curves
@@ -25,7 +40,7 @@ This is the **first implementation of a full STARK verifier running on Solana**.
 │  ❌ Elliptic curve crypto        ✅ Hash-based                  │
 │  ✅ Small proofs (~200B)         ⚠️ Larger proofs (~6KB)        │
 │                                                                 │
-│  Murkl: First full STARK verifier on Solana! 🎉                │
+│  Murkl: Experimental STARK infrastructure for Solana 🔬        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```

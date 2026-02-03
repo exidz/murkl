@@ -31,7 +31,7 @@ declare_id!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
 pub const P: u32 = 0x7FFFFFFF;
 
 /// Maximum proof size per buffer chunk (1KB to fit in stack)
-pub const MAX_PROOF_CHUNK: usize = 4096; // ~2KB for STARK proofs
+pub const MAX_PROOF_CHUNK: usize = 900; // ~2KB for STARK proofs
 
 /// Number of FRI queries for security
 pub const NUM_FRI_QUERIES: usize = 20;
@@ -90,11 +90,11 @@ pub mod stark_verifier {
         ctx: Context<InitProofBuffer>,
         expected_size: u32,
     ) -> Result<()> {
-        let buffer = &mut ctx.accounts.proof_buffer.load_mut()?;
+        let buffer = &mut ctx.accounts.proof_buffer;
         buffer.owner = ctx.accounts.owner.key();
         buffer.size = 0;
         buffer.expected_size = expected_size;
-        buffer.finalized = 0;
+        buffer.finalized = false;
         
         msg!("Proof buffer initialized, expecting {} bytes", expected_size);
         Ok(())
@@ -106,9 +106,9 @@ pub mod stark_verifier {
         offset: u32,
         data: Vec<u8>,
     ) -> Result<()> {
-        let buffer = &mut ctx.accounts.proof_buffer.load_mut()?;
+        let buffer = &mut ctx.accounts.proof_buffer;
         
-        require!(buffer.finalized == 0, VerifierError::BufferAlreadyFinalized);
+        require!(!buffer.finalized, VerifierError::BufferAlreadyFinalized);
         require!(
             ctx.accounts.owner.key() == buffer.owner,
             VerifierError::Unauthorized
@@ -135,9 +135,9 @@ pub mod stark_verifier {
         ctx: Context<FinalizeAndVerify>,
         public_inputs: Vec<u8>,
     ) -> Result<()> {
-        let buffer = &mut ctx.accounts.proof_buffer.load_mut()?;
+        let buffer = &mut ctx.accounts.proof_buffer;
         
-        require!(buffer.finalized == 0, VerifierError::BufferAlreadyFinalized);
+        require!(!buffer.finalized, VerifierError::BufferAlreadyFinalized);
         require!(
             ctx.accounts.owner.key() == buffer.owner,
             VerifierError::Unauthorized
@@ -160,7 +160,7 @@ pub mod stark_verifier {
         
         require!(result, VerifierError::ProofVerificationFailed);
 
-        buffer.finalized = 1;
+        buffer.finalized = true;
         msg!("Proof verified and buffer finalized");
         
         Ok(())
@@ -666,7 +666,7 @@ pub struct InitProofBuffer<'info> {
         seeds = [b"proof_buffer", owner.key().as_ref()],
         bump
     )]
-    pub proof_buffer: AccountLoader<'info, ProofBuffer>,
+    pub proof_buffer: Account<'info, ProofBuffer>,
     #[account(mut)]
     pub owner: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -679,7 +679,7 @@ pub struct UploadChunk<'info> {
         seeds = [b"proof_buffer", owner.key().as_ref()],
         bump
     )]
-    pub proof_buffer: AccountLoader<'info, ProofBuffer>,
+    pub proof_buffer: Account<'info, ProofBuffer>,
     pub owner: Signer<'info>,
 }
 
@@ -690,7 +690,7 @@ pub struct FinalizeAndVerify<'info> {
         seeds = [b"proof_buffer", owner.key().as_ref()],
         bump
     )]
-    pub proof_buffer: AccountLoader<'info, ProofBuffer>,
+    pub proof_buffer: Account<'info, ProofBuffer>,
     pub owner: Signer<'info>,
 }
 
@@ -702,7 +702,7 @@ pub struct CloseProofBuffer<'info> {
         seeds = [b"proof_buffer", owner.key().as_ref()],
         bump
     )]
-    pub proof_buffer: AccountLoader<'info, ProofBuffer>,
+    pub proof_buffer: Account<'info, ProofBuffer>,
     #[account(mut)]
     pub owner: Signer<'info>,
 }
@@ -711,19 +711,18 @@ pub struct CloseProofBuffer<'info> {
 // State
 // ============================================================================
 
-#[account(zero_copy)]
+#[account]
 #[repr(C)]
 pub struct ProofBuffer {
     pub owner: Pubkey,
     pub size: u32,
     pub expected_size: u32,
-    pub finalized: u8,
-    pub _padding: [u8; 3],  // Align to 4 bytes
+    pub finalized: bool,
     pub data: [u8; MAX_PROOF_CHUNK],
 }
 
 impl ProofBuffer {
-    pub const SIZE: usize = 32 + 4 + 4 + 1 + 3 + MAX_PROOF_CHUNK; // +3 for padding
+    pub const SIZE: usize = 32 + 4 + 4 + 1 + MAX_PROOF_CHUNK;
 }
 
 // ============================================================================
