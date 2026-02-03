@@ -38,6 +38,7 @@ overflow-checks = true
 
 [workspace]
 members = [
+    "programs/stark-verifier",
     ".",
     "cli",
     "crates/murkl-prover",

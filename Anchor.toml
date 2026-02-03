@@ -3,10 +3,12 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-murkl_program = "StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw"
+stark_verifier = "StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw"
+murkl_program = "74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92"
 
 [programs.devnet]
-murkl_program = "StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw"
+stark_verifier = "StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw"
+murkl_program = "74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92"
 
 [registry]
 url = "https://api.apr.dev"

@@ -1,5 +1,5 @@
 [workspace]
-members = ["murkl", "example-integration"]
+members = ["murkl", "example-integration", "stark-verifier"]
 resolver = "2"
 
 [profile.release]
