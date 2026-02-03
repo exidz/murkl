@@ -27,3 +27,5 @@ deposit.json
 !tsconfig.json
 web/node_modules
 web/dist
+relayer/node_modules
+wasm/target

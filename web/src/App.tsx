@@ -1,80 +1,98 @@
-import { useState } from 'react';
-import { keccak256 } from 'js-sha3';
+import { useState, useEffect } from 'react';
 import './App.css';
 
-const M31_PRIME = 0x7FFFFFFF;
-
-// PQ-secure hash functions (matching CLI)
-function hashPassword(password: string): number {
-  const hash = keccak256('murkl_password_v1' + password);
-  const val = parseInt(hash.slice(0, 8), 16);
-  return val % M31_PRIME;
-}
-
-function hashIdentifier(id: string): number {
-  const normalized = id.toLowerCase();
-  const hash = keccak256('murkl_identifier_v1' + normalized);
-  const val = parseInt(hash.slice(0, 8), 16);
-  return val % M31_PRIME;
-}
-
-function computeCommitment(idHash: number, secret: number): string {
-  const data = 'murkl_m31_hash_v1' + 
-    String.fromCharCode(idHash & 0xff, (idHash >> 8) & 0xff, (idHash >> 16) & 0xff, (idHash >> 24) & 0xff) +
-    String.fromCharCode(secret & 0xff, (secret >> 8) & 0xff, (secret >> 16) & 0xff, (secret >> 24) & 0xff);
-  return keccak256(data);
-}
-
-function computeNullifier(secret: number, leafIndex: number): string {
-  const data = 'murkl_nullifier_v1' +
-    String.fromCharCode(secret & 0xff, (secret >> 8) & 0xff, (secret >> 16) & 0xff, (secret >> 24) & 0xff) +
-    String.fromCharCode(leafIndex & 0xff, (leafIndex >> 8) & 0xff, (leafIndex >> 16) & 0xff, (leafIndex >> 24) & 0xff);
-  return keccak256(data);
-}
+// WASM module
+import init, { 
+  generate_commitment, 
+  generate_proof,
+} from './wasm/murkl_wasm';
 
 type Tab = 'send' | 'claim';
 
 function App() {
+  const [wasmReady, setWasmReady] = useState(false);
   const [tab, setTab] = useState<Tab>('claim');
   
   // Send tab state
   const [sendIdentifier, setSendIdentifier] = useState('');
   const [sendPassword, setSendPassword] = useState('');
   const [sendAmount, setSendAmount] = useState('');
-  const [sendResult, setSendResult] = useState<{commitment: string, idHash: number, secret: number} | null>(null);
+  const [sendResult, setSendResult] = useState<{commitment: string} | null>(null);
   
   // Claim tab state
   const [claimIdentifier, setClaimIdentifier] = useState('');
   const [claimPassword, setClaimPassword] = useState('');
   const [claimLeafIndex, setClaimLeafIndex] = useState('0');
   const [claimWallet, setClaimWallet] = useState('');
-  const [claimResult, setClaimResult] = useState<{commitment: string, nullifier: string, proofSize: number} | null>(null);
+  const [claimResult, setClaimResult] = useState<any>(null);
   const [claiming, setClaiming] = useState(false);
+  const [relayerStatus, setRelayerStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  // Initialize WASM
+  useEffect(() => {
+    init().then(() => {
+      setWasmReady(true);
+      console.log('🐈‍⬛ WASM prover ready!');
+    });
+  }, []);
 
   const handleSend = () => {
-    const idHash = hashIdentifier(sendIdentifier);
-    const secret = hashPassword(sendPassword);
-    const commitment = computeCommitment(idHash, secret);
-    setSendResult({ commitment, idHash, secret });
+    if (!wasmReady) return;
+    
+    const commitment = generate_commitment(sendIdentifier, sendPassword);
+    setSendResult({ commitment: '0x' + commitment.slice(0, 32) + '...' });
   };
 
   const handleClaim = async () => {
+    if (!wasmReady) return;
+    
     setClaiming(true);
+    setRelayerStatus('idle');
     
-    // Compute values
-    const idHash = hashIdentifier(claimIdentifier);
-    const secret = hashPassword(claimPassword);
-    const commitment = computeCommitment(idHash, secret);
-    const nullifier = computeNullifier(secret, parseInt(claimLeafIndex));
-    
-    // Simulate proof generation (in production, use WASM prover)
-    await new Promise(r => setTimeout(r, 1500));
-    
-    setClaimResult({
-      commitment: '0x' + commitment.slice(0, 16),
-      nullifier: '0x' + nullifier.slice(0, 16),
-      proofSize: 6116,
-    });
+    try {
+      // Generate proof using WASM
+      const proofBundle = generate_proof(
+        claimIdentifier, 
+        claimPassword, 
+        parseInt(claimLeafIndex)
+      );
+      
+      setClaimResult(proofBundle);
+      
+      // Submit to relayer
+      setRelayerStatus('submitting');
+      
+      const relayerUrl = import.meta.env.VITE_RELAYER_URL || 'http://localhost:3001';
+      
+      const response = await fetch(`${relayerUrl}/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proof: proofBundle.proof,
+          commitment: proofBundle.commitment,
+          nullifier: proofBundle.nullifier,
+          leafIndex: proofBundle.leaf_index,
+          recipientTokenAccount: claimWallet,
+          poolAddress: import.meta.env.VITE_POOL_ADDRESS || '',
+          depositAddress: import.meta.env.VITE_DEPOSIT_ADDRESS || '',
+          feeBps: 50
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setClaimResult({ ...proofBundle, tx: result });
+        setRelayerStatus('success');
+      } else {
+        const error = await response.json();
+        setClaimResult({ ...proofBundle, error });
+        setRelayerStatus('error');
+      }
+      
+    } catch (e: any) {
+      console.error('Claim error:', e);
+      setRelayerStatus('error');
+    }
     
     setClaiming(false);
   };
@@ -87,6 +105,9 @@ function App() {
         <div className="badges">
           <span className="badge pq">🛡️ Post-Quantum</span>
           <span className="badge stark">⚡ Circle STARKs</span>
+          <span className={`badge ${wasmReady ? 'wasm-ready' : 'wasm-loading'}`}>
+            {wasmReady ? '✅ WASM Ready' : '⏳ Loading...'}
+          </span>
         </div>
       </header>
 
@@ -148,7 +169,7 @@ function App() {
             <button 
               className="primary-btn"
               onClick={handleSend}
-              disabled={!sendIdentifier || !sendPassword}
+              disabled={!sendIdentifier || !sendPassword || !wasmReady}
             >
               Generate Commitment
             </button>
@@ -158,7 +179,7 @@ function App() {
                 <h3>✅ Commitment Generated</h3>
                 <div className="result-item">
                   <span className="label">Commitment:</span>
-                  <code>0x{sendResult.commitment.slice(0, 16)}...</code>
+                  <code>{sendResult.commitment}</code>
                 </div>
                 <div className="next-steps">
                   <h4>Next Steps:</h4>
@@ -226,32 +247,53 @@ function App() {
             <button 
               className="primary-btn"
               onClick={handleClaim}
-              disabled={!claimIdentifier || !claimPassword || !claimWallet || claiming}
+              disabled={!claimIdentifier || !claimPassword || !claimWallet || claiming || !wasmReady}
             >
               {claiming ? '⏳ Generating Proof...' : '🔐 Generate Proof & Claim'}
             </button>
             
             {claimResult && (
-              <div className="result success">
-                <h3>✅ Proof Generated!</h3>
+              <div className={`result ${relayerStatus === 'success' ? 'success' : ''}`}>
+                <h3>
+                  {relayerStatus === 'success' ? '✅ Tokens Claimed!' : 
+                   relayerStatus === 'error' ? '⚠️ Proof Generated (Relayer Error)' :
+                   relayerStatus === 'submitting' ? '⏳ Submitting to Relayer...' :
+                   '✅ Proof Generated!'}
+                </h3>
                 <div className="result-item">
                   <span className="label">Commitment:</span>
-                  <code>{claimResult.commitment}...</code>
+                  <code>0x{claimResult.commitment?.slice(0, 16)}...</code>
                 </div>
                 <div className="result-item">
                   <span className="label">Nullifier:</span>
-                  <code>{claimResult.nullifier}...</code>
+                  <code>0x{claimResult.nullifier?.slice(0, 16)}...</code>
                 </div>
                 <div className="result-item">
                   <span className="label">Proof Size:</span>
-                  <code>{claimResult.proofSize} bytes</code>
+                  <code>{claimResult.proof_size} bytes</code>
                 </div>
+                
+                {claimResult.tx?.signature && (
+                  <div className="result-item">
+                    <span className="label">Transaction:</span>
+                    <a 
+                      href={claimResult.tx.explorer} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="tx-link"
+                    >
+                      {claimResult.tx.signature.slice(0, 16)}...
+                    </a>
+                  </div>
+                )}
+                
                 <div className="privacy-note">
                   <h4>🔒 Privacy Guarantee</h4>
                   <ul>
                     <li>Your identifier never goes on-chain</li>
                     <li>Your wallet never signs anything</li>
                     <li>Relayer submits transaction for you</li>
+                    <li>STARK proof computed locally in WASM</li>
                   </ul>
                 </div>
               </div>
@@ -265,7 +307,7 @@ function App() {
           Built for <a href="https://colosseum.org">Colosseum Hackathon</a> 🏛️
         </p>
         <p className="tech">
-          Circle STARKs • M31 Field • keccak256 • Post-Quantum
+          Circle STARKs • M31 Field • keccak256 • Post-Quantum • WASM Prover
         </p>
       </footer>
     </div>

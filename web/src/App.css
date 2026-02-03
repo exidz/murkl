@@ -75,6 +75,29 @@ body {
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
+.badge.wasm-ready {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge.wasm-loading {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.tx-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+}
+
+.tx-link:hover {
+  text-decoration: underline;
+}
+
 .tabs {
   display: flex;
   gap: 0.5rem;
