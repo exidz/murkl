@@ -1,5 +1,6 @@
 [workspace]
-members = ["murkl", "example-integration", "stark-verifier"]
+members = ["murkl", "stark-verifier"]
+# example-integration needs update for new CPI architecture
 resolver = "2"
 
 [profile.release]
