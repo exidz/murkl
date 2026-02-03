@@ -2,6 +2,32 @@
 //!
 //! Minimal Circle STARK verifier optimized for Solana BPF.
 //! Uses keccak256 for Merkle/channel, M31 field ops for constraints.
+//!
+//! # CPI Interface
+//!
+//! External programs can call into Murkl's verifier via CPI. The main entry point
+//! is the `verify_stark_proof` function which validates a proof against public inputs.
+//!
+//! ## Example (from external program):
+//!
+//! ```ignore
+//! use murkl_program::cpi::{self, VerifyProof};
+//! use murkl_program::verifier::{StarkProof, VerifierConfig};
+//!
+//! // In your instruction handler:
+//! let result = murkl_program::verifier::verify_stark_proof(
+//!     &proof,
+//!     &config,
+//!     &[commitment_m31, nullifier_m31],
+//! );
+//! require!(result, YourError::ProofInvalid);
+//! ```
+//!
+//! For lower-level access, you can also use the field operations directly:
+//! - `m31_add`, `m31_sub`, `m31_mul`, `m31_inv` - M31 field arithmetic
+//! - `QM31` - Extension field element with `add`, `sub`, `mul`
+//! - `verify_merkle_path` - Merkle path verification
+//! - `Channel` - Fiat-Shamir transcript
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
@@ -332,6 +358,87 @@ pub fn verify_stark_proof(
     true
 }
 
+// ============================================================================
+// CPI Interface
+// ============================================================================
+
+/// Verification result for CPI callers
+#[derive(Clone, Debug, AnchorSerialize, AnchorDeserialize)]
+pub struct VerificationResult {
+    /// Whether the proof is valid
+    pub valid: bool,
+    /// Number of FRI layers verified
+    pub fri_layers: u8,
+    /// Number of OODS values checked
+    pub oods_values: u8,
+}
+
+/// Simplified verification for CPI callers
+/// Returns a structured result instead of bool
+pub fn verify_proof_cpi(
+    proof_data: &[u8],
+    commitment: &[u8; 32],
+    nullifier: &[u8; 32],
+) -> Result<VerificationResult> {
+    // Deserialize proof
+    let proof: StarkProof = StarkProof::try_from_slice(proof_data)
+        .map_err(|_| error!(VerifierError::InvalidProofFormat))?;
+    
+    let config = VerifierConfig::default();
+    
+    // Convert to M31 public inputs
+    let commitment_m31 = bytes_to_m31(commitment);
+    let nullifier_m31 = bytes_to_m31(nullifier);
+    
+    let valid = verify_stark_proof(&proof, &config, &[commitment_m31, nullifier_m31]);
+    
+    Ok(VerificationResult {
+        valid,
+        fri_layers: proof.fri_layers.len() as u8,
+        oods_values: proof.oods_values.len() as u8,
+    })
+}
+
+/// Convert 32-byte hash to M31 field element
+#[inline]
+pub fn bytes_to_m31(bytes: &[u8; 32]) -> u32 {
+    u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) % P
+}
+
+/// Compute commitment hash (matches WASM/CLI)
+pub fn compute_commitment(id_hash: u32, secret: u32) -> [u8; 32] {
+    let data = [
+        b"murkl_m31_hash_v1".as_slice(),
+        &id_hash.to_le_bytes(),
+        &secret.to_le_bytes(),
+    ];
+    keccak::hashv(&data).0
+}
+
+/// Compute nullifier hash (matches WASM/CLI)
+pub fn compute_nullifier(secret: u32, leaf_index: u32) -> [u8; 32] {
+    let data = [
+        b"murkl_nullifier_v1".as_slice(),
+        &secret.to_le_bytes(),
+        &leaf_index.to_le_bytes(),
+    ];
+    keccak::hashv(&data).0
+}
+
+// ============================================================================
+// CPI Errors
+// ============================================================================
+
+#[error_code]
+pub enum VerifierError {
+    #[msg("Invalid proof format")]
+    InvalidProofFormat,
+    #[msg("Proof verification failed")]
+    VerificationFailed,
+    #[msg("Invalid public input")]
+    InvalidPublicInput,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,5 +472,27 @@ mod tests {
         let f1 = ch.draw_felt();
         let f2 = ch.draw_felt();
         assert!(f1.a != f2.a || f1.b != f2.b);
+    }
+    
+    #[test]
+    fn test_bytes_to_m31() {
+        let bytes = [1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let m31 = bytes_to_m31(&bytes);
+        assert!(m31 < P);
+    }
+    
+    #[test]
+    fn test_compute_commitment_deterministic() {
+        let c1 = compute_commitment(12345, 67890);
+        let c2 = compute_commitment(12345, 67890);
+        assert_eq!(c1, c2);
+    }
+    
+    #[test]
+    fn test_compute_nullifier_deterministic() {
+        let n1 = compute_nullifier(12345, 0);
+        let n2 = compute_nullifier(12345, 0);
+        assert_eq!(n1, n2);
     }
 }

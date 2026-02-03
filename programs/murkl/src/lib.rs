@@ -14,8 +14,20 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-mod verifier;
-use verifier::{StarkProof, VerifierConfig, verify_stark_proof};
+pub mod verifier;
+pub use verifier::{
+    StarkProof, VerifierConfig, verify_stark_proof,
+    // CPI interface
+    VerificationResult, verify_proof_cpi, bytes_to_m31,
+    compute_commitment, compute_nullifier,
+    // Field operations (for advanced CPI use)
+    m31_add, m31_sub, m31_mul, m31_inv, m31_neg,
+    QM31, P,
+    // Merkle verification
+    verify_merkle_path, hash_qm31,
+    // Channel (Fiat-Shamir)
+    Channel,
+};
 
 declare_id!("74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92");
 
