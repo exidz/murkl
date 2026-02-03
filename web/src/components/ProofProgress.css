@@ -1,0 +1,105 @@
+.proof-progress {
+  padding: 2rem;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  border: 1px solid #2a2a4a;
+  text-align: center;
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.progress-icon {
+  font-size: 2rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.progress-label {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.progress-bar {
+  height: 6px;
+  background: #2a2a3a;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #9945FF, #14F195);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.progress-stages {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.4;
+  transition: opacity 0.3s ease;
+}
+
+.stage.complete,
+.stage.active {
+  opacity: 1;
+}
+
+.stage-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #2a2a3a;
+  transition: all 0.3s ease;
+}
+
+.stage.complete .stage-dot {
+  background: #14F195;
+}
+
+.stage.active .stage-dot {
+  background: #9945FF;
+  box-shadow: 0 0 12px #9945FF;
+  animation: glow 1.5s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 8px #9945FF; }
+  50% { box-shadow: 0 0 20px #9945FF; }
+}
+
+.stage-label {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.progress-hint {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.progress-hint small {
+  color: #666;
+}
