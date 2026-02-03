@@ -202,14 +202,17 @@ nullifier  = keccak256("murkl_nullifier_v1" || secret || leaf_index)
 
 ### 🌐 Live Devnet Deployment
 
-Try it now on Solana Devnet:
+Try it now on Solana Devnet!
 
 | Component | Address |
 |-----------|---------|
-| **Program** | `74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92` |
-| **Test Pool** | `Gjw5fS9TvtaZracqD31QSBcJ2SBP84jyASNFaDF7VSY4` |
+| **Program** | [`74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92`](https://explorer.solana.com/address/74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92?cluster=devnet) |
+| **WSOL Pool** | [`HBdNYy8ChUY2KJGf5qTXETXCpeX7kt7aok4XuXk6vbCd`](https://explorer.solana.com/address/HBdNYy8ChUY2KJGf5qTXETXCpeX7kt7aok4XuXk6vbCd?cluster=devnet) |
+| **WSOL Vault** | `9SehPALznYqRcCiRxkt7oJtqiqRT8DbPXLhaJ3U5Mz1M` |
+| **Test Token Pool** | `Gjw5fS9TvtaZracqD31QSBcJ2SBP84jyASNFaDF7VSY4` |
 | **Test Token** | `77s7rE6jC85uF1R1697qivEEqbU1ZifcvCFZzJ6vvfDV` |
-| **Vault** | `AeUR23inL7jac6Qr1u14ibrAzjfcV2Qr2gZxJgP9TjJH` |
+
+**E2E Test Verified:** Deposit → STARK Proof → Claim → ~40K CU verification ✅
 
 **View transactions:** [Solana Explorer (Devnet)](https://explorer.solana.com/?cluster=devnet)
 
@@ -302,6 +305,43 @@ cd relayer && npm run dev
    npm run build
    NODE_ENV=production node dist/index.js
    ```
+
+### Cloud Deployment (Fly.io)
+
+Deploy the relayer to Fly.io for production:
+
+```bash
+cd relayer
+
+# Install flyctl (https://fly.io/docs/hands-on/install-flyctl/)
+curl -L https://fly.io/install.sh | sh
+
+# Login and create app
+fly auth login
+fly apps create murkl-relayer
+
+# Set secrets (required!)
+fly secrets set RELAYER_SECRET_KEY='[YOUR_KEYPAIR_JSON_ARRAY]'
+fly secrets set CORS_ORIGINS='https://your-frontend.com,https://murkl.app'
+
+# Deploy
+fly deploy
+
+# Check status
+fly status
+fly logs
+```
+
+**Environment Variables:**
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `RELAYER_SECRET_KEY` | Keypair as JSON array (e.g., `[12,34,...]`) | Yes |
+| `RPC_URL` | Solana RPC endpoint | No (defaults to devnet) |
+| `PROGRAM_ID` | Murkl program address | No (has default) |
+| `CORS_ORIGINS` | Comma-separated allowed origins | Recommended |
+| `PORT` | Server port | No (defaults to 3001) |
+
+**⚠️ Security:** The relayer keypair needs SOL for transaction fees. Keep balance minimal and use a dedicated keypair (not your main wallet).
 
 ### Security Checklist
 

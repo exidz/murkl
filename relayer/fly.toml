@@ -1,0 +1,31 @@
+# Fly.io deployment config for Murkl Relayer
+app = "murkl-relayer"
+primary_region = "sin"  # Singapore (closest to Manila)
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+NODE_ENV = "production"
+PORT = "3001"
+RPC_URL = "https://api.devnet.solana.com"
+PROGRAM_ID = "74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92"
+# CORS_ORIGINS set via fly secrets
+# RELAYER_SECRET_KEY set via fly secrets
+
+[http_service]
+internal_port = 3001
+force_https = true
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 0
+
+[http_service.concurrency]
+type = "requests"
+hard_limit = 100
+soft_limit = 80
+
+[[vm]]
+cpu_kind = "shared"
+cpus = 1
+memory_mb = 256

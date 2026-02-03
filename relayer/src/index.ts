@@ -153,13 +153,29 @@ function sanitizeHex(hex: string): Buffer {
 // Relayer Setup
 // ============================================================================
 
-const RELAYER_KEYPAIR_PATH = process.env.RELAYER_KEYPAIR || 
-  path.join(process.env.HOME || '', '.config/solana/id.json');
+// Support keypair from env var (JSON array) or file path
+function loadRelayerKeypair(): Keypair {
+  // First try RELAYER_SECRET_KEY env var (JSON array of bytes)
+  if (process.env.RELAYER_SECRET_KEY) {
+    try {
+      const secretKey = JSON.parse(process.env.RELAYER_SECRET_KEY);
+      return Keypair.fromSecretKey(new Uint8Array(secretKey));
+    } catch (e) {
+      console.error('Failed to parse RELAYER_SECRET_KEY env var');
+      process.exit(1);
+    }
+  }
+  
+  // Fall back to file path
+  const keypairPath = process.env.RELAYER_KEYPAIR || 
+    path.join(process.env.HOME || '', '.config/solana/id.json');
+  const secretKey = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
+  return Keypair.fromSecretKey(new Uint8Array(secretKey));
+}
 
 let relayerKeypair: Keypair;
 try {
-  const secretKey = JSON.parse(fs.readFileSync(RELAYER_KEYPAIR_PATH, 'utf-8'));
-  relayerKeypair = Keypair.fromSecretKey(new Uint8Array(secretKey));
+  relayerKeypair = loadRelayerKeypair();
   log('info', 'Relayer keypair loaded', { 
     pubkey: relayerKeypair.publicKey.toBase58().slice(0, 8) + '...' 
   });

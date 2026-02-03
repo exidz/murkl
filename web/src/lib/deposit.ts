@@ -62,12 +62,12 @@ export function computeCommitment(identifier: string, password: string): Uint8Ar
 }
 
 /**
- * Get Anchor discriminator
+ * Get Anchor discriminator (SHA256, not keccak!)
  */
-function getDiscriminator(name: string): Uint8Array {
+async function getDiscriminator(name: string): Promise<Uint8Array> {
   const data = new TextEncoder().encode(`global:${name}`);
-  const hash = keccak256.arrayBuffer(data);
-  return new Uint8Array(hash.slice(0, 8));
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return new Uint8Array(hashBuffer.slice(0, 8));
 }
 
 export interface PoolInfo {
@@ -145,8 +145,8 @@ export async function buildDepositTransaction(
   );
   
   // Build instruction data
-  const discriminator = getDiscriminator('deposit');
-  const amountLamports = BigInt(amount * Math.pow(10, TOKEN_DECIMALS));
+  const discriminator = await getDiscriminator('deposit');
+  const amountLamports = BigInt(Math.floor(amount * Math.pow(10, TOKEN_DECIMALS)));
   
   const instructionData = Buffer.alloc(8 + 32 + 8);
   instructionData.set(discriminator, 0);
