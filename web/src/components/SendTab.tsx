@@ -134,6 +134,26 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         amount: amountNum,
       });
       
+      // Register deposit with relayer for OAuth lookup
+      try {
+        await fetch(`${RELAYER_URL}/deposits/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            identifier: cleanIdentifier,
+            amount: amountNum,
+            token: 'SOL',
+            leafIndex: depositResult.leafIndex,
+            pool: POOL_ADDRESS.toBase58(),
+            commitment: depositResult.commitment,
+            txSignature: signature,
+          }),
+        });
+      } catch (e) {
+        // Non-critical, deposit still succeeded
+        console.warn('Failed to register deposit with relayer:', e);
+      }
+      
       toast.success('Deposit successful!');
       
     } catch (error) {

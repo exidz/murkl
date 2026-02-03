@@ -667,6 +667,136 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================================
+// Deposit Indexing (for OAuth claim flow)
+// ============================================================================
+
+// In-memory deposit index (production would use database)
+interface IndexedDeposit {
+  id: string;
+  pool: string;
+  commitment: string;
+  identifierHash: string;
+  amount: number;
+  token: string;
+  leafIndex: number;
+  timestamp: string;
+  claimed: boolean;
+  txSignature: string;
+}
+
+const depositIndex: Map<string, IndexedDeposit[]> = new Map();
+
+// Hash identifier for lookup (same as on-chain)
+function hashIdentifier(identifier: string): string {
+  return crypto.createHash('sha256').update(identifier.toLowerCase().trim()).digest('hex');
+}
+
+// Index a new deposit
+function indexDeposit(deposit: IndexedDeposit): void {
+  const existing = depositIndex.get(deposit.identifierHash) || [];
+  existing.push(deposit);
+  depositIndex.set(deposit.identifierHash, existing);
+  log('info', 'Deposit indexed', { 
+    identifierHash: deposit.identifierHash.slice(0, 16) + '...', 
+    leafIndex: deposit.leafIndex 
+  });
+}
+
+// Get deposits by identity
+app.get('/deposits', async (req: Request, res: Response) => {
+  try {
+    const identity = req.query.identity as string;
+    if (!identity || identity.length < 1 || identity.length > 256) {
+      return res.status(400).json({ error: 'Invalid identity parameter' });
+    }
+    
+    const identifierHash = hashIdentifier(identity);
+    const deposits = depositIndex.get(identifierHash) || [];
+    
+    // Filter out claimed deposits
+    const unclaimed = deposits.filter(d => !d.claimed);
+    
+    res.json({
+      identity: identity,
+      deposits: unclaimed.map(d => ({
+        id: d.id,
+        amount: d.amount,
+        token: d.token,
+        leafIndex: d.leafIndex,
+        timestamp: d.timestamp,
+        claimed: d.claimed,
+      })),
+      totalCount: deposits.length,
+      unclaimedCount: unclaimed.length,
+    });
+  } catch (e: unknown) {
+    log('error', 'Deposits query failed', { error: String(e) });
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// Register deposit (called after successful deposit tx)
+app.post('/deposits/register', async (req: Request, res: Response) => {
+  try {
+    const { identifier, amount, token, leafIndex, pool, commitment, txSignature } = req.body;
+    
+    if (!identifier || !amount || !leafIndex === undefined || !pool || !commitment || !txSignature) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const deposit: IndexedDeposit = {
+      id: `${pool}-${leafIndex}`,
+      pool,
+      commitment,
+      identifierHash: hashIdentifier(identifier),
+      amount: parseFloat(amount),
+      token: token || 'SOL',
+      leafIndex: parseInt(leafIndex, 10),
+      timestamp: new Date().toISOString(),
+      claimed: false,
+      txSignature,
+    };
+    
+    indexDeposit(deposit);
+    
+    res.json({ success: true, depositId: deposit.id });
+  } catch (e: unknown) {
+    log('error', 'Deposit registration failed', { error: String(e) });
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// Mark deposit as claimed
+app.post('/deposits/mark-claimed', async (req: Request, res: Response) => {
+  try {
+    const { depositId, nullifier } = req.body;
+    
+    if (!depositId) {
+      return res.status(400).json({ error: 'Missing depositId' });
+    }
+    
+    // Find and mark as claimed
+    for (const [hash, deposits] of depositIndex.entries()) {
+      const deposit = deposits.find(d => d.id === depositId);
+      if (deposit) {
+        deposit.claimed = true;
+        log('info', 'Deposit marked claimed', { depositId });
+        return res.json({ success: true });
+      }
+    }
+    
+    res.status(404).json({ error: 'Deposit not found' });
+  } catch (e: unknown) {
+    log('error', 'Mark claimed failed', { error: String(e) });
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// ============================================================================
+// Pool Info
+// ============================================================================
+
 app.get('/pool/:address', async (req: Request, res: Response) => {
   try {
     if (!isValidBase58(req.params.address)) {
