@@ -40,5 +40,6 @@ overflow-checks = true
 members = [
     ".",
     "cli",
+    "crates/murkl-prover",
     # Note: programs/murkl has its own workspace due to dependency conflicts with STWO
 ]
