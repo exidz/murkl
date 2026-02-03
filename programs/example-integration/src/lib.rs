@@ -25,7 +25,7 @@ use murkl_program::verifier::{
     StarkProof, VerifierConfig, verify_stark_proof,
 };
 
-declare_id!("ExMpLe111111111111111111111111111111111111");
+declare_id!("ExmpLe1111111111111111111111111111111111111");
 
 // ============================================================================
 // Program
@@ -240,7 +240,7 @@ pub struct VerifyAndRecord<'info> {
         init,
         payer = verifier,
         space = VerificationRecord::SIZE,
-        seeds = [b"record", &nullifier],
+        seeds = [b"record", nullifier.as_ref()],
         bump
     )]
     pub verification_record: Account<'info, VerificationRecord>,
@@ -262,7 +262,7 @@ pub struct VerifyRaw<'info> {
         payer = verifier,
         space = VerificationRecord::SIZE,
         // Use id_hash + leaf_index as seed (nullifier derived from these)
-        seeds = [b"raw_record", &id_hash.to_le_bytes(), &leaf_index.to_le_bytes()],
+        seeds = [b"raw_record", id_hash.to_le_bytes().as_ref(), leaf_index.to_le_bytes().as_ref()],
         bump
     )]
     pub verification_record: Account<'info, VerificationRecord>,

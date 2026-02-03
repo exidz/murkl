@@ -29,7 +29,7 @@ pub use verifier::{
     Channel,
 };
 
-declare_id!("74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92");
+declare_id!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
 
 // ============================================================================
 // Constants
@@ -433,13 +433,8 @@ pub mod murkl {
 }
 
 // ============================================================================
-// Helpers
+// Helpers (using verifier::bytes_to_m31 re-exported above)
 // ============================================================================
-
-fn bytes_to_m31(bytes: &[u8; 32]) -> u32 {
-    const P: u32 = 0x7FFFFFFF;
-    u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) % P
-}
 
 // ============================================================================
 // Data Structures
