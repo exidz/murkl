@@ -1,0 +1,20 @@
+[package]
+name = "murkl-program"
+version = "0.1.0"
+description = "Murkl - Anonymous Social Transfers on Solana"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "murkl_program"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+
+[dependencies]
+anchor-lang = "0.30"
+anchor-spl = "0.30"

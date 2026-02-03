@@ -38,6 +38,5 @@ lto = true
 [workspace]
 members = [
     ".",
-    # "verifier",   # Solana program (coming soon)
-    # "contracts",  # Anchor programs (coming soon)
+    # Note: programs/murkl has its own workspace due to dependency conflicts with STWO
 ]
