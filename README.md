@@ -13,9 +13,9 @@ Send tokens to anyone using their social identifier (email, @twitter, Discord) �
 | **stark-verifier** | ✅ Deployed | `StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw` |
 | **murkl app** | ✅ Deployed | `74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92` |
 | **Deposit flow** | ✅ Working | Tested on devnet |
-| **Proof generation** | ✅ Working | CLI + WASM prover |
-| **Proof upload** | ✅ Working | Buffer upload tested |
-| **Full E2E claim** | 🔄 In progress | Proof size optimization needed |
+| **Proof generation** | ✅ Working | CLI + WASM prover (~3.7KB proofs) |
+| **On-chain verification** | ✅ Working | STARK proof verified on-chain |
+| **Full E2E claim** | ✅ Working | Complete flow tested on devnet! |
 
 **Devnet addresses:**
 - WSOL Pool: `HBdNYy8ChUY2KJGf5qTXETXCpeX7kt7aok4XuXk6vbCd`
