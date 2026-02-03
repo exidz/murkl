@@ -39,5 +39,6 @@ overflow-checks = true
 [workspace]
 members = [
     ".",
+    "cli",
     # Note: programs/murkl has its own workspace due to dependency conflicts with STWO
 ]

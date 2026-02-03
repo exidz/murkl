@@ -21,3 +21,7 @@ programs/target/
 .anchor/
 *.log
 
+deposit.json
+*.json
+!package.json
+!tsconfig.json

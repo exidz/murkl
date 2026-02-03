@@ -1,119 +1,126 @@
-# Murkl
+# 🐈‍⬛ Murkl
 
-Anonymous social transfers on Solana via Circle STARKs (M31)
+**Anonymous Social Transfers on Solana via Circle STARKs**
 
-> *Your transactions, murky to everyone else.*
+Send tokens to anyone using their social identifier (email, @twitter, Discord) — they claim with a password you share out-of-band. Full privacy, no KYC.
 
-## The Idea
+## How It Works
 
-Send tokens to someone's email/Twitter. They claim privately — no one can link sender to receiver.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     PASSWORD-PROTECTED CLAIMS                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  SENDER:                                                        │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │ 1. murkl commit -i "@alice" -p "bluemoon123"             │  │
+│  │ 2. Deposit tokens with commitment                        │  │
+│  │ 3. Tell recipient the password (text, call, Signal...)   │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  RECIPIENT:                                                     │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │ 1. murkl prove -i "@alice" -p "bluemoon123" -l 0         │  │
+│  │ 2. Submit proof + wallet address to relayer              │  │
+│  │ 3. Tokens arrive! (never signed anything)                │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  PRIVACY:                                                       │
+│  ✅ Identifier + password never on-chain                        │
+│  ✅ Recipient wallet never signs (relayer submits)              │
+│  ✅ STARK proof = zero-knowledge                                │
+│  ✅ Password shared out-of-band (your choice how)               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## CLI Usage
+
+```bash
+# Install
+cargo build --release -p murkl-cli
+
+# Sender: create deposit commitment
+./target/release/murkl commit -i "@alice" -p "secretpassword"
+
+# Recipient: generate STARK proof
+./target/release/murkl prove -i "@alice" -p "secretpassword" -l 0 -m merkle.json
+
+# Verify locally
+./target/release/murkl verify -p proof.bin -c <commitment_hex>
+
+# Check commitment from identifier + password
+./target/release/murkl hash -i "@alice" -p "secretpassword"
+```
 
 ## Architecture
 
 ```
-DEPOSIT: User → Contract (commitment = hash(identifier || secret))
-                    ↓
-              Merkle Tree (on-chain)
-                    ↓
-CLAIM:   Recipient generates ZK proof (knows preimage in tree)
-                    ↓
-         M31 Circle STARK Verifier (Solana program)
-                    ↓
-WITHDRAW: Funds released to fresh address (unlinkable)
+┌─────────┐  password   ┌─────────┐
+│ Sender  │ ──────────► │Recipient│
+└────┬────┘  (Signal,   └────┬────┘
+     │       in person)      │
+     │                       │
+     ▼                       ▼
+┌─────────┐             ┌─────────┐
+│ Deposit │             │  Prove  │
+│   tx    │             │ (WASM)  │
+└────┬────┘             └────┬────┘
+     │                       │
+     │                       ▼
+     │                  ┌─────────┐    tx     ┌─────────┐
+     │                  │ Relayer │ ────────► │ Solana  │
+     │                  └─────────┘           └────┬────┘
+     │                       ▲                     │
+     │                       │ fee                 │ tokens
+     └───────────────────────┴─────────────────────┘
 ```
 
-## Why "Murkl"?
+## Cryptography
 
-- **Mur**ky — your transfers are hidden
-- Mer**kl**e — the cryptographic data structure at its core
+- **Field**: M31 (Mersenne-31, p = 2³¹ - 1)
+- **STARK**: Circle STARKs over M31 for efficient FRI
+- **Hash**: Custom M31-native hash for commitment/nullifier
+- **Merkle**: keccak256 via Solana syscall (~100 CU/hash)
+- **Proof size**: ~6 KB
+- **Verification**: ~11K compute units on-chain
 
-## Components
+## Program
 
-- `circuits/` - STWO ZK circuits (Merkle membership + nullifier)
-- `verifier/` - Solana program for M31 STARK verification  
-- `contracts/` - Anchor programs for deposits/claims
-- `cli/` - Rust CLI for proof generation
-- `frontend/` - React app for UX
+- **ID**: `74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92`
+- **Size**: ~320 KB (includes full STARK verifier)
+- **Relayer fee**: Max 1% (configurable)
 
-## Technical Stack
+## Instructions
 
-### M31 Field (Mersenne-31)
-- p = 2³¹ - 1 = 2147483647
-- Efficient 32-bit arithmetic
-- Fast modular reduction: x mod p = (x & p) + (x >> 31)
-- Perfect for Circle STARKs
+### `initialize_pool`
+Create a new Murkl pool for a token.
 
-### Circle STARKs
-- Circle curve: x² + y² = 1 over M31
-- Group order = p + 1 = 2³¹ (power of 2!)
-- Enables efficient FFT without extension fields
-- 1.4x faster than traditional STARKs
+### `deposit`
+Deposit tokens with a commitment.
+- `commitment = hash(identifier, hash(password))`
 
-### ZK Circuit
-- **Private inputs:** identifier, secret, Merkle path
-- **Public inputs:** Merkle root, nullifier, recipient address
-- **Constraint:** hash(identifier || secret) is in the Merkle tree
-- **Nullifier:** hash(secret || leaf_index) — prevents double-claims
-
-### On-Chain Verifier
-- FRI (Fast Reed-Solomon IOP) verification
-- M31 field operations in Solana BPF
-- Optimized for ~1.4M compute unit budget
-
-## Status
-
-🚧 Under construction — Colosseum Agent Hackathon 2026
-
-**Progress:**
-- [x] M31 field implementation (circuits/m31.rs)
-- [x] Circle group operations (circuits/circle.rs)
-- [x] Poseidon hash over M31 (circuits/poseidon.rs)
-- [x] Merkle tree (circuits/merkle.rs)
-- [x] ZK circuit with STWO integration (circuits/stark_circuit.rs, prover.rs)
-- [x] **End-to-end proof generation & verification working!** 🎉
-- [ ] Solana verifier program
-- [ ] Deposit/claim contracts
-- [ ] CLI prover
-- [ ] Frontend
-
-### Test Results
-```
-running 26 tests
-test circle::tests::test_double_equals_add ... ok
-test circle::tests::test_generator_on_circle ... ok
-test circle::tests::test_group_identity ... ok
-test m31::tests::test_basic_arithmetic ... ok
-test m31::tests::test_inverse ... ok
-test poseidon::tests::test_hash_deterministic ... ok
-test merkle::tests::test_merkle_path_verification ... ok
-test stark_circuit::tests::test_claim_consistency ... ok
-test prover::tests::test_full_proof_generation_and_verification ... ok
-... (26 total)
-
-test result: ok. 26 passed; 0 failed
-```
+### `claim`
+Claim tokens with STARK proof via relayer.
+- Verifies STARK proof on-chain
+- Checks Merkle proof
+- Prevents double-spend via nullifier
+- Tokens go to recipient, fee to relayer
 
 ## Building
 
 ```bash
-# Requires Rust nightly-2025-07-14 for STWO compatibility
-rustup install nightly-2025-07-14
-rustup default nightly-2025-07-14
+# CLI (STWO prover)
+cargo build --release -p murkl-cli
 
-cargo build
-cargo test
+# On-chain program (Anchor)
+cd programs && anchor build
 ```
-
-## Links & Research
-
-- [Circle STARKs Paper (PDF)](https://eprint.iacr.org/2024/278.pdf)
-- [STWO Prover GitHub](https://github.com/starkware-libs/stwo)
-- [STWO Blog Announcement](https://starkware.co/blog/stwo-prover-the-next-gen-of-stark-scaling-is-here/)
-
-### Key Insight
-Classical STARKs require p-1 divisible by 2^k. M31 has p-1 = 2(2³⁰-1) which fails this.
-But M31 has **p+1 = 2³¹** — Circle STARKs use the circle curve x²+y²=1 to provide FFT/FRI structure when p+1 is a power of 2.
 
 ## License
 
 MIT
+
+---
+
+Built for [Colosseum Hackathon](https://www.colosseum.org/) 🏛️

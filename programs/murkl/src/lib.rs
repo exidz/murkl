@@ -1,6 +1,6 @@
 //! Murkl - Anonymous Social Transfers on Solana
 //!
-//! Full on-chain Circle STARK verification!
+//! Full on-chain Circle STARK verification with relayer support!
 //! Uses keccak256 syscall for Merkle, M31/QM31 field ops for constraints.
 
 use anchor_lang::prelude::*;
@@ -16,6 +16,9 @@ declare_id!("74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92");
 const MIX_A: u32 = 0x9e3779b9 % P;
 const MIX_B: u32 = 0x517cc1b7 % P;
 const MIX_C: u32 = 0x2545f491 % P;
+
+/// Maximum relayer fee (1% = 100 basis points)
+const MAX_RELAYER_FEE_BPS: u16 = 100;
 
 #[program]
 pub mod murkl {
@@ -82,12 +85,18 @@ pub mod murkl {
         Ok(())
     }
 
-    /// Claim tokens with STARK proof
+    /// Claim tokens with STARK proof via relayer
+    /// 
+    /// PRIVACY FLOW:
+    /// 1. Recipient generates STARK proof off-chain (proves knowledge of secret)
+    /// 2. Recipient sends proof to relayer (off-chain, e.g., API call)
+    /// 3. Relayer submits this tx and pays gas fees
+    /// 4. Tokens go directly to recipient - they never sign anything!
     /// 
     /// The STARK proof verifies:
-    /// 1. Prover knows (identifier, secret) such that hash(identifier, secret) = commitment
-    /// 2. Merkle path proves commitment is in the tree
-    /// 3. Nullifier = hash(secret, leaf_index) prevents double-spend
+    /// - Prover knows (identifier, secret) such that hash(identifier, secret) = commitment
+    /// - Merkle path proves commitment is in the tree
+    /// - Nullifier = hash(secret, leaf_index) prevents double-spend
     /// 
     /// Privacy: identifier and secret are NEVER revealed on-chain!
     pub fn claim(
@@ -100,6 +109,8 @@ pub mod murkl {
         leaf_index: u32,
         // Merkle proof for commitment
         merkle_proof: Vec<[u8; 32]>,
+        // Relayer fee in basis points (0-100, max 1%)
+        relayer_fee_bps: u16,
     ) -> Result<()> {
         let pool = &ctx.accounts.pool;
         let nullifier_account = &mut ctx.accounts.nullifier_account;
@@ -107,37 +118,57 @@ pub mod murkl {
         // 1. Check nullifier not used
         require!(!nullifier_account.used, MurklError::NullifierAlreadyUsed);
         
-        // 2. Verify Merkle proof (commitment in tree)
+        // 2. Validate relayer fee
+        require!(relayer_fee_bps <= MAX_RELAYER_FEE_BPS, MurklError::RelayerFeeTooHigh);
+        
+        // 3. Verify Merkle proof (commitment in tree)
         let computed_root = verify_merkle_proof_internal(&commitment, leaf_index, &merkle_proof);
         require!(computed_root == pool.merkle_root, MurklError::InvalidMerkleProof);
         
-        // 3. Deserialize and verify STARK proof
+        // 4. Deserialize and verify STARK proof
         let proof: StarkProof = StarkProof::try_from_slice(&proof_data)
             .map_err(|_| MurklError::InvalidProofFormat)?;
         
         let config = VerifierConfig::default();
         
-        // Public input: the commitment hash (as M31 element)
+        // Public inputs: commitment hash + nullifier (as M31 elements)
         let commitment_m31 = u32::from_le_bytes([
             commitment[0], commitment[1], commitment[2], commitment[3]
         ]) % P;
+        let nullifier_m31 = u32::from_le_bytes([
+            nullifier[0], nullifier[1], nullifier[2], nullifier[3]
+        ]) % P;
         
-        let verification_result = verify_stark_proof(&proof, &config, &[commitment_m31]);
+        let verification_result = verify_stark_proof(
+            &proof, 
+            &config, 
+            &[commitment_m31, nullifier_m31]
+        );
         
         require!(verification_result, MurklError::StarkVerificationFailed);
         
-        // 4. Verify nullifier is correctly derived
-        // The STARK also proves nullifier derivation, but we double-check format
-        // In production, nullifier would be a public output of the STARK
-        
         // 5. Mark nullifier as used
         nullifier_account.nullifier = nullifier;
         nullifier_account.pool = pool.key();
         nullifier_account.used = true;
         nullifier_account.claimed_at = Clock::get()?.unix_timestamp;
         
-        // 6. Transfer tokens
-        let amount = ctx.accounts.deposit_account.amount;
+        // 6. Calculate amounts
+        let total_amount = ctx.accounts.deposit_account.amount;
+        let relayer_fee = if relayer_fee_bps > 0 {
+            (total_amount as u128 * relayer_fee_bps as u128 / 10000) as u64
+        } else {
+            0
+        };
+        let recipient_amount = total_amount - relayer_fee;
+        
+        // 7. Transfer tokens to recipient
+        let signer_seeds = &[
+            b"pool",
+            pool.token_mint.as_ref(),
+            &[pool.bump],
+        ];
+        
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -146,92 +177,40 @@ pub mod murkl {
                     to: ctx.accounts.recipient_token_account.to_account_info(),
                     authority: pool.to_account_info(),
                 },
-                &[&[
-                    b"pool",
-                    pool.token_mint.as_ref(),
-                    &[pool.bump],
-                ]],
+                &[signer_seeds],
             ),
-            amount,
+            recipient_amount,
         )?;
+        
+        // 8. Transfer fee to relayer (if any)
+        if relayer_fee > 0 {
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.vault.to_account_info(),
+                        to: ctx.accounts.relayer_token_account.to_account_info(),
+                        authority: pool.to_account_info(),
+                    },
+                    &[signer_seeds],
+                ),
+                relayer_fee,
+            )?;
+        }
         
         ctx.accounts.deposit_account.claimed = true;
         
         emit!(ClaimEvent {
             pool: pool.key(),
             nullifier,
-            amount,
+            recipient: ctx.accounts.recipient_token_account.key(),
+            amount: recipient_amount,
+            relayer: ctx.accounts.relayer.key(),
+            relayer_fee,
         });
         
-        msg!("STARK proof verified! Tokens claimed anonymously.");
-        Ok(())
-    }
-    
-    /// Simple claim without full STARK (for testing/MVP)
-    /// WARNING: This reveals identifier and secret! Use claim() for privacy.
-    pub fn claim_simple(
-        ctx: Context<ClaimSimple>,
-        // Revealed values (no privacy!)
-        identifier: u32,
-        secret: u32,
-        nullifier: [u8; 32],
-        leaf_index: u32,
-        merkle_proof: Vec<[u8; 32]>,
-    ) -> Result<()> {
-        let pool = &ctx.accounts.pool;
-        let nullifier_account = &mut ctx.accounts.nullifier_account;
-        
-        // 1. Check nullifier not used
-        require!(!nullifier_account.used, MurklError::NullifierAlreadyUsed);
-        
-        // 2. Compute commitment from revealed values
-        let commitment = m31_hash2(identifier, secret);
-        
-        // 3. Verify commitment matches deposit
-        // (simplified - in production use proper Merkle tree)
-        require!(
-            commitment == ctx.accounts.deposit_account.commitment,
-            MurklError::InvalidMerkleProof
-        );
-        
-        // 4. Verify nullifier derivation
-        let expected_nullifier = m31_hash2(secret, leaf_index);
-        require!(expected_nullifier == nullifier, MurklError::InvalidNullifier);
-        
-        // 5. Mark nullifier as used
-        nullifier_account.nullifier = nullifier;
-        nullifier_account.pool = pool.key();
-        nullifier_account.used = true;
-        nullifier_account.claimed_at = Clock::get()?.unix_timestamp;
-        
-        // 6. Transfer tokens
-        let amount = ctx.accounts.deposit_account.amount;
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                Transfer {
-                    from: ctx.accounts.vault.to_account_info(),
-                    to: ctx.accounts.recipient_token_account.to_account_info(),
-                    authority: pool.to_account_info(),
-                },
-                &[&[
-                    b"pool",
-                    pool.token_mint.as_ref(),
-                    &[pool.bump],
-                ]],
-            ),
-            amount,
-        )?;
-        
-        ctx.accounts.deposit_account.claimed = true;
-        
-        emit!(ClaimEvent {
-            pool: pool.key(),
-            nullifier,
-            amount,
-        });
-        
-        msg!("Simple claim successful (no privacy)");
+        msg!("STARK verified! {} tokens to recipient, {} fee to relayer", 
+            recipient_amount, relayer_fee);
         Ok(())
     }
 }
@@ -258,15 +237,13 @@ fn verify_merkle_proof_internal(leaf: &[u8; 32], index: u32, proof: &[[u8; 32]])
 }
 
 /// M31 hash function (matches off-chain STWO circuits)
+#[allow(dead_code)]
 fn m31_hash2(a: u32, b: u32) -> [u8; 32] {
     let a = a % P;
     let b = b % P;
     
-    // x = (a + b * MIX_A + 1) mod p
     let x = m31_add(m31_add(a, m31_mul(b, MIX_A)), 1);
-    // y = x^2 mod p
     let y = m31_mul(x, x);
-    // result = (y + a*MIX_B + b*MIX_C + MIX_A) mod p
     let result = m31_add(
         m31_add(m31_add(y, m31_mul(a, MIX_B)), m31_mul(b, MIX_C)),
         MIX_A
@@ -384,6 +361,7 @@ pub struct Deposit<'info> {
     nullifier: [u8; 32],
     leaf_index: u32,
     merkle_proof: Vec<[u8; 32]>,
+    relayer_fee_bps: u16,
 )]
 pub struct Claim<'info> {
     #[account(mut)]
@@ -397,7 +375,7 @@ pub struct Claim<'info> {
     
     #[account(
         init,
-        payer = claimer,
+        payer = relayer,
         space = 8 + 32 + 32 + 1 + 8,
         seeds = [b"nullifier", pool.key().as_ref(), nullifier.as_ref()],
         bump
@@ -411,55 +389,17 @@ pub struct Claim<'info> {
     )]
     pub vault: Account<'info, TokenAccount>,
     
+    /// Recipient's token account - they don't need to sign!
     #[account(mut)]
     pub recipient_token_account: Account<'info, TokenAccount>,
     
+    /// Relayer's token account for fee (can be same as recipient if self-relay)
     #[account(mut)]
-    pub claimer: Signer<'info>,
+    pub relayer_token_account: Account<'info, TokenAccount>,
     
-    pub token_program: Program<'info, Token>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(
-    identifier: u32,
-    secret: u32,
-    nullifier: [u8; 32],
-    leaf_index: u32,
-    merkle_proof: Vec<[u8; 32]>,
-)]
-pub struct ClaimSimple<'info> {
+    /// Relayer signs and pays tx fees - recipient stays anonymous
     #[account(mut)]
-    pub pool: Account<'info, Pool>,
-    
-    #[account(
-        mut,
-        constraint = !deposit_account.claimed @ MurklError::AlreadyClaimed
-    )]
-    pub deposit_account: Account<'info, DepositAccount>,
-    
-    #[account(
-        init,
-        payer = claimer,
-        space = 8 + 32 + 32 + 1 + 8,
-        seeds = [b"nullifier", pool.key().as_ref(), nullifier.as_ref()],
-        bump
-    )]
-    pub nullifier_account: Account<'info, NullifierAccount>,
-    
-    #[account(
-        mut,
-        seeds = [b"vault", pool.key().as_ref()],
-        bump
-    )]
-    pub vault: Account<'info, TokenAccount>,
-    
-    #[account(mut)]
-    pub recipient_token_account: Account<'info, TokenAccount>,
-    
-    #[account(mut)]
-    pub claimer: Signer<'info>,
+    pub relayer: Signer<'info>,
     
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -481,7 +421,10 @@ pub struct DepositEvent {
 pub struct ClaimEvent {
     pub pool: Pubkey,
     pub nullifier: [u8; 32],
+    pub recipient: Pubkey,
     pub amount: u64,
+    pub relayer: Pubkey,
+    pub relayer_fee: u64,
 }
 
 #[error_code]
@@ -498,4 +441,6 @@ pub enum MurklError {
     InvalidProofFormat,
     #[msg("STARK verification failed")]
     StarkVerificationFailed,
+    #[msg("Relayer fee too high (max 1%)")]
+    RelayerFeeTooHigh,
 }
