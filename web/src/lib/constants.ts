@@ -2,9 +2,13 @@ import { PublicKey } from '@solana/web3.js';
 
 // Program and pool addresses
 export const PROGRAM_ID = new PublicKey('74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92');
+// Test token pool (working on devnet)
 export const POOL_ADDRESS = new PublicKey(
-  import.meta.env.VITE_POOL_ADDRESS || 'BzZPehHo3uPMKqxgYVHVKL1bQoXTsXR9zB9iApvx1M8V'
+  import.meta.env.VITE_POOL_ADDRESS || '6ujDMwXXwEBwxmmKG6TD6cMhfw8g9XU33AHrJmEAEYzn'
 );
+
+// STARK Verifier program
+export const STARK_VERIFIER_ID = new PublicKey('StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw');
 
 // RPC endpoint
 export const RPC_ENDPOINT = import.meta.env.VITE_RPC_URL || 'https://api.devnet.solana.com';
