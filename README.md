@@ -75,7 +75,12 @@ WITHDRAW: Funds released to fresh address (unlinkable)
 - [ ] CLI prover
 - [ ] Frontend
 
-## Links
+## Links & Research
 
-- [Circle STARKs Paper](https://eprint.iacr.org/2024/278)
-- [STWO Prover](https://github.com/starkware-libs/stwo)
+- [Circle STARKs Paper (PDF)](https://eprint.iacr.org/2024/278.pdf)
+- [STWO Prover GitHub](https://github.com/starkware-libs/stwo)
+- [STWO Blog Announcement](https://starkware.co/blog/stwo-prover-the-next-gen-of-stark-scaling-is-here/)
+
+### Key Insight
+Classical STARKs require p-1 divisible by 2^k. M31 has p-1 = 2(2³⁰-1) which fails this.
+But M31 has **p+1 = 2³¹** — Circle STARKs use the circle curve x²+y²=1 to provide FFT/FRI structure when p+1 is a power of 2.

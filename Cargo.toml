@@ -14,13 +14,21 @@ name = "murkl-cli"
 path = "cli/main.rs"
 
 [dependencies]
-# Will add STWO and other deps as needed
+# STWO prover framework (Circle STARKs)
+stwo = { git = "https://github.com/starkware-libs/stwo.git", features = ["std"] }
+stwo-constraint-framework = { git = "https://github.com/starkware-libs/stwo.git", features = ["std", "prover"] }
+
+# Utilities
+itertools = "0.12"
+num-traits = "0.2"
+tracing = "0.1"
 
 [dev-dependencies]
-# Testing
+rand = "0.8"
 
 [features]
-default = []
+default = ["std"]
+std = []
 solana = []  # For Solana-compatible builds (no_std, etc.)
 
 [profile.release]
