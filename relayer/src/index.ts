@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 /**
  * Murkl Relayer API - Production Ready
  * 
