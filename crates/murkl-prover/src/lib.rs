@@ -3,6 +3,23 @@
 //! This crate provides cryptographic primitives for generating and verifying
 //! Circle STARK proofs for the Murkl privacy protocol.
 //!
+//! # Quick Start
+//!
+//! ```rust,ignore
+//! use murkl_prover::prelude::*;
+//! use murkl_prover::prover::ProverConfig;
+//!
+//! // Create a prover with fast configuration
+//! let prover = Prover::new(ProverConfig::fast());
+//!
+//! // Generate proof for your AIR and trace
+//! let proof = prover.prove(&air, &trace, public_inputs)?;
+//!
+//! // Serialize for on-chain verification
+//! let proof_bytes = proof.to_bytes();
+//! println!("Proof size: {} bytes", proof_bytes.len());
+//! ```
+//!
 //! # Features
 //!
 //! - `std` - Enable standard library features (default)
@@ -11,14 +28,21 @@
 //!
 //! # Components
 //!
-//! - `m31` - Mersenne-31 field implementation with optional SIMD
-//! - `circle` - Circle group operations for Circle STARKs
-//! - `merkle` - Keccak256-based Merkle tree
-//! - `fri` - FRI (Fast Reed-Solomon IOPP) protocol
-//! - `air` - Algebraic Intermediate Representation constraints
-//! - `prover` - Proof generation
-//! - `verifier` - Proof verification (for testing)
-//! - `types` - Common types (Proof, PublicInputs, etc.)
+//! - [`m31`] - Mersenne-31 field implementation with optional SIMD
+//! - [`circle`] - Circle group operations for Circle STARKs
+//! - [`merkle`] - Keccak256-based Merkle tree
+//! - [`fri`] - FRI (Fast Reed-Solomon IOPP) protocol
+//! - [`air`] - Algebraic Intermediate Representation constraints
+//! - [`prover`] - Proof generation
+//! - [`verifier`] - Proof verification (for testing)
+//! - [`types`] - Common types (Proof, PublicInputs, etc.)
+//!
+//! # Security
+//!
+//! Murkl proofs provide:
+//! - **128-bit post-quantum security** (hash-based, no elliptic curves)
+//! - **Transparent setup** (no trusted ceremony)
+//! - **~6KB proof size** with ~40K compute units for on-chain verification
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
