@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { SendTab } from './components/SendTab';
 import { ClaimTabNew as ClaimTab } from './components/ClaimTabNew';
 import { TabBar } from './components/TabBar';
+import { Footer } from './components/Footer';
 import './App.css';
 
 // WASM module
@@ -60,16 +61,7 @@ function AppContent() {
         {tab === 'claim' && <ClaimTab wasmReady={wasmReady} />}
       </main>
 
-      <footer className="footer">
-        <p>
-          Private payments, built in-browser 🐈‍⬛
-        </p>
-        <p className="tech">
-          <a href="https://github.com/exidz/murkl" target="_blank" rel="noopener noreferrer">Source</a>
-          {' • '}
-          <a href="https://colosseum.org" target="_blank" rel="noopener noreferrer">Colosseum</a>
-        </p>
-      </footer>
+      <Footer />
     </div>
   );
 }
