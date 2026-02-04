@@ -820,13 +820,31 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // Simulate first
     const simResult = await connection.simulateTransaction(claimTx, [relayerKeypair]);
     if (simResult.value.err) {
+      // Parse error for better diagnostics
+      const errJson = JSON.stringify(simResult.value.err);
+      let errorDetail = errJson;
+      
+      // Check for specific Anchor errors
+      if (errJson.includes('3007')) {
+        // AccountOwnedByWrongProgram - check which account
+        const depositInfo = await connection.getAccountInfo(deposit);
+        const poolInfo = await connection.getAccountInfo(pool);
+        errorDetail = `AccountOwnedByWrongProgram: ` +
+          `deposit=${deposit.toBase58()} owner=${depositInfo?.owner?.toBase58() || 'NOT_FOUND'}, ` +
+          `pool=${pool.toBase58()} owner=${poolInfo?.owner?.toBase58() || 'NOT_FOUND'}, ` +
+          `expected=${config.programId.toBase58()}`;
+      }
+      
       log('error', 'Claim simulation failed', { 
         requestId, 
-        error: JSON.stringify(simResult.value.err),
+        error: errJson,
+        detail: errorDetail,
+        logs: simResult.value.logs?.slice(-10),
       });
       return res.status(400).json({ 
         error: 'Claim verification failed',
         code: 'VERIFICATION_FAILED',
+        detail: errorDetail,
       });
     }
     

@@ -12,7 +12,7 @@ const RELAYER_URL = 'http://localhost:3001';
 const POOL = '8MU3WQzxLDHi6Up2ksk255LWrRm17i7UQ6Hap4zeF3qJ';
 const IDENTIFIER = '_Exidz_';
 const PASSWORD = '12345678';
-const LEAF_INDEX = 11;
+const LEAF_INDEX = 22;
 const RECIPIENT = 'DhUG7vMJsx3GDAJ3RLmFhs5piwfSxN6zX34ABvUwgC3T';
 
 async function loadWasm() {
