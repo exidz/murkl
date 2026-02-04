@@ -14,6 +14,7 @@ interface Props {
   tokens: Token[];
   selected: Token;
   onChange: (token: Token) => void;
+  onMaxClick?: (balance: number) => void; // Callback when Max is clicked
   balance?: number | null;
   disabled?: boolean;
 }
@@ -32,6 +33,7 @@ export const TokenSelector: FC<Props> = ({
   tokens,
   selected,
   onChange,
+  onMaxClick,
   balance,
   disabled = false,
 }) => {
@@ -101,7 +103,7 @@ export const TokenSelector: FC<Props> = ({
         })}
       </div>
 
-      {/* Balance display */}
+      {/* Balance display with Max button */}
       <AnimatePresence mode="wait">
         {balance !== undefined && balance !== null && (
           <motion.div
@@ -116,6 +118,19 @@ export const TokenSelector: FC<Props> = ({
             <span className="balance-amount">
               {formatBalance(balance)} {selected.symbol}
             </span>
+            {onMaxClick && balance > 0 && (
+              <motion.button
+                type="button"
+                className="max-button"
+                onClick={() => onMaxClick(balance)}
+                disabled={disabled}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label={`Use maximum balance of ${formatBalance(balance)} ${selected.symbol}`}
+              >
+                Max
+              </motion.button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -98,6 +98,20 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     setAmount('');
   }, []);
 
+  // Handle Max button click - fills in max balance (minus small buffer for fees)
+  const handleMaxClick = useCallback((balance: number) => {
+    // Leave a small buffer for transaction fees (0.001 SOL for native, none for tokens)
+    const feeBuffer = selectedToken.symbol === 'SOL' ? 0.001 : 0;
+    const maxAmount = Math.max(0, balance - feeBuffer);
+    
+    // Format to avoid floating point issues, respect token decimals
+    const formatted = maxAmount.toFixed(Math.min(selectedToken.decimals, 6));
+    // Remove trailing zeros after decimal
+    const cleaned = formatted.replace(/\.?0+$/, '');
+    
+    setAmount(cleaned || '0');
+  }, [selectedToken]);
+
   // Copy to clipboard
   const copyToClipboard = useCallback(async (text: string, field: string) => {
     try {
@@ -467,6 +481,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               tokens={SUPPORTED_TOKENS}
               selected={selectedToken}
               onChange={handleTokenChange}
+              onMaxClick={handleMaxClick}
               balance={tokenBalance}
             />
 

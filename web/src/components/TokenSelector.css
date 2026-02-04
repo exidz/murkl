@@ -73,7 +73,7 @@
   z-index: -1;
 }
 
-/* Balance display */
+/* Balance display with Max button */
 .token-balance {
   display: flex;
   align-items: center;
@@ -90,6 +90,38 @@
   color: var(--text-secondary, #a1a1aa);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+
+/* Max button - Venmo/crypto app style */
+.max-button {
+  margin-left: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-primary, #3d95ce);
+  background: rgba(61, 149, 206, 0.1);
+  border: 1px solid rgba(61, 149, 206, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 24px;
+}
+
+.max-button:hover:not(:disabled) {
+  background: rgba(61, 149, 206, 0.2);
+  border-color: rgba(61, 149, 206, 0.4);
+  color: #5ba8d9;
+}
+
+.max-button:active:not(:disabled) {
+  background: rgba(61, 149, 206, 0.25);
+}
+
+.max-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Dropdown (for many tokens) */
