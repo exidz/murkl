@@ -26,17 +26,11 @@ const TOKEN_PRESETS: Record<string, { value: number; label: string }[]> = {
     { value: 1, label: '1' },
     { value: 5, label: '5' },
   ],
-  USDC: [
+  WSOL: [
+    { value: 0.1, label: '0.1' },
+    { value: 0.5, label: '0.5' },
+    { value: 1, label: '1' },
     { value: 5, label: '5' },
-    { value: 10, label: '10' },
-    { value: 25, label: '25' },
-    { value: 100, label: '100' },
-  ],
-  USDT: [
-    { value: 5, label: '5' },
-    { value: 10, label: '10' },
-    { value: 25, label: '25' },
-    { value: 100, label: '100' },
   ],
 };
 
@@ -103,11 +97,25 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     const fetchBalance = async () => {
       try {
         if (selectedToken.symbol === 'SOL') {
+          // Native SOL balance
           const balance = await connection.getBalance(publicKey);
           setTokenBalance(balance / 1e9); // Convert lamports to SOL
+        } else if (selectedToken.symbol === 'WSOL') {
+          // WSOL (wrapped SOL) token account balance
+          const { getAssociatedTokenAddress } = await import('@solana/spl-token');
+          const { PublicKey } = await import('@solana/web3.js');
+          const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+          const ata = await getAssociatedTokenAddress(WSOL_MINT, publicKey);
+          const ataInfo = await connection.getAccountInfo(ata);
+          if (ataInfo) {
+            // Parse token account data - balance is at offset 64, u64 LE
+            const balance = ataInfo.data.readBigUInt64LE(64);
+            setTokenBalance(Number(balance) / 1e9);
+          } else {
+            setTokenBalance(0);
+          }
         } else {
-          // For SPL tokens, would need to fetch token account
-          // For now, show null (no balance shown)
+          // For other SPL tokens
           setTokenBalance(null);
         }
       } catch (e) {
@@ -208,6 +216,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       const amountNum = parseFloat(amount);
       
       // Build transaction
+      // If user selected SOL, wrap native SOL to WSOL
+      // If user selected WSOL, use existing WSOL directly
+      const wrapSol = selectedToken.symbol === 'SOL';
       const depositResult = await buildDepositTransaction(
         connection,
         POOL_ADDRESS,
@@ -215,6 +226,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         cleanIdentifier,
         password,
         amountNum,
+        { wrapSol },
       );
       
       // Set recent blockhash and fee payer

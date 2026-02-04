@@ -21,8 +21,8 @@ interface Props {
 
 // Default supported tokens
 export const SUPPORTED_TOKENS: Token[] = [
-  { symbol: 'SOL', name: 'Solana', icon: '◎', decimals: 9 },
-  { symbol: 'USDC', name: 'USD Coin', icon: '$', decimals: 6, mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' },
+  { symbol: 'SOL', name: 'Solana (auto-wrap)', icon: '◎', decimals: 9 },
+  { symbol: 'WSOL', name: 'Wrapped SOL', icon: '◎', decimals: 9, mint: 'So11111111111111111111111111111111111111112' },
 ];
 
 /**

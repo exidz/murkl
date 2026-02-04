@@ -48,6 +48,12 @@
   background: var(--bg-secondary, #14141f);
   border: 1px solid var(--border, #27272a);
   border-radius: 12px;
+  /* Smooth border transition for when content loads */
+  transition: border-color 0.3s ease;
+}
+
+.skeleton-card:hover {
+  border-color: var(--border, #27272a);
 }
 
 .skeleton-card-content {
@@ -57,11 +63,114 @@
   gap: 0.5rem;
 }
 
-/* Reduced motion - disable shimmer */
+/* ============================================
+   Skeleton List - Staggered animation container
+   ============================================ */
+
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* ============================================
+   Skeleton Amount - Big number displays
+   ============================================ */
+
+.skeleton-amount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================
+   Enhanced shimmer variations
+   ============================================ */
+
+/* Faster shimmer for smaller elements */
+.skeleton-card .skeleton:nth-child(2) .skeleton,
+.skeleton-card-content .skeleton:nth-child(1) {
+  animation-duration: 1.8s;
+  animation-delay: 0.1s;
+}
+
+.skeleton-card-content .skeleton:nth-child(2) {
+  animation-duration: 1.8s;
+  animation-delay: 0.15s;
+}
+
+/* Amount skeletons get a special highlight */
+.skeleton-amount .skeleton {
+  background: linear-gradient(
+    105deg,
+    var(--bg-tertiary, #1e1e2e) 0%,
+    var(--bg-tertiary, #1e1e2e) 30%,
+    rgba(61, 149, 206, 0.04) 40%,
+    rgba(61, 149, 206, 0.08) 50%,
+    rgba(61, 149, 206, 0.04) 60%,
+    var(--bg-tertiary, #1e1e2e) 70%,
+    var(--bg-tertiary, #1e1e2e) 100%
+  );
+  background-size: 300% 100%;
+  animation: skeleton-shimmer-accent 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes skeleton-shimmer-accent {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+/* ============================================
+   Mobile optimizations
+   ============================================ */
+
+@media (max-width: 480px) {
+  .skeleton-card {
+    padding: 0.875rem;
+    gap: 0.875rem;
+  }
+  
+  .skeleton-card-content {
+    gap: 0.375rem;
+  }
+  
+  .skeleton-list {
+    gap: 0.75rem;
+  }
+}
+
+/* ============================================
+   Reduced motion - disable shimmer
+   ============================================ */
+
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
+  .skeleton,
+  .skeleton-amount .skeleton {
     animation: none;
     background: var(--bg-tertiary, #1e1e2e);
+  }
+  
+  .skeleton-card {
+    transition: none;
+  }
+}
+
+/* ============================================
+   High contrast mode
+   ============================================ */
+
+@media (prefers-contrast: high) {
+  .skeleton {
+    border: 1px solid var(--border, #27272a);
+    box-shadow: none;
+  }
+  
+  .skeleton-card {
+    border-width: 2px;
   }
 }
 

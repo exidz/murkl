@@ -115,8 +115,15 @@ export interface DepositResult {
   depositPda: PublicKey;
 }
 
+export interface DepositOptions {
+  /** If true, wrap native SOL to WSOL. If false, use existing WSOL in wallet */
+  wrapSol?: boolean;
+}
+
 /**
- * Build deposit transaction (auto-wraps SOL to WSOL if needed)
+ * Build deposit transaction
+ * - wrapSol=true (default): Wraps native SOL to WSOL for deposit
+ * - wrapSol=false: Uses existing WSOL in wallet directly
  */
 export async function buildDepositTransaction(
   connection: Connection,
@@ -125,7 +132,9 @@ export async function buildDepositTransaction(
   identifier: string,
   password: string,
   amount: number,
+  options: DepositOptions = {},
 ): Promise<DepositResult> {
+  const { wrapSol = true } = options;
   // Fetch pool info
   const poolInfo = await fetchPoolInfo(connection, pool);
   const leafIndex = poolInfo.nextLeafIndex;
@@ -174,9 +183,9 @@ export async function buildDepositTransaction(
     );
   }
   
-  // If WSOL pool, wrap SOL → WSOL
-  if (isWsol) {
-    // Transfer SOL to the WSOL ATA
+  // If WSOL pool AND user wants to wrap native SOL
+  if (isWsol && wrapSol) {
+    // Transfer native SOL to the WSOL ATA
     tx.add(
       SystemProgram.transfer({
         fromPubkey: depositor,
@@ -188,6 +197,7 @@ export async function buildDepositTransaction(
     // Sync native balance (tells the token program about the new SOL)
     tx.add(createSyncNativeInstruction(userAta));
   }
+  // If wrapSol=false for WSOL pool, user is depositing existing WSOL directly
   
   // Add deposit instruction
   const ix = new TransactionInstruction({
