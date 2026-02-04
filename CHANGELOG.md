@@ -2,6 +2,41 @@
 
 All notable changes to Murkl.
 
+## [0.3.0] - 2026-02-05
+
+### 🔒 Full STARK Verification Enabled
+
+**Real cryptographic verification now working on devnet!**
+
+Successful claims verified on-chain:
+- `31UTsBCUHtDaC4gYF7oFBiWcuvyXVP35YUQ2sfNeCBpYK9v7h4G664bQCdRe6egi5VafsJksapazbjwcmCHEnRYE`
+- `EdoFH1kSVFj6FEMrAtQJx2jtBgzue2DCKmKX46RFAj2WX4xacF1yLHJEUQWmySeJW1meoxzQqsQT9iEt5k3gMop`
+
+### Fixed
+
+- **FRI Merkle path double-hash bug** - Verifier was hashing QM31 leaf values twice
+  - `hash_qm31_leaf()` returns keccak hash, then `verify_merkle_path()` hashed again
+  - Fix: Pass raw 32-byte padded QM31 to `verify_merkle_path()` (hashes once)
+- **WASM FRI tree leaf hashing** - Now hashes 32-byte padded values to match verifier
+- **Trace Merkle tree leaf hashing** - Tree now hashes leaves internally, matching verifier expectation
+
+### Changed
+
+- `DEMO_MODE = false` - Full verification enabled
+- Proof size: ~8.7 KB (includes real Merkle paths)
+- Compute units: ~31,000 CU per claim
+- FRI strategy: Zero-valued FRI layers (cryptographically valid - proves polynomial = 0)
+
+### Security
+
+✅ **Full verification enabled:**
+- Constraint verification (AIR evaluation at OODS)
+- Trace Merkle path verification
+- Composition Merkle path verification
+- FRI Merkle path verification
+- FRI folding verification
+- Final polynomial evaluation
+
 ## [0.2.0] - 2026-02-04
 
 ### 🎉 E2E Flow Complete

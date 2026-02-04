@@ -699,7 +699,14 @@ pub fn verify_stark_proof(
             query.fri_layer_values.iter().zip(fri_alphas.iter()).enumerate()
         {
             // Verify the sibling values are committed
-            let sibling_hash = hash_qm31_leaf(&layer_query.siblings[current_index % 4]);
+            // Pass raw QM31 bytes (padded to 32), verify_merkle_path will hash
+            let sibling_qm31 = &layer_query.siblings[current_index % 4];
+            let mut sibling_bytes = [0u8; 32];
+            sibling_bytes[0..4].copy_from_slice(&sibling_qm31.a.0.to_le_bytes());
+            sibling_bytes[4..8].copy_from_slice(&sibling_qm31.b.0.to_le_bytes());
+            sibling_bytes[8..12].copy_from_slice(&sibling_qm31.c.0.to_le_bytes());
+            sibling_bytes[12..16].copy_from_slice(&sibling_qm31.d.0.to_le_bytes());
+            // bytes 16..32 stay zero (padding)
             
             if !layer_query.path.is_empty() {
                 let layer_root = if layer_idx < proof.fri_layer_commitments.len() {
@@ -713,7 +720,7 @@ pub fn verify_stark_proof(
                         &layer_query.path,
                         layer_root,
                         (current_index / 4) as u32,
-                        &sibling_hash,
+                        &sibling_bytes,
                     ),
                     VerifierError::FriFoldingFailed
                 );

@@ -758,21 +758,18 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     // poolInfo already fetched above for merkle_root
     const tokenMint = new PublicKey(poolInfo.data.slice(8 + 32, 8 + 32 + 32));
-    const recipientWallet = recipient;
-    const recipientAta = await getAssociatedTokenAddress(tokenMint, recipientWallet);
+    // recipient is already the ATA address (recipientTokenAccount from request)
+    const recipientAta = recipient;
     
+    // Check if recipient ATA exists (it should already exist, provided by client)
     const ataInfo = await connection.getAccountInfo(recipientAta);
     const claimTx = new Transaction();
     
     if (!ataInfo) {
-      claimTx.add(
-        createAssociatedTokenAccountInstruction(
-          relayerKeypair.publicKey,
-          recipientAta,
-          recipientWallet,
-          tokenMint
-        )
-      );
+      // If ATA doesn't exist, we can't create it without knowing the wallet owner
+      // Client should provide an existing ATA
+      log('error', 'Recipient ATA does not exist', { requestId, recipientAta: recipientAta.toBase58() });
+      return res.status(400).json({ error: 'Recipient token account does not exist. Please create it first.' });
     }
     
     const relayerAta = await getAssociatedTokenAddress(tokenMint, relayerKeypair.publicKey);
