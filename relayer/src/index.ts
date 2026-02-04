@@ -476,6 +476,7 @@ app.get('/pool-info', async (req: Request, res: Response) => {
  */
 app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
   const requestId = crypto.randomBytes(8).toString('hex');
+  let claimNullifier: string | undefined; // Track for cleanup on error
   
   try {
     const {
@@ -488,6 +489,8 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       poolAddress,
       feeBps = 50
     } = req.body;
+    
+    claimNullifier = nullifier; // Store for error handling
     
     // ========================================
     // Input Validation
@@ -837,7 +840,9 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     log('error', 'Claim error', { requestId, error: message });
     
     // Remove nullifier from cache so user can retry
-    processedNullifiers.delete(nullifier);
+    if (claimNullifier) {
+      processedNullifiers.delete(claimNullifier);
+    }
     
     // Don't leak internal error details
     if (message.includes('insufficient funds')) {
