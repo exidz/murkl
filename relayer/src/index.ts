@@ -440,6 +440,37 @@ app.get('/info', async (_req: Request, res: Response) => {
   }
 });
 
+// Get pool info (merkle root needed for proof generation)
+app.get('/pool-info', async (req: Request, res: Response) => {
+  try {
+    const poolAddress = req.query.pool as string;
+    if (!poolAddress) {
+      return res.status(400).json({ error: 'pool query param required' });
+    }
+    
+    const pool = new PublicKey(poolAddress);
+    const poolInfo = await connection.getAccountInfo(pool);
+    
+    if (!poolInfo) {
+      return res.status(404).json({ error: 'Pool not found' });
+    }
+    
+    // Pool layout: [8 discriminator][32 admin][32 token_mint][32 vault][32 merkle_root][8 leaf_count]...
+    const merkleRoot = poolInfo.data.slice(104, 136).toString('hex');
+    const leafCount = poolInfo.data.readBigUInt64LE(136);
+    
+    res.json({
+      pool: poolAddress,
+      merkleRoot,
+      leafCount: leafCount.toString(),
+    });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error';
+    log('error', 'Pool info error', { error: message });
+    res.status(500).json({ error: 'Failed to fetch pool info' });
+  }
+});
+
 /**
  * Submit a claim (multi-step chunked upload)
  */
@@ -677,6 +708,21 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     await sendAndConfirmTransaction(connection, finalizeTx, [relayerKeypair]);
     log('info', 'Buffer finalized', { requestId });
+    
+    // DEBUG: Read buffer to verify commitment was stored correctly
+    const bufferInfo = await connection.getAccountInfo(bufferKeypair.publicKey);
+    if (bufferInfo) {
+      const bufData = bufferInfo.data;
+      const bufFinalized = bufData[40] === 1;
+      const bufCommitment = bufData.slice(41, 73).toString('hex');
+      log('info', 'DEBUG: Buffer state after finalize', { 
+        requestId,
+        finalized: bufFinalized,
+        bufferCommitment: bufCommitment,
+        expectedCommitment: commitment,
+        match: bufCommitment === commitment ? '✅' : '❌'
+      });
+    }
     
     // ========================================
     // Step 4: Prepare ATA & Claim

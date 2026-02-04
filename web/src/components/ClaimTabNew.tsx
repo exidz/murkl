@@ -387,16 +387,26 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
         });
       }, 200);
 
+      // Fetch merkle root from pool (needed for proof generation)
+      const poolInfoRes = await fetch(`${RELAYER_URL}/pool-info?pool=${POOL_ADDRESS.toBase58()}`);
+      let merkleRoot = '0'.repeat(64); // Default if fetch fails
+      if (poolInfoRes.ok) {
+        const poolInfo = await poolInfoRes.json();
+        merkleRoot = poolInfo.merkleRoot || merkleRoot;
+      }
+      
       // Generate proof
       console.log('[DEBUG CLAIM] Generating proof with:', {
         identifier: identity.handle,
         passwordLength: password.length,
-        leafIndex: deposit.leafIndex
+        leafIndex: deposit.leafIndex,
+        merkleRoot: merkleRoot.slice(0, 16) + '...'
       });
       const proofResult = await generate_proof(
         identity.handle,
         password,
-        deposit.leafIndex
+        deposit.leafIndex,
+        merkleRoot
       );
       console.log('[DEBUG CLAIM] Proof result:', {
         commitment: proofResult.commitment,

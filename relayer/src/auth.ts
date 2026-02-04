@@ -28,6 +28,16 @@ export const auth = betterAuth({
   // Base URL for callbacks
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3001',
   
+  // Trusted origins for CORS
+  trustedOrigins: [
+    'http://localhost:5173',
+    'http://localhost:5174', 
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'https://murkl.app',
+    'https://murkl.dev',
+  ],
+  
   // Secret for signing sessions
   secret: process.env.BETTER_AUTH_SECRET || 'murkl-dev-secret-change-in-production-32chars!',
   
