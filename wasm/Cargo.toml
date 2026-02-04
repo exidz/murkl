@@ -10,6 +10,9 @@ description = "WASM prover for Murkl"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# Core prover (shared with CLI!)
+murkl-prover = { path = "../crates/murkl-prover", features = ["wasm"] }
+
 # WASM bindings
 wasm-bindgen = "0.2"
 js-sys = "0.3"
@@ -18,7 +21,7 @@ serde_json = "1.0"
 serde-wasm-bindgen = "0.6"
 getrandom = { version = "0.2", features = ["js"] }
 
-# Crypto
+# Crypto (still needed for some direct hashing)
 sha3 = "0.10"
 hex = "0.4"
 

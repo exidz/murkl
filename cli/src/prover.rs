@@ -2,15 +2,14 @@
 //!
 //! Generates Circle STARK proofs for anonymous claims.
 //! Output format matches on-chain verifier exactly.
+//!
+//! Uses `murkl-prover` SDK for shared cryptographic primitives.
 
 use crate::types::*;
-use sha3::{Digest, Keccak256};
 
 // Import the murkl-prover SDK
 use murkl_prover::prelude::*;
-use murkl_prover::prover::ProverConfig;
-
-const M31_PRIME: u32 = 0x7FFFFFFF;
+use murkl_prover::{M31_PRIME, keccak_hash, QM31};
 
 // ============================================================================
 // Prover Configuration
@@ -76,19 +75,14 @@ impl MurklProver {
         ]);
 
         // OODS values (evaluations at out-of-domain point)
-        let trace_oods = QM31 {
-            a: commitment_m31,
-            b: nullifier_m31,
-            c: id_m31,
-            d: secret_m31,
-        };
+        let trace_oods = QM31::from_u32(commitment_m31, nullifier_m31, id_m31, secret_m31);
 
-        let composition_oods = QM31 {
-            a: (commitment_m31.wrapping_mul(7)) % M31_PRIME,
-            b: (nullifier_m31.wrapping_mul(11)) % M31_PRIME,
-            c: 0,
-            d: 0,
-        };
+        let composition_oods = QM31::from_u32(
+            (commitment_m31.wrapping_mul(7)) % M31_PRIME,
+            (nullifier_m31.wrapping_mul(11)) % M31_PRIME,
+            0,
+            0,
+        );
 
         // FRI layer commitments
         let mut fri_layer_commitments = Vec::with_capacity(self.config.n_fri_layers);
@@ -102,8 +96,8 @@ impl MurklProver {
 
         // Final polynomial (degree 2)
         let fri_final_poly = vec![
-            QM31 { a: 1, b: 0, c: 0, d: 0 },
-            QM31 { a: commitment_m31 % 1000, b: 0, c: 0, d: 0 },
+            QM31::from_u32(1, 0, 0, 0),
+            QM31::from_u32(commitment_m31 % 1000, 0, 0, 0),
         ];
 
         // Generate queries
@@ -156,12 +150,12 @@ impl MurklProver {
                         &(s as u32).to_le_bytes(),
                         &fri_layer_commitments[layer_idx],
                     ]);
-                    QM31 {
-                        a: u32::from_le_bytes([val[0], val[1], val[2], val[3]]) % M31_PRIME,
-                        b: u32::from_le_bytes([val[4], val[5], val[6], val[7]]) % M31_PRIME,
-                        c: u32::from_le_bytes([val[8], val[9], val[10], val[11]]) % M31_PRIME,
-                        d: u32::from_le_bytes([val[12], val[13], val[14], val[15]]) % M31_PRIME,
-                    }
+                    QM31::from_u32(
+                        u32::from_le_bytes([val[0], val[1], val[2], val[3]]) % M31_PRIME,
+                        u32::from_le_bytes([val[4], val[5], val[6], val[7]]) % M31_PRIME,
+                        u32::from_le_bytes([val[8], val[9], val[10], val[11]]) % M31_PRIME,
+                        u32::from_le_bytes([val[12], val[13], val[14], val[15]]) % M31_PRIME,
+                    )
                 }).collect();
 
                 // FRI layer path (shorter each round)
@@ -207,36 +201,19 @@ impl MurklProver {
 }
 
 // ============================================================================
-// Helper Functions
+// Helper Functions (using murkl-prover SDK)
 // ============================================================================
 
-fn keccak_hash(inputs: &[&[u8]]) -> [u8; 32] {
-    let mut hasher = Keccak256::new();
-    for input in inputs {
-        hasher.update(input);
-    }
-    let result = hasher.finalize();
-    let mut hash = [0u8; 32];
-    hash.copy_from_slice(&result);
-    hash
-}
+// keccak_hash is imported from murkl_prover
 
+/// Compute M31 commitment using SDK
 fn compute_m31_commitment(id: u32, secret: u32) -> u32 {
-    let hash = keccak_hash(&[
-        b"murkl_m31_commitment",
-        &id.to_le_bytes(),
-        &secret.to_le_bytes(),
-    ]);
-    u32::from_le_bytes([hash[0], hash[1], hash[2], hash[3]]) % M31_PRIME
+    murkl_prover::m31_commitment(M31::new(id), M31::new(secret)).value()
 }
 
+/// Compute M31 nullifier using SDK
 fn compute_m31_nullifier(secret: u32, leaf_index: u32) -> u32 {
-    let hash = keccak_hash(&[
-        b"murkl_m31_nullifier",
-        &secret.to_le_bytes(),
-        &leaf_index.to_le_bytes(),
-    ]);
-    u32::from_le_bytes([hash[0], hash[1], hash[2], hash[3]]) % M31_PRIME
+    murkl_prover::m31_nullifier(M31::new(secret), leaf_index).value()
 }
 
 fn generate_merkle_path(depth: usize, index: u32, seed: &[u8; 32]) -> Vec<[u8; 32]> {

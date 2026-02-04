@@ -54,8 +54,10 @@ extern crate alloc;
 use alloc::{vec, vec::Vec};
 
 pub mod m31;
+pub mod qm31;
 pub mod circle;
 pub mod merkle;
+pub mod hash;
 pub mod fri;
 pub mod air;
 pub mod prover;
@@ -64,8 +66,10 @@ pub mod types;
 
 // Re-exports for convenience
 pub use m31::{M31, M31_PRIME};
+pub use qm31::QM31;
 pub use circle::{CirclePoint, CIRCLE_GENERATOR};
 pub use merkle::{MerkleTree, MerklePath, TREE_DEPTH};
+pub use hash::{keccak_hash, hash_password, hash_identifier, m31_commitment, m31_nullifier, pq_commitment, pq_nullifier, Hash32};
 pub use fri::{FriConfig, FriProof};
 pub use air::{AirConfig, TraceColumn};
 pub use prover::{Prover, ProverConfig};
@@ -75,8 +79,10 @@ pub use types::{Proof, PublicInputs, Witness, ProofError};
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::m31::{M31, M31_PRIME};
+    pub use crate::qm31::QM31;
     pub use crate::circle::{CirclePoint, CIRCLE_GENERATOR};
     pub use crate::merkle::{MerkleTree, MerklePath};
+    pub use crate::hash::{keccak_hash, hash_password, hash_identifier, m31_commitment, m31_nullifier};
     pub use crate::types::{Proof, PublicInputs, Witness};
     pub use crate::prover::Prover;
     pub use crate::verifier::Verifier;

@@ -1,6 +1,11 @@
 //! Murkl CLI types
+//!
+//! Re-exports shared types from murkl-prover SDK.
 
 use serde::{Deserialize, Serialize};
+
+// Re-export QM31 from SDK
+pub use murkl_prover::QM31;
 
 /// Merkle tree data
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,31 +24,10 @@ impl MerkleData {
     }
     
     /// Get Merkle proof for a leaf
-    pub fn get_proof(&self, index: u32) -> Vec<[u8; 32]> {
+    pub fn get_proof(&self, _index: u32) -> Vec<[u8; 32]> {
         // For now, return empty proof (simplified tree)
         // In production, compute actual sibling path
         vec![]
-    }
-}
-
-/// QM31 extension field element
-#[derive(Debug, Clone, Copy, Default)]
-pub struct QM31 {
-    pub a: u32,
-    pub b: u32,
-    pub c: u32,
-    pub d: u32,
-}
-
-impl QM31 {
-    /// Serialize to 16 bytes (a, b, c, d as u32 LE)
-    pub fn to_bytes(&self) -> [u8; 16] {
-        let mut bytes = [0u8; 16];
-        bytes[0..4].copy_from_slice(&self.a.to_le_bytes());
-        bytes[4..8].copy_from_slice(&self.b.to_le_bytes());
-        bytes[8..12].copy_from_slice(&self.c.to_le_bytes());
-        bytes[12..16].copy_from_slice(&self.d.to_le_bytes());
-        bytes
     }
 }
 
@@ -322,11 +306,7 @@ impl MurklProof {
     }
     
     fn parse_qm31(bytes: &[u8]) -> QM31 {
-        QM31 {
-            a: u32::from_le_bytes(bytes[0..4].try_into().unwrap()),
-            b: u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
-            c: u32::from_le_bytes(bytes[8..12].try_into().unwrap()),
-            d: u32::from_le_bytes(bytes[12..16].try_into().unwrap()),
-        }
+        // Use SDK's from_bytes method
+        QM31::from_bytes(bytes)
     }
 }

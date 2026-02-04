@@ -18,5 +18,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 hex = "0.4"
 
-# Crypto (for backwards-compatible hashing)
-sha3 = "0.10"
+# Note: sha3 no longer needed - using murkl-prover::keccak_hash

@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import type { FC, ReactNode } from 'react';
 import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
+import type { WalletError } from '@solana/wallet-adapter-base';
 
-// Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 interface Props {
@@ -13,23 +13,20 @@ interface Props {
 }
 
 export const WalletProvider: FC<Props> = ({ children }) => {
-  // Default to devnet
   const endpoint = useMemo(() => 
     import.meta.env.VITE_RPC_URL || clusterApiUrl('devnet'),
     []
   );
 
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-    ],
-    []
-  );
+  const wallets = useMemo(() => [new PhantomWalletAdapter()], []);
+
+  const onError = useCallback((error: WalletError) => {
+    console.error('[Wallet Error]', error.name, error.message);
+  }, []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
+      <SolanaWalletProvider wallets={wallets} autoConnect={false} onError={onError}>
         <WalletModalProvider>
           {children}
         </WalletModalProvider>

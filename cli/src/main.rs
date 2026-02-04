@@ -267,62 +267,32 @@ fn cmd_hash(identifier: &str, password: &str) {
 }
 
 // ============================================================================
-// PQ-SECURE HASH FUNCTIONS (keccak256-based)
+// PQ-SECURE HASH FUNCTIONS (using murkl-prover SDK)
 // Post-quantum secure: relies only on hash collision resistance
 // ============================================================================
 
-use sha3::{Digest, Keccak256};
+use murkl_prover::{M31, M31_PRIME, keccak_hash};
 
-const M31_PRIME: u32 = 0x7FFFFFFF;
-
-/// Derive secret from password using keccak256 (PQ-secure)
+/// Derive secret from password using SDK
 fn hash_password(password: &str) -> u32 {
-    let mut hasher = Keccak256::new();
-    hasher.update(b"murkl_password_v1");
-    hasher.update(password.as_bytes());
-    let result = hasher.finalize();
-    // Take first 4 bytes mod M31
-    let val = u32::from_le_bytes([result[0], result[1], result[2], result[3]]);
-    val % M31_PRIME
+    murkl_prover::hash_password(password).value()
 }
 
-/// Hash identifier to M31 using keccak256 (PQ-secure)
+/// Hash identifier to M31 using SDK
 fn hash_identifier(id: &str) -> u32 {
-    let normalized = id.to_lowercase();
-    let mut hasher = Keccak256::new();
-    hasher.update(b"murkl_identifier_v1");
-    hasher.update(normalized.as_bytes());
-    let result = hasher.finalize();
-    // Take first 4 bytes mod M31
-    let val = u32::from_le_bytes([result[0], result[1], result[2], result[3]]);
-    val % M31_PRIME
+    murkl_prover::hash_identifier(id).value()
 }
 
-/// Compute commitment = keccak256(identifier || secret) (PQ-secure)
-/// Full 32-byte hash for on-chain storage
-fn pq_commitment(identifier: &str, secret: u32) -> [u8; 32] {
-    let normalized = identifier.to_lowercase();
-    let mut hasher = Keccak256::new();
-    hasher.update(b"murkl_commitment_v1");
-    hasher.update(normalized.as_bytes());
-    hasher.update(&secret.to_le_bytes());
-    let result = hasher.finalize();
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&result);
-    out
+/// Compute commitment using SDK (full 32-byte hash)
+fn pq_commitment(_identifier: &str, _secret: u32) -> [u8; 32] {
+    // Note: This was using raw identifier, but we use m31_hash2 for actual deposits
+    // Keeping for backwards compatibility but deprecated
+    unimplemented!("Use m31_hash2 instead for proper commitment generation")
 }
 
-/// Compute nullifier = keccak256(secret || leaf_index) (PQ-secure)
-/// Prevents double-spend
+/// Compute nullifier using SDK (full 32-byte hash)
 fn pq_nullifier(secret: u32, leaf_index: u32) -> [u8; 32] {
-    let mut hasher = Keccak256::new();
-    hasher.update(b"murkl_nullifier_v1");
-    hasher.update(&secret.to_le_bytes());
-    hasher.update(&leaf_index.to_le_bytes());
-    let result = hasher.finalize();
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&result);
-    out
+    murkl_prover::pq_nullifier(M31::new(secret), leaf_index)
 }
 
 /// Convert 32-byte hash to M31 for STARK circuits
@@ -331,17 +301,9 @@ fn hash_to_m31(hash: &[u8; 32]) -> u32 {
     val % M31_PRIME
 }
 
-// Legacy M31 hash (kept for STARK trace, but commitment uses keccak256)
+/// M31 hash (id_hash, secret) → 32-byte commitment (used for deposits)
 fn m31_hash2(id_hash: u32, secret: u32) -> [u8; 32] {
-    // Now just wraps pq_commitment with M31 inputs
-    let mut hasher = Keccak256::new();
-    hasher.update(b"murkl_m31_hash_v1");
-    hasher.update(&id_hash.to_le_bytes());
-    hasher.update(&secret.to_le_bytes());
-    let result = hasher.finalize();
-    let mut out = [0u8; 32];
-    out.copy_from_slice(&result);
-    out
+    murkl_prover::pq_commitment(M31::new(id_hash), M31::new(secret))
 }
 
 // ============================================================================

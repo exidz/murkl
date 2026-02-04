@@ -20,6 +20,7 @@ bytemuck = { version = "1.14", features = ["derive"] }
 rand = { version = "0.8", default-features = false }
 getrandom = { version = "0.2", optional = true }
 cfg-if = "1.0"
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
 # For serde support
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }

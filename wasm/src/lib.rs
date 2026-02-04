@@ -2,12 +2,14 @@
 //!
 //! Generates STARK proofs in the browser for anonymous claims.
 //! Output format matches on-chain verifier exactly.
+//!
+//! Uses `murkl-prover` for shared cryptographic primitives.
 
 use wasm_bindgen::prelude::*;
-use sha3::{Digest, Keccak256};
 use serde::{Deserialize, Serialize};
 
-const M31_PRIME: u32 = 0x7FFFFFFF;
+// Import from murkl-prover SDK
+use murkl_prover::{M31_PRIME, keccak_hash};
 
 // Prover config (matches CLI)
 const N_FRI_LAYERS: usize = 3;
@@ -289,67 +291,41 @@ fn generate_stark_proof(id_hash: u32, secret: u32, leaf_index: u32) -> Vec<u8> {
 }
 
 // ============================================================================
-// Hash Functions
+// Hash Functions (using murkl-prover SDK)
 // ============================================================================
 
-fn keccak_hash(inputs: &[&[u8]]) -> [u8; 32] {
-    let mut hasher = Keccak256::new();
-    for input in inputs {
-        hasher.update(input);
-    }
-    let result = hasher.finalize();
-    let mut hash = [0u8; 32];
-    hash.copy_from_slice(&result);
-    hash
-}
+// Re-use SDK's keccak_hash for all hashing - imported at top
 
+/// Hash password to u32 secret (uses SDK under the hood)
 fn hash_password(password: &str) -> u32 {
-    let mut hasher = Keccak256::new();
-    hasher.update(b"murkl_password_v1");
-    hasher.update(password.as_bytes());
-    let result = hasher.finalize();
-    let val = u32::from_le_bytes([result[0], result[1], result[2], result[3]]);
-    val % M31_PRIME
+    murkl_prover::hash_password(password).value()
 }
 
+/// Hash identifier to u32 (uses SDK under the hood)
 fn hash_identifier(id: &str) -> u32 {
-    let normalized = id.to_lowercase();
-    let mut hasher = Keccak256::new();
-    hasher.update(b"murkl_identifier_v1");
-    hasher.update(normalized.as_bytes());
-    let result = hasher.finalize();
-    let val = u32::from_le_bytes([result[0], result[1], result[2], result[3]]);
-    val % M31_PRIME
+    murkl_prover::hash_identifier(id).value()
 }
 
+/// Compute M31 commitment (u32 wrapper around SDK)
 fn compute_m31_commitment(id: u32, secret: u32) -> u32 {
-    let hash = keccak_hash(&[
-        b"murkl_m31_commitment",
-        &id.to_le_bytes(),
-        &secret.to_le_bytes(),
-    ]);
-    u32::from_le_bytes([hash[0], hash[1], hash[2], hash[3]]) % M31_PRIME
+    use murkl_prover::M31;
+    murkl_prover::m31_commitment(M31::new(id), M31::new(secret)).value()
 }
 
+/// Compute M31 nullifier (u32 wrapper around SDK)
 fn compute_m31_nullifier(secret: u32, leaf_index: u32) -> u32 {
-    let hash = keccak_hash(&[
-        b"murkl_m31_nullifier",
-        &secret.to_le_bytes(),
-        &leaf_index.to_le_bytes(),
-    ]);
-    u32::from_le_bytes([hash[0], hash[1], hash[2], hash[3]]) % M31_PRIME
+    use murkl_prover::M31;
+    murkl_prover::m31_nullifier(M31::new(secret), leaf_index).value()
 }
 
+/// Full 32-byte commitment (u32 inputs wrapper)
 fn pq_commitment(id_hash: u32, secret: u32) -> [u8; 32] {
-    let mut data = [0u8; 8];
-    data[0..4].copy_from_slice(&id_hash.to_le_bytes());
-    data[4..8].copy_from_slice(&secret.to_le_bytes());
-    keccak_hash(&[&data])
+    use murkl_prover::M31;
+    murkl_prover::pq_commitment(M31::new(id_hash), M31::new(secret))
 }
 
+/// Full 32-byte nullifier (u32 inputs wrapper)
 fn pq_nullifier(secret: u32, leaf_index: u32) -> [u8; 32] {
-    let mut data = [0u8; 8];
-    data[0..4].copy_from_slice(&secret.to_le_bytes());
-    data[4..8].copy_from_slice(&leaf_index.to_le_bytes());
-    keccak_hash(&[&data])
+    use murkl_prover::M31;
+    murkl_prover::pq_nullifier(M31::new(secret), leaf_index)
 }
