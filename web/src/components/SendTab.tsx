@@ -2,8 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { FC } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from './Toast';
 import { buildDepositTransaction, generatePassword, createShareLink } from '../lib/deposit';
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
 import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
@@ -200,22 +200,21 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       depositResult.transaction.feePayer = publicKey;
       
       // Sign transaction
-      toast.loading('Approve in wallet...', { id: 'tx' });
+      const txToastId = toast.loading('Approve in wallet...');
       const signed = await signTransaction(depositResult.transaction);
-      toast.dismiss('tx');
+      toast.update(txToastId, { message: 'Sending...', type: 'loading' });
       
       // Send transaction
-      toast.loading('Sending...', { id: 'tx' });
       const signature = await connection.sendRawTransaction(signed.serialize());
       
       // Confirm transaction
-      toast.loading('Confirming...', { id: 'tx' });
+      toast.update(txToastId, { message: 'Confirming...', type: 'loading' });
       await connection.confirmTransaction({
         blockhash,
         lastValidBlockHeight,
         signature,
       }, 'confirmed');
-      toast.dismiss('tx');
+      toast.dismiss(txToastId);
       
       // Generate share link
       const shareLink = createShareLink(

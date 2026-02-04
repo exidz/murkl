@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WalletProvider } from './providers/WalletProvider';
 import { Header } from './components/Header';
@@ -7,6 +6,7 @@ import { SendTab } from './components/SendTab';
 import { ClaimTabNew as ClaimTab } from './components/ClaimTabNew';
 import { TabBar } from './components/TabBar';
 import { Footer } from './components/Footer';
+import { ToastContainer } from './components/Toast';
 import './App.css';
 
 // WASM module
@@ -116,29 +116,7 @@ function App() {
   return (
     <WalletProvider>
       <AppContent />
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#1a1a24',
-            color: '#fff',
-            border: '1px solid #2a2a3a',
-          },
-          success: {
-            iconTheme: {
-              primary: '#22c55e',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
+      <ToastContainer />
     </WalletProvider>
   );
 }

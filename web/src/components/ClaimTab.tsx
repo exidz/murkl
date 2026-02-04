@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import toast from 'react-hot-toast';
+import toast from './Toast';
 import { parseShareLink } from '../lib/deposit';
 import { isValidIdentifier, isValidPassword, isValidSolanaAddress, isValidLeafIndex, sanitizeInput } from '../lib/validation';
 import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl, FEE_BPS } from '../lib/constants';
@@ -111,9 +111,9 @@ export const ClaimTab: FC<Props> = ({ wasmReady }) => {
       const leafIndexNum = parseInt(leafIndex, 10);
       
       // Generate proof using WASM
-      toast.loading('Generating STARK proof...', { id: 'proof' });
+      const proofToastId = toast.loading('Generating STARK proof...');
       const proofBundle = generate_proof(cleanIdentifier, password, leafIndexNum);
-      toast.dismiss('proof');
+      toast.dismiss(proofToastId);
       
       if (!proofBundle || !proofBundle.commitment) {
         throw new Error('Proof generation failed');
@@ -123,7 +123,7 @@ export const ClaimTab: FC<Props> = ({ wasmReady }) => {
       
       // Submit to relayer
       setStatus('submitting');
-      toast.loading('Submitting to relayer...', { id: 'submit' });
+      const submitToastId = toast.loading('Submitting to relayer...');
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
@@ -145,7 +145,7 @@ export const ClaimTab: FC<Props> = ({ wasmReady }) => {
       });
       
       clearTimeout(timeoutId);
-      toast.dismiss('submit');
+      toast.dismiss(submitToastId);
       
       if (response.ok) {
         const txResult = await response.json();

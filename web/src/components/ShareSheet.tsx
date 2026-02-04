@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import toast from 'react-hot-toast';
+import toast from './Toast';
 import './ShareSheet.css';
 
 interface ShareData {

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, type FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from './Toast';
 import { OAuthLogin } from './OAuthLogin';
 import { ProofProgress } from './ProofProgress';
 import { SkeletonCard } from './Skeleton';
@@ -320,7 +320,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
         setDeposits(data.deposits || []);
         
         if (data.deposits?.length === 0) {
-          toast('No deposits yet — ask someone to send!', { icon: '📭' });
+          toast.info('No deposits yet — ask someone to send!', { icon: '📭' });
         } else {
           toast.success(`Found ${data.deposits.length} deposit(s)!`);
         }
@@ -388,11 +388,21 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
       }, 200);
 
       // Generate proof
+      console.log('[DEBUG CLAIM] Generating proof with:', {
+        identifier: identity.handle,
+        passwordLength: password.length,
+        leafIndex: deposit.leafIndex
+      });
       const proofResult = await generate_proof(
         identity.handle,
         password,
         deposit.leafIndex
       );
+      console.log('[DEBUG CLAIM] Proof result:', {
+        commitment: proofResult.commitment,
+        nullifier: proofResult.nullifier?.slice(0, 16) + '...',
+        proofSize: proofResult.proof?.length
+      });
       
       clearInterval(progressInterval);
       setProofProgress(100);
