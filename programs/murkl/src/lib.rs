@@ -2,6 +2,11 @@
 //!
 //! This program handles deposits and claims for private transfers.
 //! Proof verification is done via CPI to the standalone stark-verifier program.
+//! 
+//! FAULT-PROOF DESIGN:
+//! - Nullifier tracking prevents replay attacks
+//! - Public inputs verified from verifier buffer
+//! - Merkle root verified against pool state
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
@@ -14,6 +19,19 @@ pub const STARK_VERIFIER_ID: Pubkey = pubkey!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSb
 
 /// Global config seed
 pub const CONFIG_SEED: &[u8] = b"config";
+
+// ============================================================================
+// Verifier Buffer Layout (must match stark-verifier)
+// ============================================================================
+
+const VERIFIER_OFFSET_OWNER: usize = 0;
+const VERIFIER_OFFSET_SIZE: usize = 32;
+const VERIFIER_OFFSET_EXPECTED_SIZE: usize = 36;
+const VERIFIER_OFFSET_FINALIZED: usize = 40;
+const VERIFIER_OFFSET_COMMITMENT: usize = 41;
+const VERIFIER_OFFSET_NULLIFIER: usize = 73;
+const VERIFIER_OFFSET_MERKLE_ROOT: usize = 105;
+const VERIFIER_HEADER_SIZE: usize = 137;
 
 // ============================================================================
 // Constants
@@ -101,46 +119,89 @@ pub mod murkl {
         Ok(())
     }
 
-    /// Claim tokens - proof already verified in stark-verifier's buffer
+    /// Claim tokens - FAULT-PROOF verification
     /// 
-    /// Flow:
-    /// 1. Relayer uploads proof to stark-verifier's proof buffer
-    /// 2. Relayer calls stark-verifier::finalize_and_verify
-    /// 3. Relayer calls this instruction with the verified buffer
+    /// Security checks:
+    /// 1. Verifier buffer is finalized (proof was valid)
+    /// 2. Commitment in buffer matches deposit commitment
+    /// 3. Nullifier in buffer matches provided nullifier (prevents tampering)
+    /// 4. Nullifier tracked in PDA (prevents replay - init fails if exists)
+    /// 5. Merkle root in buffer matches pool merkle root
+    /// 6. Buffer owned by stark-verifier program
     pub fn claim(
         ctx: Context<Claim>,
-        commitment: [u8; 32],
-        nullifier: [u8; 32],
         relayer_fee: u64,
+        nullifier: [u8; 32],
     ) -> Result<()> {
         let pool = &ctx.accounts.pool;
         let deposit = &mut ctx.accounts.deposit;
         
         require!(!pool.paused, MurklError::PoolPaused);
         require!(!deposit.claimed, MurklError::AlreadyClaimed);
-        require!(commitment == deposit.commitment, MurklError::CommitmentMismatch);
         
         // Verify fee
         let max_fee = (deposit.amount * pool.config.max_relayer_fee_bps as u64) / 10000;
         require!(relayer_fee <= max_fee, MurklError::FeeTooHigh);
         
-        // Verify the proof buffer from stark-verifier is finalized
-        // The stark-verifier sets finalized=true after successful verification
+        // ========================================
+        // FAULT-PROOF VERIFICATION
+        // ========================================
+        
         let verifier_buffer = &ctx.accounts.verifier_buffer;
-        
-        // Parse verifier buffer data (raw format, no discriminator)
         let data = verifier_buffer.try_borrow_data()?;
-        require!(data.len() >= 41, MurklError::InvalidVerifierBuffer);
         
-        // Raw ProofBuffer layout: owner(32) + size(4) + expected_size(4) + finalized(1) + data...
-        let finalized = data[40] == 1;
+        // Check buffer size
+        require!(data.len() >= VERIFIER_HEADER_SIZE, MurklError::InvalidVerifierBuffer);
+        
+        // Check finalized flag
+        let finalized = data[VERIFIER_OFFSET_FINALIZED] == 1;
         require!(finalized, MurklError::ProofNotVerified);
         
-        // TODO: Also verify commitment/nullifier match in buffer
+        // Extract verified public inputs from buffer
+        let buffer_commitment: [u8; 32] = data[VERIFIER_OFFSET_COMMITMENT..VERIFIER_OFFSET_COMMITMENT + 32]
+            .try_into()
+            .map_err(|_| MurklError::InvalidVerifierBuffer)?;
+        let buffer_nullifier: [u8; 32] = data[VERIFIER_OFFSET_NULLIFIER..VERIFIER_OFFSET_NULLIFIER + 32]
+            .try_into()
+            .map_err(|_| MurklError::InvalidVerifierBuffer)?;
+        let buffer_merkle_root: [u8; 32] = data[VERIFIER_OFFSET_MERKLE_ROOT..VERIFIER_OFFSET_MERKLE_ROOT + 32]
+            .try_into()
+            .map_err(|_| MurklError::InvalidVerifierBuffer)?;
         
-        msg!("Proof verified via stark-verifier");
+        // Verify commitment matches deposit
+        require!(
+            buffer_commitment == deposit.commitment,
+            MurklError::CommitmentMismatch
+        );
         
-        // Mark as claimed
+        // Verify nullifier argument matches buffer (prevents tampering with PDA seed)
+        require!(
+            buffer_nullifier == nullifier,
+            MurklError::NullifierMismatch
+        );
+        
+        // Verify merkle root matches pool (proof was for this pool's state)
+        require!(
+            buffer_merkle_root == pool.merkle_root,
+            MurklError::MerkleRootMismatch
+        );
+        
+        // Initialize nullifier record (will fail if already exists = replay attack)
+        // The PDA is derived from pool + nullifier, so if this nullifier was used before,
+        // the account already exists and init will fail with AccountAlreadyInUse
+        let nullifier_record = &mut ctx.accounts.nullifier_record;
+        nullifier_record.pool = pool.key();
+        nullifier_record.nullifier = nullifier;
+        nullifier_record.claimed_at = Clock::get()?.unix_timestamp;
+        nullifier_record.bump = ctx.bumps.nullifier_record;
+        
+        msg!("Proof verified: commitment, nullifier, merkle_root all match");
+        
+        // ========================================
+        // EXECUTE CLAIM
+        // ========================================
+        
+        // Mark deposit as claimed
         deposit.claimed = true;
         
         // Calculate amounts
@@ -300,6 +361,7 @@ pub struct Deposit<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(relayer_fee: u64, nullifier: [u8; 32])]
 pub struct Claim<'info> {
     #[account(
         seeds = [b"pool", pool.token_mint.as_ref()],
@@ -314,11 +376,21 @@ pub struct Claim<'info> {
     )]
     pub deposit: Account<'info, DepositRecord>,
     
-    /// CHECK: stark-verifier's proof buffer (verified via finalized flag)
+    /// CHECK: stark-verifier's proof buffer (verified via finalized flag + public inputs)
     #[account(
         constraint = verifier_buffer.owner == &STARK_VERIFIER_ID @ MurklError::InvalidVerifierBuffer
     )]
     pub verifier_buffer: UncheckedAccount<'info>,
+    
+    /// Nullifier record - init here prevents replay (PDA collision = already used)
+    #[account(
+        init,
+        payer = relayer,
+        space = 8 + NullifierRecord::SIZE,
+        seeds = [b"nullifier", pool.key().as_ref(), nullifier.as_ref()],
+        bump
+    )]
+    pub nullifier_record: Account<'info, NullifierRecord>,
     
     #[account(
         mut,
@@ -337,6 +409,7 @@ pub struct Claim<'info> {
     pub relayer_token: Account<'info, TokenAccount>,
     
     pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -415,6 +488,20 @@ impl DepositRecord {
     pub const SIZE: usize = 32 + 32 + 8 + 8 + 1 + 1;
 }
 
+/// Nullifier tracking - prevents replay attacks
+/// PDA derived from pool + nullifier ensures uniqueness
+#[account]
+pub struct NullifierRecord {
+    pub pool: Pubkey,
+    pub nullifier: [u8; 32],
+    pub claimed_at: i64,
+    pub bump: u8,
+}
+
+impl NullifierRecord {
+    pub const SIZE: usize = 32 + 32 + 8 + 1;
+}
+
 // ============================================================================
 // Errors
 // ============================================================================
@@ -430,8 +517,11 @@ pub enum MurklError {
     #[msg("Already claimed")]
     AlreadyClaimed,
     
-    #[msg("Commitment mismatch")]
+    #[msg("Commitment mismatch - proof was for different deposit")]
     CommitmentMismatch,
+    
+    #[msg("Merkle root mismatch - proof was for different pool state")]
+    MerkleRootMismatch,
     
     #[msg("Fee too high")]
     FeeTooHigh,
@@ -439,9 +529,15 @@ pub enum MurklError {
     #[msg("Unauthorized")]
     Unauthorized,
     
-    #[msg("Proof not verified")]
+    #[msg("Proof not verified - buffer not finalized")]
     ProofNotVerified,
     
     #[msg("Invalid verifier buffer")]
     InvalidVerifierBuffer,
+    
+    #[msg("Nullifier mismatch - argument doesn't match proof")]
+    NullifierMismatch,
+    
+    #[msg("Nullifier already used - replay attack detected")]
+    NullifierReplay,
 }
