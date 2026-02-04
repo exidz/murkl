@@ -14,6 +14,7 @@ import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
 import { Confetti } from './Confetti';
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
+import { ConfirmationSummary } from './ConfirmationSummary';
 import './SendTab.css';
 
 interface Props {
@@ -623,34 +624,35 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               ← Back
             </button>
 
-            <div className="confirm-card">
-              <p className="confirm-label">You're sending</p>
-              <p className="confirm-amount">{amount} {selectedToken.symbol}</p>
-              <p className="confirm-to">to {identifier}</p>
-              
-              <div className="confirm-details">
-                <div className="confirm-row">
-                  <span>Network fee</span>
-                  <span>~0.00001 SOL</span>
-                </div>
-              </div>
-            </div>
-
-            <Button 
-              variant="primary"
-              size="lg"
-              fullWidth
-              onClick={handleDeposit}
-              disabled={!wasmReady}
-              loading={loading}
-              loadingText="Sending..."
+            <ConfirmationSummary
+              amount={amount}
+              token={selectedToken.symbol}
+              tokenIcon={selectedToken.icon}
+              recipient={identifier}
+              fees={[
+                { 
+                  label: 'Network fee', 
+                  value: '~0.00001 SOL',
+                  tooltip: 'Paid to Solana validators for processing your transaction'
+                },
+              ]}
             >
-              Send privately
-            </Button>
+              <Button 
+                variant="primary"
+                size="lg"
+                fullWidth
+                onClick={handleDeposit}
+                disabled={!wasmReady}
+                loading={loading}
+                loadingText="Sending..."
+              >
+                Send privately
+              </Button>
 
-            {!wasmReady && (
-              <p className="wasm-loading">Loading prover...</p>
-            )}
+              {!wasmReady && (
+                <p className="wasm-loading">Loading prover...</p>
+              )}
+            </ConfirmationSummary>
           </motion.div>
         )}
       </AnimatePresence>

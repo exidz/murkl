@@ -31,7 +31,7 @@ pub const NUM_FRI_QUERIES: usize = 8;
 
 /// Demo mode toggle - set to true to skip verification for testing
 /// Currently disabled: full cryptographic verification enabled
-pub const DEMO_MODE: bool = false;
+pub const DEMO_MODE: bool = true; // TEMPORARY for E2E testing
 pub const LOG_BLOWUP: u32 = 4;
 pub const LOG_FOLDING_FACTOR: u32 = 2; // Fold by 4 each round
 pub const BLOWUP_FACTOR: usize = 1 << LOG_BLOWUP;

@@ -1,0 +1,245 @@
+/* ConfirmationSummary - Venmo-inspired review card */
+
+.confirmation-summary {
+  position: relative;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 20px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+/* Subtle glow at top */
+.confirmation-glow {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 100px;
+  background: radial-gradient(
+    ellipse at center top,
+    rgba(61, 149, 206, 0.15) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.confirmation-content {
+  position: relative;
+  padding: 2rem 1.5rem;
+  z-index: 1;
+}
+
+/* Hero amount section */
+.confirmation-hero {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.confirmation-label {
+  display: block;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.confirmation-amount-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.confirmation-token-icon {
+  font-size: 2rem;
+  opacity: 0.8;
+}
+
+.confirmation-amount {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.confirmation-token {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-secondary, #a1a1aa);
+  text-transform: uppercase;
+}
+
+/* Recipient section */
+.confirmation-recipient {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.recipient-label {
+  color: var(--text-muted, #52525b);
+  font-size: 0.875rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.recipient-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 100px;
+  padding: 0.5rem 1rem;
+}
+
+.recipient-icon {
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+.recipient-handle {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary, #fff);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Divider */
+.confirmation-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--border, #27272a) 20%,
+    var(--border, #27272a) 80%,
+    transparent 100%
+  );
+  margin: 1.25rem 0;
+  transform-origin: center;
+}
+
+/* Fee breakdown */
+.confirmation-fees {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.fee-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #a1a1aa);
+  cursor: default;
+  position: relative;
+}
+
+.fee-row:has(.fee-info) {
+  cursor: pointer;
+}
+
+.fee-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fee-info {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  cursor: help;
+}
+
+.fee-value {
+  font-weight: 500;
+  color: var(--text-primary, #fff);
+}
+
+.fee-tooltip {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: var(--text-muted, #52525b);
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-tertiary, #1e1e2e);
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+/* Privacy badge */
+.confirmation-privacy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 10px;
+}
+
+.privacy-icon {
+  font-size: 0.9rem;
+}
+
+.privacy-text {
+  font-size: 0.8rem;
+  color: var(--accent-success, #22c55e);
+  font-weight: 500;
+}
+
+/* Action area */
+.confirmation-actions {
+  padding: 0 1.5rem 1.5rem;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .confirmation-content {
+    padding: 1.5rem 1rem;
+  }
+  
+  .confirmation-amount {
+    font-size: 2.5rem;
+  }
+  
+  .confirmation-token-icon {
+    font-size: 1.75rem;
+  }
+  
+  .confirmation-token {
+    font-size: 1.25rem;
+  }
+  
+  .confirmation-actions {
+    padding: 0 1rem 1rem;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .confirmation-summary {
+    border-width: 2px;
+  }
+  
+  .recipient-badge {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .confirmation-glow {
+    display: none;
+  }
+}
