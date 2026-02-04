@@ -24,15 +24,25 @@ const stageHints: Record<string, string> = {
   complete: 'All done!',
 };
 
-// Friendly tip messages that rotate during proving
+// Friendly tip messages that rotate during proving (more variety!)
 const provingTips = [
   'Your browser is doing math magic ✨',
   'Zero-knowledge = maximum privacy 🔒',
   'No one can see what you\'re proving 👀',
-  'Almost there, hang tight! 🐈‍⬛',
+  'This proof is quantum-resistant 🛡️',
+  'Creating cryptographic evidence... 🔐',
+  'Your secrets never leave your device 💻',
 ];
 
-// Estimate time based on stage
+// Special messages when close to completion
+const almostDoneTips = [
+  'Almost there! 🎯',
+  'Just a moment more... ⏳',
+  'Finishing up! 🏁',
+  'Nearly done! 🐈‍⬛',
+];
+
+// Estimate time based on stage with friendly formatting
 function estimateTimeRemaining(stage: Props['stage'], progress: number): string {
   if (stage === 'complete') return '';
   
@@ -44,8 +54,14 @@ function estimateTimeRemaining(stage: Props['stage'], progress: number): string 
   };
   
   const seconds = estimates[stage] || 5;
-  if (seconds < 60) return `~${seconds}s`;
-  return `~${Math.ceil(seconds / 60)}m`;
+  
+  // Friendly time formatting
+  if (seconds <= 5) return 'almost done';
+  if (seconds <= 10) return 'a few seconds';
+  if (seconds < 30) return `~${seconds}s`;
+  if (seconds < 60) return 'less than a minute';
+  if (seconds < 90) return '~1 minute';
+  return `~${Math.ceil(seconds / 60)} minutes`;
 }
 
 // Trigger haptic feedback on supported devices
@@ -166,15 +182,16 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
     }
   }, [stage, progress]);
 
-  // Rotate tips during proof generation
+  // Rotate tips during proof generation (faster rotation when close to done)
   useEffect(() => {
     if (stage === 'generating') {
+      const rotationSpeed = progress > 85 ? 2000 : 4000;
       const timer = setInterval(() => {
-        setTipIndex(prev => (prev + 1) % provingTips.length);
-      }, 4000);
+        setTipIndex(prev => (prev + 1) % (progress > 85 ? almostDoneTips.length : provingTips.length));
+      }, rotationSpeed);
       return () => clearInterval(timer);
     }
-  }, [stage]);
+  }, [stage, progress > 85]); // Only re-run when crossing 85% threshold
 
   // Haptic feedback on stage change
   useEffect(() => {
@@ -274,19 +291,21 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
         )}
       </div>
 
-      {/* Hint text - shows tips during generation */}
+      {/* Hint text - shows tips during generation, special tips when almost done */}
       <AnimatePresence mode="wait">
         <motion.p 
-          className="progress-hint"
-          key={stage === 'generating' ? `tip-${tipIndex}` : `hint-${stage}`}
+          className={`progress-hint ${progress > 85 ? 'almost-done' : ''}`}
+          key={stage === 'generating' ? `tip-${tipIndex}-${progress > 85}` : `hint-${stage}`}
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -5 }}
           transition={{ duration: 0.2 }}
         >
-          {stage === 'generating' && progress > 20 
-            ? provingTips[tipIndex] 
-            : stageHints[stage]}
+          {stage === 'generating' && progress > 85 
+            ? almostDoneTips[tipIndex % almostDoneTips.length]
+            : stage === 'generating' && progress > 20 
+              ? provingTips[tipIndex % provingTips.length] 
+              : stageHints[stage]}
         </motion.p>
       </AnimatePresence>
 
@@ -294,14 +313,22 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
       <div className="progress-bar-wrapper">
         <div className="progress-bar-track">
           <motion.div 
-            className={`progress-bar-fill ${isComplete ? 'complete' : ''}`}
+            className={`progress-bar-fill ${isComplete ? 'complete' : ''} ${!isComplete && progress > 85 ? 'almost-done' : ''}`}
             initial={{ width: 0 }}
             animate={{ width: `${overallProgress}%` }}
             transition={{ ease: 'easeOut', duration: 0.4 }}
           />
         </div>
         {eta && !isComplete && (
-          <span className="progress-eta">{eta}</span>
+          <motion.span 
+            className="progress-eta"
+            key={eta}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            {eta}
+          </motion.span>
         )}
       </div>
 

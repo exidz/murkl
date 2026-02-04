@@ -132,6 +132,13 @@
   margin: 0 0 1.5rem;
   line-height: 1.4;
   min-height: 1.4em; /* Prevent layout shift during tip rotation */
+  transition: color 0.3s ease;
+}
+
+/* Almost done - highlight the hint */
+.progress-hint.almost-done {
+  color: var(--accent-success, #22c55e);
+  font-weight: 500;
 }
 
 /* Main progress bar */
@@ -161,6 +168,22 @@
 
 .progress-bar-fill.complete {
   background: linear-gradient(90deg, var(--accent-success, #22c55e) 0%, #4ade80 100%);
+}
+
+/* Excited pulse when almost done (>85%) */
+.progress-bar-fill.almost-done {
+  animation: progress-excited 0.8s ease-in-out infinite;
+}
+
+@keyframes progress-excited {
+  0%, 100% { 
+    filter: brightness(1); 
+    box-shadow: 0 0 8px rgba(61, 149, 206, 0.3);
+  }
+  50% { 
+    filter: brightness(1.15); 
+    box-shadow: 0 0 16px rgba(61, 149, 206, 0.5);
+  }
 }
 
 /* Animated shimmer on progress bar */
@@ -366,6 +389,12 @@
     animation: none;
   }
   
+  .progress-bar-fill.almost-done {
+    animation: none;
+    filter: none;
+    box-shadow: none;
+  }
+  
   .progress-icon-ring,
   .step-circle {
     animation: none !important;
@@ -373,6 +402,10 @@
   
   .burst-particle {
     display: none;
+  }
+  
+  .progress-hint {
+    transition: none;
   }
 }
 
