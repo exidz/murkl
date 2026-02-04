@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, type FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,6 +31,17 @@ interface Deposit {
   leafIndex: number;
   timestamp: string;
   claimed: boolean;
+}
+
+/** Data extracted from a claim link URL */
+interface ClaimLinkData {
+  identifier: string;
+  leafIndex: number;
+  pool: string;
+  /** Amount if we could fetch it from the relayer */
+  amount?: number;
+  /** Token symbol if known */
+  token?: string;
 }
 
 interface PasswordSheetProps {
@@ -286,8 +298,211 @@ const ManualClaimSection: FC<{ onLogin: (provider: string, handle: string) => vo
   );
 };
 
+/**
+ * Claim Link Landing — Venmo-style "You received" hero screen.
+ * Shown when user arrives via a claim link (?id=...&leaf=...).
+ * Skips OAuth and goes directly to password entry → proof → claim.
+ */
+const ClaimLanding: FC<{
+  data: ClaimLinkData;
+  wasmReady: boolean;
+  connected: boolean;
+  onPasswordSubmit: (password: string) => void;
+  onSwitchToOAuth: () => void;
+}> = ({ data, wasmReady, connected, onPasswordSubmit, onSwitchToOAuth }) => {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const { setVisible: openWalletModal } = useWalletModal();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (connected) {
+      setTimeout(() => inputRef.current?.focus(), 200);
+    }
+  }, [connected]);
+
+  const isReady = password.length >= 8;
+
+  const handleSubmit = () => {
+    if (!isReady || !connected) return;
+    onPasswordSubmit(password);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && isReady && connected) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  // Friendly display of the identifier
+  const displayName = data.identifier.startsWith('@') 
+    ? data.identifier 
+    : data.identifier.includes('@') 
+      ? data.identifier.split('@')[0] 
+      : data.identifier;
+
+  return (
+    <motion.div
+      className="claim-landing"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      {/* Hero section */}
+      <div className="landing-hero">
+        <motion.div
+          className="landing-icon"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
+        >
+          💰
+        </motion.div>
+        
+        <motion.h2
+          className="landing-title"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          {data.amount 
+            ? `${data.amount} ${data.token || 'SOL'} waiting`
+            : 'Funds waiting for you'}
+        </motion.h2>
+        
+        <motion.div
+          className="landing-recipient"
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <span className="landing-recipient-icon">👤</span>
+          <span className="landing-recipient-name">{displayName}</span>
+        </motion.div>
+
+        {data.amount && (
+          <motion.div
+            className="landing-amount"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.25, type: 'spring', stiffness: 200 }}
+          >
+            <span className="landing-amount-value">{data.amount}</span>
+            <span className="landing-amount-token">{data.token || 'SOL'}</span>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Action section */}
+      <motion.div
+        className="landing-action"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        {!connected ? (
+          /* Wallet not connected */
+          <div className="landing-connect">
+            <p className="landing-connect-hint">Connect your wallet to claim</p>
+            <Button 
+              variant="primary" 
+              size="lg" 
+              fullWidth
+              onClick={() => openWalletModal(true)}
+              icon={<span>👛</span>}
+            >
+              Connect Wallet
+            </Button>
+          </div>
+        ) : (
+          /* Password entry */
+          <div className="landing-password">
+            <p className="landing-password-label">Enter the password to claim</p>
+            
+            <div className="landing-password-wrapper">
+              <input
+                ref={inputRef}
+                type={showPassword ? 'text' : 'password'}
+                className={`landing-password-input ${password.length > 0 ? 'has-value' : ''} ${isReady ? 'ready' : ''}`}
+                placeholder="Password from sender..."
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onKeyDown={handleKeyDown}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <motion.button
+                type="button"
+                className="landing-password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                whileTap={{ scale: 0.9 }}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </motion.button>
+            </div>
+            
+            <motion.div 
+              className={`landing-password-hint ${isReady ? 'ready' : ''}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
+              {password.length === 0 ? (
+                <span>The sender shared this with you</span>
+              ) : isReady ? (
+                <span className="ready-text">✓ Ready to claim</span>
+              ) : (
+                <span>{password.length}/8 characters minimum</span>
+              )}
+            </motion.div>
+
+            <Button 
+              variant="primary" 
+              size="lg" 
+              fullWidth
+              onClick={handleSubmit}
+              disabled={!isReady || !wasmReady}
+              loading={!wasmReady}
+              loadingText="Loading prover..."
+            >
+              Claim
+            </Button>
+          </div>
+        )}
+      </motion.div>
+
+      {/* Privacy footer */}
+      <motion.div
+        className="landing-privacy"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+      >
+        <span className="landing-privacy-icon">🔒</span>
+        <span>Only someone with the password can claim</span>
+      </motion.div>
+
+      {/* Switch to OAuth */}
+      <motion.button
+        className="landing-switch"
+        onClick={onSwitchToOAuth}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+      >
+        Sign in to see all deposits →
+      </motion.button>
+    </motion.div>
+  );
+};
+
 export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
   const { connected, publicKey } = useWallet();
+  
+  // Claim link state (from URL params)
+  const [claimLinkData, setClaimLinkData] = useState<ClaimLinkData | null>(null);
+  const [showOAuthOverride, setShowOAuthOverride] = useState(false);
   
   // Auth state
   const [identity, setIdentity] = useState<{ provider: string; handle: string } | null>(null);
@@ -304,6 +519,47 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
   
   // Refs
   const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  // Parse URL params for claim link data
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    const leaf = params.get('leaf');
+    const pool = params.get('pool');
+    
+    if (id && leaf) {
+      const linkData: ClaimLinkData = {
+        identifier: id,
+        leafIndex: parseInt(leaf, 10),
+        pool: pool || POOL_ADDRESS.toBase58(),
+      };
+      
+      setClaimLinkData(linkData);
+      
+      // Try to fetch deposit info from relayer for the amount
+      if (RELAYER_URL) {
+        fetch(`${RELAYER_URL}/deposits?identity=${encodeURIComponent(id)}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data?.deposits) {
+              const match = data.deposits.find(
+                (d: Deposit) => d.leafIndex === linkData.leafIndex && !d.claimed
+              );
+              if (match) {
+                setClaimLinkData(prev => prev ? {
+                  ...prev,
+                  amount: match.amount,
+                  token: match.token || 'SOL',
+                } : prev);
+              }
+            }
+          })
+          .catch(() => {
+            // Non-critical — landing works fine without amount
+          });
+      }
+    }
+  }, []);
 
   // Focus password input when sheet opens
   useEffect(() => {
@@ -494,6 +750,135 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     setIdentity(null);
     setDeposits([]);
   };
+
+  // Handle claim from landing page (claim link flow)
+  const handleLandingClaim = useCallback(async (landingPassword: string) => {
+    if (!claimLinkData || !publicKey || !wasmReady) return;
+    
+    // Create a synthetic deposit from the link data
+    const syntheticDeposit: Deposit = {
+      id: `link-${claimLinkData.leafIndex}`,
+      amount: claimLinkData.amount || 0,
+      token: claimLinkData.token || 'SOL',
+      leafIndex: claimLinkData.leafIndex,
+      timestamp: new Date().toISOString(),
+      claimed: false,
+    };
+    
+    // Set identity from the link
+    setIdentity({ provider: 'link', handle: claimLinkData.identifier });
+    
+    // Execute claim directly
+    setClaimingDeposit(syntheticDeposit);
+    setStage('generating');
+    setProofProgress(0);
+
+    try {
+      const progressInterval = setInterval(() => {
+        setProofProgress(prev => {
+          if (prev >= 95) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + Math.random() * 8 + 2;
+        });
+      }, 200);
+
+      // Fetch merkle root
+      let merkleRoot = '0'.repeat(64);
+      if (RELAYER_URL) {
+        try {
+          const poolAddr = claimLinkData.pool || POOL_ADDRESS.toBase58();
+          const poolInfoRes = await fetch(`${RELAYER_URL}/pool-info?pool=${poolAddr}`);
+          if (poolInfoRes.ok) {
+            const poolInfo = await poolInfoRes.json();
+            merkleRoot = poolInfo.merkleRoot || merkleRoot;
+          }
+        } catch {
+          // Use default
+        }
+      }
+      
+      // Generate proof
+      const proofResult = await generate_proof(
+        claimLinkData.identifier,
+        landingPassword,
+        claimLinkData.leafIndex,
+        merkleRoot
+      );
+      
+      clearInterval(progressInterval);
+      setProofProgress(100);
+
+      if (proofResult.error) {
+        throw new Error(proofResult.error);
+      }
+
+      // Upload proof
+      setStage('uploading');
+      await new Promise(r => setTimeout(r, 500));
+
+      // Submit to relayer
+      setStage('verifying');
+      const recipientATA = await getAssociatedTokenAddress(WSOL_MINT, publicKey);
+
+      const response = await fetch(`${RELAYER_URL}/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proof: proofResult.proof,
+          commitment: proofResult.commitment,
+          nullifier: proofResult.nullifier,
+          recipientTokenAccount: recipientATA.toBase58(),
+          poolAddress: claimLinkData.pool || POOL_ADDRESS.toBase58(),
+          leafIndex: claimLinkData.leafIndex,
+          feeBps: 50,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Claim failed — try again');
+      }
+
+      const result = await response.json();
+      
+      setStage('claiming');
+      await new Promise(r => setTimeout(r, 500));
+      
+      setStage('complete');
+      setSuccessSignature(result.signature || null);
+      
+      // Clean URL params after successful claim
+      const url = new URL(window.location.href);
+      url.searchParams.delete('id');
+      url.searchParams.delete('leaf');
+      url.searchParams.delete('pool');
+      window.history.replaceState({}, '', url.toString());
+      
+      toast.success('Claimed! 🎉');
+      
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Claim failed';
+      toast.error(message);
+      setStage('idle');
+      setClaimingDeposit(null);
+    }
+  }, [claimLinkData, publicKey, wasmReady]);
+
+  // Claim link landing → show hero experience (skips OAuth)
+  if (claimLinkData && !identity && !showOAuthOverride) {
+    return (
+      <div className="claim-tab-new">
+        <ClaimLanding
+          data={claimLinkData}
+          wasmReady={wasmReady}
+          connected={connected}
+          onPasswordSubmit={handleLandingClaim}
+          onSwitchToOAuth={() => setShowOAuthOverride(true)}
+        />
+      </div>
+    );
+  }
 
   // Not logged in → OAuth
   if (!identity) {

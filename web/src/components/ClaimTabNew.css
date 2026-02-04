@@ -642,6 +642,264 @@
   color: #5ba8d9;
 }
 
+/* ============================================
+   Claim Link Landing - Venmo-style hero
+   ============================================ */
+
+.claim-landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 1rem;
+  min-height: 60vh;
+}
+
+/* Hero section */
+.landing-hero {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  padding-top: 1rem;
+}
+
+.landing-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.15) 0%,
+    rgba(61, 149, 206, 0.1) 100%
+  );
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.25rem;
+  margin: 0 auto 1.25rem;
+  position: relative;
+}
+
+/* Soft glow behind icon */
+.landing-icon::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(34, 197, 94, 0.1) 0%,
+    transparent 70%
+  );
+  z-index: -1;
+}
+
+.landing-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin: 0 0 0.75rem;
+  line-height: 1.2;
+}
+
+/* Recipient badge */
+.landing-recipient {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 100px;
+  padding: 0.5rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.landing-recipient-icon {
+  font-size: 1rem;
+  opacity: 0.7;
+}
+
+.landing-recipient-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Amount display (when known) */
+.landing-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.landing-amount-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-amount-token {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-secondary, #a1a1aa);
+  text-transform: uppercase;
+}
+
+/* Action section */
+.landing-action {
+  width: 100%;
+  max-width: 360px;
+  margin-bottom: 2rem;
+}
+
+/* Connect wallet state */
+.landing-connect {
+  text-align: center;
+}
+
+.landing-connect-hint {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+  margin: 0 0 1rem;
+}
+
+/* Password entry */
+.landing-password {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.landing-password-label {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+  text-align: center;
+  margin: 0;
+}
+
+.landing-password-wrapper {
+  position: relative;
+}
+
+.landing-password-input {
+  width: 100%;
+  padding: 1rem 3.5rem 1rem 1.25rem;
+  font-size: 1.125rem;
+  color: var(--text-primary, #fff);
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 2px solid var(--border, #27272a);
+  border-radius: 14px;
+  outline: none;
+  text-align: center;
+  letter-spacing: 0.05em;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.landing-password-input:focus {
+  border-color: var(--border-focus, #3d95ce);
+  box-shadow: 0 0 0 3px rgba(61, 149, 206, 0.15);
+}
+
+.landing-password-input.has-value {
+  border-color: var(--text-muted, #52525b);
+}
+
+.landing-password-input.ready {
+  border-color: var(--accent-success, #22c55e);
+}
+
+.landing-password-input.ready:focus {
+  border-color: var(--accent-success, #22c55e);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+
+.landing-password-input::placeholder {
+  letter-spacing: normal;
+  color: var(--text-muted, #52525b);
+}
+
+.landing-password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.landing-password-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Password hint */
+.landing-password-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted, #52525b);
+  text-align: center;
+  min-height: 1.2em;
+  transition: color 0.2s;
+}
+
+.landing-password-hint.ready {
+  color: var(--accent-success, #22c55e);
+}
+
+.landing-password-hint .ready-text {
+  font-weight: 500;
+}
+
+/* Privacy footer */
+.landing-privacy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: var(--accent-success, #22c55e);
+  font-weight: 500;
+  margin-bottom: 1rem;
+  max-width: 360px;
+  width: 100%;
+}
+
+.landing-privacy-icon {
+  font-size: 0.9rem;
+}
+
+/* Switch to OAuth link */
+.landing-switch {
+  background: none;
+  border: none;
+  color: var(--text-muted, #52525b);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  transition: color 0.2s;
+}
+
+.landing-switch:hover {
+  color: var(--text-secondary, #a1a1aa);
+}
+
 /* Mobile optimizations */
 @media (max-width: 480px) {
   .claim-tab-new {
@@ -666,6 +924,44 @@
   }
 }
 
+@media (max-width: 480px) {
+  .claim-landing {
+    padding: 1rem 0.75rem;
+  }
+  
+  .landing-icon {
+    width: 68px;
+    height: 68px;
+    font-size: 2rem;
+  }
+  
+  .landing-title {
+    font-size: 1.5rem;
+  }
+  
+  .landing-amount-value {
+    font-size: 2rem;
+  }
+  
+  .landing-amount-token {
+    font-size: 1.125rem;
+  }
+  
+  .landing-password-input {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .landing-title {
+    font-size: 1.25rem;
+  }
+  
+  .landing-amount-value {
+    font-size: 1.75rem;
+  }
+}
+
 /* Touch targets */
 .btn,
 .manual-claim summary {
@@ -687,6 +983,11 @@
   .celebration-emoji {
     animation: none;
   }
+  
+  .landing-password-input,
+  .landing-password-hint {
+    transition: none;
+  }
 }
 
 /* High contrast mode */
@@ -701,6 +1002,26 @@
   }
   
   .success-celebration {
+    border-width: 2px;
+  }
+  
+  .landing-icon {
+    border-width: 2px;
+  }
+  
+  .landing-icon::after {
+    display: none;
+  }
+  
+  .landing-recipient {
+    border-width: 2px;
+  }
+  
+  .landing-password-input {
+    border-width: 3px;
+  }
+  
+  .landing-privacy {
     border-width: 2px;
   }
 }
