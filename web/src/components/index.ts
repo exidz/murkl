@@ -1,8 +1,7 @@
 export { Header } from './Header';
 export { SendTab } from './SendTab';
-export { ClaimTab } from './ClaimTab';
-export { OAuthLogin } from './OAuthLogin';
 export { ClaimTabNew } from './ClaimTabNew';
+export { OAuthLogin } from './OAuthLogin';
 export { ProofProgress } from './ProofProgress';
 export { HowItWorks } from './HowItWorks';
 export { TabBar } from './TabBar';
@@ -17,3 +16,4 @@ export { Button, IconButton } from './Button';
 export { ConfirmationSummary } from './ConfirmationSummary';
 export { ShareSheet } from './ShareSheet';
 export { BalanceDisplay } from './BalanceDisplay';
+export { SplashScreen } from './SplashScreen';
