@@ -5,3 +5,5 @@ export { OAuthLogin } from './OAuthLogin';
 export { ClaimTabNew } from './ClaimTabNew';
 export { ProofProgress } from './ProofProgress';
 export { HowItWorks } from './HowItWorks';
+export { TabBar } from './TabBar';
+export { AmountInput } from './AmountInput';

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { WalletProvider } from './providers/WalletProvider';
 import { Header } from './components/Header';
 import { SendTab } from './components/SendTab';
 import { ClaimTabNew as ClaimTab } from './components/ClaimTabNew';
+import { TabBar } from './components/TabBar';
 import './App.css';
 
 // WASM module
@@ -11,9 +12,18 @@ import init from './wasm/murkl_wasm';
 
 type Tab = 'send' | 'claim';
 
+// Tab configuration
+const TABS = [
+  { id: 'send', label: 'Send', icon: '📤' },
+  { id: 'claim', label: 'Claim', icon: '📥' },
+] as const;
+
 function AppContent() {
   const [wasmReady, setWasmReady] = useState(false);
   const [tab, setTab] = useState<Tab>('send');
+  
+  // Memoize tabs to prevent unnecessary re-renders
+  const tabs = useMemo(() => TABS.map(t => ({ ...t })), []);
 
   // Initialize WASM
   useEffect(() => {
@@ -39,22 +49,11 @@ function AppContent() {
     <div className="app">
       <Header wasmReady={wasmReady} />
 
-      <div className="tabs">
-        <button 
-          className={`tab ${tab === 'send' ? 'active' : ''}`}
-          onClick={() => setTab('send')}
-          aria-selected={tab === 'send'}
-        >
-          📤 Send
-        </button>
-        <button 
-          className={`tab ${tab === 'claim' ? 'active' : ''}`}
-          onClick={() => setTab('claim')}
-          aria-selected={tab === 'claim'}
-        >
-          📥 Claim
-        </button>
-      </div>
+      <TabBar 
+        tabs={tabs}
+        activeTab={tab}
+        onChange={(id) => setTab(id as Tab)}
+      />
 
       <main className="content">
         {tab === 'send' && <SendTab wasmReady={wasmReady} />}
