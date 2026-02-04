@@ -1,6 +1,22 @@
-import { useRef, useEffect, useCallback, type FC, type ChangeEvent, type KeyboardEvent } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  useState,
+  useImperativeHandle,
+  forwardRef,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import './AmountInput.css';
+
+export interface AmountInputHandle {
+  /** Trigger shake animation (e.g. on invalid submit) */
+  shake: () => void;
+  /** Focus the input */
+  focus: () => void;
+}
 
 interface Props {
   value: string;
@@ -14,17 +30,63 @@ interface Props {
   disabled?: boolean;
 }
 
-// Venmo-style auto-sizing: font shrinks as digits increase
-const getFontSize = (value: string): number => {
-  const len = value.length || 1;
-  if (len <= 3) return 64;  // $0 to $999
-  if (len <= 5) return 56;  // $1000 to $99999
-  if (len <= 7) return 48;  // $100000 to $9999999
-  if (len <= 9) return 40;  // Larger amounts
-  return 32;                 // Very large amounts
+// Trigger haptic feedback on supported devices
+const triggerHaptic = (pattern: number | number[] = 6) => {
+  if ('vibrate' in navigator) {
+    try {
+      navigator.vibrate(pattern);
+    } catch {
+      // Silently fail
+    }
+  }
 };
 
-export const AmountInput: FC<Props> = ({
+/**
+ * Calculate font size based on the visual width of the value.
+ * Accounts for character widths: digits are wider than decimals/commas.
+ */
+const getFontSize = (value: string): number => {
+  if (!value) return 64;
+
+  // Approximate character "weight" (digits ~1.0, decimal ~0.4)
+  let weight = 0;
+  for (const ch of value) {
+    if (ch === '.') weight += 0.4;
+    else weight += 1;
+  }
+
+  if (weight <= 3) return 64;
+  if (weight <= 4.5) return 56;
+  if (weight <= 6) return 48;
+  if (weight <= 8) return 40;
+  if (weight <= 10) return 34;
+  return 28;
+};
+
+// Shake animation keyframes
+const shakeVariants = {
+  idle: { x: 0 },
+  shake: {
+    x: [0, -12, 10, -8, 6, -3, 0],
+    transition: { duration: 0.45, ease: 'easeInOut' as const },
+  },
+};
+
+/**
+ * Venmo-style hero amount input.
+ *
+ * The input IS the visual display — no hidden overlay tricks.
+ * This ensures the caret is always properly positioned and visible.
+ *
+ * Features:
+ * - Auto-sizing font based on value length
+ * - Haptic feedback on input
+ * - Shake animation for validation errors (via ref)
+ * - Subtle glow when focused
+ * - Accessible with proper input modes
+ * - Respects reduced motion preference
+ */
+export const AmountInput = forwardRef<AmountInputHandle, Props>(({
   value,
   onChange,
   onSubmit,
@@ -34,9 +96,23 @@ export const AmountInput: FC<Props> = ({
   maxDecimals = 9,
   autoFocus = false,
   disabled = false,
-}) => {
+}, ref) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const measureRef = useRef<HTMLSpanElement>(null);
+  const [isShaking, setIsShaking] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const prevValueRef = useRef(value);
+  const reducedMotion = useReducedMotion();
+
+  // Expose imperative methods
+  useImperativeHandle(ref, () => ({
+    shake: () => {
+      setIsShaking(true);
+      triggerHaptic([20, 30, 20]);
+      // Reset after animation completes
+      setTimeout(() => setIsShaking(false), 500);
+    },
+    focus: () => inputRef.current?.focus(),
+  }), []);
 
   // Focus on mount if autoFocus
   useEffect(() => {
@@ -46,25 +122,39 @@ export const AmountInput: FC<Props> = ({
     }
   }, [autoFocus]);
 
+  // Haptic on value change (not on mount)
+  useEffect(() => {
+    if (prevValueRef.current !== value && value) {
+      triggerHaptic(4);
+    }
+    prevValueRef.current = value;
+  }, [value]);
+
   // Handle input change with validation
   const handleChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     let newValue = e.target.value;
-    
+
     // Remove non-numeric except decimal
     newValue = newValue.replace(/[^0-9.]/g, '');
-    
+
     // Allow only one decimal point
     const parts = newValue.split('.');
     if (parts.length > 2) return;
-    
+
     // Limit decimal places
-    if (parts[1]?.length > maxDecimals) return;
-    
-    // Prevent leading zeros (except for decimals like "0.5")
-    if (parts[0].length > 1 && parts[0].startsWith('0') && parts[0][1] !== '.') {
-      newValue = parts[0].replace(/^0+/, '') + (parts[1] !== undefined ? '.' + parts[1] : '');
+    if (parts[1] !== undefined && parts[1].length > maxDecimals) return;
+
+    // Prevent leading zeros (except "0." for decimals)
+    if (parts[0].length > 1 && parts[0].startsWith('0')) {
+      parts[0] = parts[0].replace(/^0+/, '') || '0';
+      newValue = parts.join('.');
     }
-    
+
+    // Allow starting with "." → treat as "0."
+    if (newValue === '.') {
+      newValue = '0.';
+    }
+
     onChange(newValue);
   }, [onChange, maxDecimals]);
 
@@ -76,92 +166,92 @@ export const AmountInput: FC<Props> = ({
     }
   }, [onSubmit]);
 
-  // Calculate font size based on value length
+  // Calculate font size
   const fontSize = getFontSize(value);
-  const displayValue = value || placeholder;
   const isEmpty = !value;
 
   return (
-    <div className="amount-input-wrapper">
-      {/* Main display area */}
+    <motion.div
+      className={`amount-input-wrapper ${isFocused ? 'focused' : ''} ${isEmpty ? 'empty' : ''}`}
+      variants={shakeVariants}
+      animate={isShaking ? 'shake' : 'idle'}
+    >
+      {/* Currency symbol */}
       <div className="amount-display-container">
-        {/* Currency symbol */}
-        <motion.span 
+        <motion.span
           className="amount-currency"
           initial={false}
-          animate={{ 
-            fontSize: fontSize * 0.6,
-            opacity: isEmpty ? 0.4 : 0.6,
+          animate={{
+            fontSize: Math.round(fontSize * 0.55),
+            opacity: isEmpty ? 0.3 : 0.55,
           }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          transition={
+            reducedMotion
+              ? { duration: 0.1 }
+              : { type: 'spring', stiffness: 300, damping: 30 }
+          }
+          aria-hidden="true"
         >
           {currencySymbol}
         </motion.span>
 
-        {/* Hidden input for actual editing */}
-        <div className="amount-input-field">
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="decimal"
-            className="amount-hidden-input"
-            value={value}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            disabled={disabled}
-            style={{ fontSize }}
-          />
-          
-          {/* Visual display with animation */}
-          <motion.span
-            className={`amount-display-value ${isEmpty ? 'placeholder' : ''}`}
-            initial={false}
-            animate={{ fontSize }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          >
-            {displayValue}
-          </motion.span>
-
-          {/* Measuring element (hidden) */}
-          <span 
-            ref={measureRef} 
-            className="amount-measure"
-            style={{ fontSize }}
-          >
-            {displayValue}
-          </span>
-        </div>
+        {/* The actual input — this IS the visual display */}
+        <motion.input
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          className="amount-input"
+          value={value}
+          placeholder={placeholder}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          disabled={disabled}
+          aria-label={`Amount in ${currency}`}
+          initial={false}
+          animate={{ fontSize }}
+          transition={
+            reducedMotion
+              ? { duration: 0.1 }
+              : { type: 'spring', stiffness: 300, damping: 30 }
+          }
+        />
       </div>
 
-      {/* Currency label */}
+      {/* Currency label below */}
       <AnimatePresence mode="wait">
-        <motion.p 
+        <motion.p
           key={currency}
           className="amount-label"
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -5 }}
           transition={{ duration: 0.15 }}
+          aria-hidden="true"
         >
           {currency}
         </motion.p>
       </AnimatePresence>
 
-      {/* Subtle pulse animation when typing */}
-      {value && (
+      {/* Focus glow — subtle radial behind the input */}
+      {isFocused && !reducedMotion && (
         <motion.div
-          className="amount-pulse"
-          initial={{ scale: 0.8, opacity: 0.5 }}
-          animate={{ scale: 1.2, opacity: 0 }}
-          transition={{ duration: 0.4 }}
-          key={value.length}
+          className="amount-focus-glow"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          transition={{ duration: 0.3 }}
+          aria-hidden="true"
         />
       )}
-    </div>
+    </motion.div>
   );
-};
+});
+
+AmountInput.displayName = 'AmountInput';
 
 export default AmountInput;

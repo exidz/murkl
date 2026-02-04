@@ -1,4 +1,8 @@
-/* AmountInput - Venmo-style hero amount input with auto-sizing */
+/* AmountInput — Venmo-style hero amount with auto-sizing
+ *
+ * The input IS the visual display (no hidden overlay).
+ * This ensures proper caret positioning and native editing behavior.
+ */
 
 .amount-input-wrapper {
   display: flex;
@@ -8,15 +12,17 @@
   padding: 2rem 1rem;
   position: relative;
   min-height: 180px;
+  isolation: isolate;
 }
 
-/* Main display container */
+/* Main display container — currency + input side by side */
 .amount-display-container {
   display: flex;
   align-items: baseline;
   justify-content: center;
   gap: 0.25rem;
   position: relative;
+  z-index: 1;
 }
 
 /* Currency symbol (◎ for SOL) */
@@ -25,72 +31,49 @@
   color: var(--text-secondary, #a1a1aa);
   line-height: 1;
   user-select: none;
-  transition: opacity 0.2s;
+  flex-shrink: 0;
 }
 
-/* Input field wrapper */
-.amount-input-field {
-  position: relative;
-  display: inline-flex;
-  align-items: baseline;
-  min-width: 60px;
-}
-
-/* The actual input (transparent, overlays the display) */
-.amount-hidden-input {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
+/* The input — visible, styled, IS the display */
+.amount-input {
   font-weight: 700;
-  color: transparent;
+  color: var(--text-primary, #fff);
   background: transparent;
   border: none;
   outline: none;
   text-align: center;
+  line-height: 1;
+  min-width: 60px;
+  max-width: 320px;
+  width: auto;
   caret-color: var(--accent-primary, #3d95ce);
-  z-index: 2;
-  -webkit-text-fill-color: transparent;
+  -webkit-tap-highlight-color: transparent;
+  font-variant-numeric: tabular-nums;
+
+  /* Smooth text shadow on focus */
+  transition: text-shadow 0.3s ease;
 }
 
-/* Hide spinner on number inputs */
-.amount-hidden-input::-webkit-inner-spin-button,
-.amount-hidden-input::-webkit-outer-spin-button {
+.amount-input::placeholder {
+  color: var(--text-muted, #52525b);
+  font-weight: 700;
+}
+
+/* Subtle glow on the text when focused and has value */
+.amount-input-wrapper.focused:not(.empty) .amount-input {
+  text-shadow: 0 0 40px rgba(61, 149, 206, 0.15);
+}
+
+/* Hide spinner on number inputs (Safari, Chrome) */
+.amount-input::-webkit-inner-spin-button,
+.amount-input::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-/* The visual display (shows the value beautifully) */
-.amount-display-value {
-  font-weight: 700;
-  color: var(--text-primary, #fff);
-  line-height: 1;
-  user-select: none;
-  white-space: nowrap;
-  text-align: center;
-  transition: color 0.2s;
-}
-
-.amount-display-value.placeholder {
-  color: var(--text-muted, #52525b);
-}
-
-/* Focus state: subtle glow effect */
-.amount-hidden-input:focus + .amount-display-value {
-  text-shadow: 0 0 40px rgba(61, 149, 206, 0.2);
-}
-
-/* Measuring span (invisible, for width calculation) */
-.amount-measure {
-  position: absolute;
-  visibility: hidden;
-  height: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  font-weight: 700;
+/* Firefox spinner */
+.amount-input[type="number"] {
+  -moz-appearance: textfield;
 }
 
 /* Currency label below */
@@ -102,102 +85,134 @@
   user-select: none;
 }
 
-/* Pulse animation on input */
-.amount-pulse {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 100px;
-  height: 100px;
-  margin: -50px 0 0 -50px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-primary, #3d95ce) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Subtle underline indicator (like Venmo) */
+/* Subtle underline indicator (Venmo-style) */
 .amount-input-wrapper::after {
   content: '';
   position: absolute;
   bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
-  width: 120px;
+  width: 100px;
   height: 2px;
   background: linear-gradient(
-    90deg, 
-    transparent 0%, 
+    90deg,
+    transparent 0%,
     var(--border, #27272a) 20%,
     var(--border, #27272a) 80%,
     transparent 100%
   );
   border-radius: 1px;
-  opacity: 0.5;
-  transition: opacity 0.2s;
+  opacity: 0.4;
+  transition: opacity 0.3s, width 0.3s ease, background 0.3s;
+  z-index: 0;
 }
 
-.amount-input-wrapper:focus-within::after {
+/* Underline activates on focus */
+.amount-input-wrapper.focused::after {
+  width: 140px;
+  opacity: 0.8;
   background: linear-gradient(
-    90deg, 
-    transparent 0%, 
+    90deg,
+    transparent 0%,
     var(--accent-primary, #3d95ce) 20%,
     var(--accent-primary, #3d95ce) 80%,
     transparent 100%
   );
-  opacity: 0.8;
+}
+
+/* Focus glow — large subtle radial behind the input area */
+.amount-focus-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    rgba(61, 149, 206, 0.06) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* Disabled state */
-.amount-hidden-input:disabled {
+.amount-input:disabled {
   cursor: not-allowed;
+  opacity: 0.4;
 }
 
-.amount-hidden-input:disabled + .amount-display-value {
-  opacity: 0.5;
-}
+/* ========================================
+   RESPONSIVE
+   ======================================== */
 
-/* Mobile optimizations */
 @media (max-width: 480px) {
   .amount-input-wrapper {
     padding: 1.5rem 0.5rem;
     min-height: 150px;
   }
-  
+
+  .amount-input {
+    max-width: 260px;
+  }
+
   .amount-input-wrapper::after {
     width: 80px;
     bottom: 1.5rem;
   }
+
+  .amount-input-wrapper.focused::after {
+    width: 120px;
+  }
 }
 
-/* Very small screens - Note: font size is controlled via JS inline styles */
 @media (max-width: 360px) {
   .amount-input-wrapper {
     padding: 1rem 0.25rem;
     min-height: 130px;
   }
+
+  .amount-input {
+    max-width: 220px;
+  }
 }
+
+/* ========================================
+   ACCESSIBILITY
+   ======================================== */
 
 /* High contrast mode */
 @media (prefers-contrast: high) {
-  .amount-display-value {
-    text-shadow: none;
+  .amount-input {
+    text-shadow: none !important;
   }
-  
+
   .amount-input-wrapper::after {
     opacity: 1;
     background: var(--text-primary, #fff);
   }
-}
 
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .amount-pulse {
+  .amount-focus-glow {
     display: none;
   }
-  
+}
+
+/* Reduced motion — disable shake and glow transitions */
+@media (prefers-reduced-motion: reduce) {
+  .amount-focus-glow {
+    display: none;
+  }
+
+  .amount-input {
+    transition: none;
+  }
+
+  .amount-input-wrapper::after {
+    transition: none;
+  }
+
   .amount-currency,
-  .amount-display-value,
   .amount-label {
     transition: none;
   }

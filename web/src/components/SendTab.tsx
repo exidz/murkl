@@ -8,7 +8,7 @@ import { buildDepositTransaction, generatePassword, createShareLink } from '../l
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
 import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
 import { HowItWorks } from './HowItWorks';
-import { AmountInput } from './AmountInput';
+import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { AmountPresets } from './AmountPresets';
 import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
 import { Confetti } from './Confetti';
@@ -69,6 +69,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   
   // Refs
+  const amountInputRef = useRef<AmountInputHandle>(null);
   const identifierInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
@@ -170,6 +171,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const goNext = useCallback(() => {
     if (step === 'amount') {
       if (!isValidAmount(amount)) {
+        amountInputRef.current?.shake();
         toast.error('Enter a valid amount');
         return;
       }
@@ -509,6 +511,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             />
 
             <AmountInput
+              ref={amountInputRef}
               value={amount}
               onChange={handleAmountChange}
               onSubmit={goNext}
