@@ -64,46 +64,26 @@ const OFFSET_PROOF_DATA: usize = 137;
 pub mod stark_verifier {
     use super::*;
 
+    /// Initialize a proof buffer
+    /// 
+    /// The proof_buffer account must be pre-created by the caller with sufficient space
+    /// using SystemProgram.createAccount before calling this instruction.
+    /// Required space: HEADER_SIZE (137) + expected_size bytes
     pub fn init_proof_buffer(
         ctx: Context<InitProofBuffer>,
         expected_size: u32,
-        seed_nonce: [u8; 8],  // First 8 bytes of commitment for PDA derivation
     ) -> Result<()> {
         require!(expected_size as usize <= MAX_PROOF_SIZE, VerifierError::ProofTooLarge);
         
-        // Derive PDA and bump
-        let owner_key = ctx.accounts.owner.key();
-        let seeds: &[&[u8]] = &[b"proof", owner_key.as_ref(), &seed_nonce];
-        let (pda, bump) = Pubkey::find_program_address(seeds, ctx.program_id);
-        require!(pda == ctx.accounts.proof_buffer.key(), VerifierError::InvalidProofFormat);
+        let buffer = &ctx.accounts.proof_buffer;
+        let data_len = buffer.data_len();
         
-        // Calculate space needed
-        let space = HEADER_SIZE + expected_size as usize;
-        let rent = Rent::get()?;
-        let lamports = rent.minimum_balance(space);
-        
-        // Create account via CPI
-        let signer_seeds: &[&[&[u8]]] = &[&[b"proof", owner_key.as_ref(), &seed_nonce, &[bump]]];
-        
-        anchor_lang::solana_program::program::invoke_signed(
-            &anchor_lang::solana_program::system_instruction::create_account(
-                ctx.accounts.owner.key,
-                &pda,
-                lamports,
-                space as u64,
-                ctx.program_id,
-            ),
-            &[
-                ctx.accounts.owner.to_account_info(),
-                ctx.accounts.proof_buffer.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-            signer_seeds,
-        )?;
+        // Verify account has enough space
+        require!(data_len >= HEADER_SIZE + expected_size as usize, VerifierError::BufferTooSmall);
         
         // Initialize buffer data
-        let buffer = &ctx.accounts.proof_buffer;
         let mut data = buffer.try_borrow_mut_data()?;
+        let owner_key = ctx.accounts.owner.key();
         
         data[OFFSET_OWNER..OFFSET_OWNER + 32].copy_from_slice(owner_key.as_ref());
         data[OFFSET_SIZE..OFFSET_SIZE + 4].copy_from_slice(&0u32.to_le_bytes());

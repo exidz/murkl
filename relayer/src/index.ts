@@ -447,9 +447,9 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       log('info', 'Fetched merkle_root from pool', { requestId, merkleRoot: merkleRoot32.toString('hex').slice(0, 16) + '...' });
     }
     
-    // Derive deposit PDA from pool + leafIndex
-    const leafIndexBuffer = Buffer.alloc(4);
-    leafIndexBuffer.writeUInt32LE(leafIndex);
+    // Derive deposit PDA from pool + leafIndex (u64 = 8 bytes)
+    const leafIndexBuffer = Buffer.alloc(8);
+    leafIndexBuffer.writeBigUInt64LE(BigInt(leafIndex));
     const [depositPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('deposit'), pool.toBuffer(), leafIndexBuffer],
       config.programId
@@ -462,11 +462,6 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     const [vaultPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('vault'), pool.toBuffer()],
       config.programId
-    );
-    
-    const [proofBufferPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('proof'), relayerKeypair.publicKey.toBuffer(), commitment32.slice(0, 8)],
-      STARK_VERIFIER_ID  // Proof buffer is owned by stark-verifier, not murkl
     );
     
     const [nullifierPda] = PublicKey.findProgramAddressSync(
@@ -485,117 +480,112 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     }
     
     // ========================================
-    // Step 1: Check Proof Buffer Status
+    // Step 1: Create Proof Buffer
     // ========================================
     
-    const existingBuffer = await connection.getAccountInfo(proofBufferPda);
-    let bufferFinalized = false;
+    // Create a fresh buffer for this claim (temp account, closed after claim)
+    const bufferKeypair = Keypair.generate();
+    const HEADER_SIZE = 137;
+    const accountSize = HEADER_SIZE + proofBytes.length;
+    const rentExempt = await connection.getMinimumBalanceForRentExemption(accountSize);
     let numChunks = Math.ceil(proofBytes.length / config.chunkSize);
     
-    if (existingBuffer) {
-      // Buffer layout: [owner:32][size:4][expected_size:4][finalized:1][commitment:32][nullifier:32][merkle_root:32][proof...]
-      // Finalized byte is at offset 40 (32 + 4 + 4)
-      const finalizedByte = existingBuffer.data[40];
-      bufferFinalized = finalizedByte === 1;
-      
-      if (bufferFinalized) {
-        log('info', 'Buffer already finalized', { requestId });
-      }
-    } else {
-      // Create buffer via init_proof_buffer(expected_size: u32, seed_nonce: [u8; 8])
-      // The program creates the PDA account via CPI internally
-      const expectedSizeBuffer = Buffer.alloc(4);
-      expectedSizeBuffer.writeUInt32LE(proofBytes.length);
-      
-      // seed_nonce is the first 8 bytes of commitment (used for PDA derivation)
-      const seedNonce = commitment32.slice(0, 8);
-      
-      const initData = Buffer.concat([
-        getDiscriminator('init_proof_buffer'),
-        expectedSizeBuffer,
-        seedNonce,
-      ]);
-      
-      const initIx = new TransactionInstruction({
-        programId: STARK_VERIFIER_ID,
-        keys: [
-          { pubkey: proofBufferPda, isSigner: false, isWritable: true },
-          { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        ],
-        data: initData,
-      });
-      
-      const createTx = new Transaction().add(initIx);
-      createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      createTx.feePayer = relayerKeypair.publicKey;
-      
-      await sendAndConfirmTransaction(connection, createTx, [relayerKeypair]);
-      log('info', 'Buffer created', { requestId, proofSize: proofBytes.length });
-    }
+    const createAccountIx = SystemProgram.createAccount({
+      fromPubkey: relayerKeypair.publicKey,
+      newAccountPubkey: bufferKeypair.publicKey,
+      lamports: rentExempt,
+      space: accountSize,
+      programId: STARK_VERIFIER_ID,
+    });
+    
+    // Initialize the buffer via stark-verifier
+    const expectedSizeBuffer = Buffer.alloc(4);
+    expectedSizeBuffer.writeUInt32LE(proofBytes.length);
+    
+    const initData = Buffer.concat([
+      getDiscriminator('init_proof_buffer'),
+      expectedSizeBuffer,
+    ]);
+    
+    const initIx = new TransactionInstruction({
+      programId: STARK_VERIFIER_ID,
+      keys: [
+        { pubkey: bufferKeypair.publicKey, isSigner: false, isWritable: true },
+        { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data: initData,
+    });
+    
+    const createTx = new Transaction().add(createAccountIx).add(initIx);
+    createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    createTx.feePayer = relayerKeypair.publicKey;
+    
+    // Buffer keypair must sign for createAccount
+    await sendAndConfirmTransaction(connection, createTx, [relayerKeypair, bufferKeypair]);
+    
+    log('info', 'Buffer created', { requestId, buffer: bufferKeypair.publicKey.toBase58().slice(0, 8), accountSize, rentExempt });
     
     // ========================================
     // Step 2: Write Proof Chunks
     // ========================================
     
-    if (!bufferFinalized) {
-      for (let i = 0; i < numChunks; i++) {
-        const offset = i * config.chunkSize;
-        const chunk = proofBytes.slice(offset, offset + config.chunkSize);
-        
-        const writeData = Buffer.concat([
-          getDiscriminator('upload_chunk'),
-          Buffer.from(new Uint32Array([offset]).buffer),
-          Buffer.from(new Uint32Array([chunk.length]).buffer),
-          chunk,
-        ]);
-        
-        const writeIx = new TransactionInstruction({
-          programId: STARK_VERIFIER_ID,  // write_chunk is on stark-verifier
-          keys: [
-            { pubkey: proofBufferPda, isSigner: false, isWritable: true },
-            { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: false },
-          ],
-          data: writeData,
-        });
-        
-        const writeTx = new Transaction().add(writeIx);
-        writeTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        writeTx.feePayer = relayerKeypair.publicKey;
-        
-        await sendAndConfirmTransaction(connection, writeTx, [relayerKeypair]);
-      }
+    for (let i = 0; i < numChunks; i++) {
+      const offset = i * config.chunkSize;
+      const chunk = proofBytes.slice(offset, offset + config.chunkSize);
       
-      log('info', 'Chunks written', { requestId, numChunks });
-      
-      // ========================================
-      // Step 3: Finalize Buffer
-      // ========================================
-      
-      // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32])
-      const finalizeData = Buffer.concat([
-        getDiscriminator('finalize_and_verify'),
-        commitment32,
-        nullifier32,
-        merkleRoot32,
+      const writeData = Buffer.concat([
+        getDiscriminator('upload_chunk'),
+        Buffer.from(new Uint32Array([offset]).buffer),
+        Buffer.from(new Uint32Array([chunk.length]).buffer),
+        chunk,
       ]);
       
-      const finalizeIx = new TransactionInstruction({
-        programId: STARK_VERIFIER_ID,  // finalize_proof_buffer is on stark-verifier
+      const writeIx = new TransactionInstruction({
+        programId: STARK_VERIFIER_ID,
         keys: [
-          { pubkey: proofBufferPda, isSigner: false, isWritable: true },
+          { pubkey: bufferKeypair.publicKey, isSigner: false, isWritable: true },
           { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: false },
         ],
-        data: finalizeData,
+        data: writeData,
       });
       
-      const finalizeTx = new Transaction().add(finalizeIx);
-      finalizeTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      finalizeTx.feePayer = relayerKeypair.publicKey;
+      const writeTx = new Transaction().add(writeIx);
+      writeTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      writeTx.feePayer = relayerKeypair.publicKey;
       
-      await sendAndConfirmTransaction(connection, finalizeTx, [relayerKeypair]);
-      log('info', 'Buffer finalized', { requestId });
+      await sendAndConfirmTransaction(connection, writeTx, [relayerKeypair]);
     }
+    
+    log('info', 'Chunks written', { requestId, numChunks });
+    
+    // ========================================
+    // Step 3: Finalize Buffer
+    // ========================================
+    
+    // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32])
+    const finalizeData = Buffer.concat([
+      getDiscriminator('finalize_and_verify'),
+      commitment32,
+      nullifier32,
+      merkleRoot32,
+    ]);
+    
+    const finalizeIx = new TransactionInstruction({
+      programId: STARK_VERIFIER_ID,
+      keys: [
+        { pubkey: bufferKeypair.publicKey, isSigner: false, isWritable: true },
+        { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: false },
+      ],
+      data: finalizeData,
+    });
+    
+    const finalizeTx = new Transaction().add(finalizeIx);
+    finalizeTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    finalizeTx.feePayer = relayerKeypair.publicKey;
+    
+    await sendAndConfirmTransaction(connection, finalizeTx, [relayerKeypair]);
+    log('info', 'Buffer finalized', { requestId });
     
     // ========================================
     // Step 4: Prepare ATA & Claim
@@ -649,7 +639,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       keys: [
         { pubkey: pool, isSigner: false, isWritable: false },           // pool (read-only)
         { pubkey: deposit, isSigner: false, isWritable: true },         // deposit
-        { pubkey: proofBufferPda, isSigner: false, isWritable: false }, // verifier_buffer
+        { pubkey: bufferKeypair.publicKey, isSigner: false, isWritable: false }, // verifier_buffer
         { pubkey: nullifierPda, isSigner: false, isWritable: true },    // nullifier_record
         { pubkey: vaultPda, isSigner: false, isWritable: true },        // vault
         { pubkey: recipientAta, isSigner: false, isWritable: true },    // recipient_token

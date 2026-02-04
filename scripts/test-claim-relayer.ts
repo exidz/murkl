@@ -13,21 +13,17 @@ const RELAYER_URL = 'http://localhost:3001';
 const POOL_ADDRESS = '8MU3WQzxLDHi6Up2ksk255LWrRm17i7UQ6Hap4zeF3qJ';
 const RPC_URL = 'https://api.devnet.solana.com';
 
-// Generate deterministic test values
+// Use the ACTUAL commitment from the deposit on devnet (leaf index 0)
+// This was deposited during the e2e-vanity.ts test
 function generateTestProof() {
-  const identifier = 'test@example.com';
-  const password = 'testpassword123';
   const leafIndex = 0;
   
-  // Generate commitment: H(identifier || password)
-  const idHash = crypto.createHash('sha256').update(identifier.toLowerCase()).digest();
-  const secretHash = crypto.createHash('sha256').update(password).digest();
-  const commitment = crypto.createHash('sha256').update(Buffer.concat([idHash, secretHash])).digest();
+  // Actual commitment from deposit at leaf index 0:
+  const commitment = Buffer.from('1cd8fca5ddbe8c1cb174a9dceee59b76feaa91dd7a87c13939e38af086c9097d', 'hex');
   
-  // Generate nullifier: H(secret || leafIndex)
-  const leafBuf = Buffer.alloc(4);
-  leafBuf.writeUInt32LE(leafIndex);
-  const nullifier = crypto.createHash('sha256').update(Buffer.concat([secretHash, leafBuf])).digest();
+  // Generate a fake nullifier (we don't know the original password)
+  // This will fail verification but lets us test the flow
+  const nullifier = crypto.createHash('sha256').update(Buffer.from('test-nullifier-0')).digest();
   
   // Generate a minimal valid-looking proof (for testing the buffer creation flow)
   // This won't pass verification but will test the init/upload/finalize flow
