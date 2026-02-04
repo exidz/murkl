@@ -481,8 +481,8 @@ fn generate_stark_proof(
     proof.extend_from_slice(&0u32.to_le_bytes());
     proof.extend_from_slice(&0u32.to_le_bytes());
 
-    // 9. Query count (2 bytes u16)
-    proof.extend_from_slice(&(N_QUERIES as u16).to_le_bytes());
+    // 9. Query count (1 byte)
+    proof.push(N_QUERIES as u8);
 
     // 10. Generate query proofs (format must match verifier's parse_query_proof)
     let log_domain_size: usize = 10 + 2; // LOG_TRACE_SIZE + LOG_BLOWUP
