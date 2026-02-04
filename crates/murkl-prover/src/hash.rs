@@ -197,3 +197,23 @@ mod tests {
         assert_eq!(nullifier.len(), 32);
     }
 }
+
+#[test]
+fn test_commitment_values() {
+    // Test @alice with testpass123
+    let id1 = hash_identifier("@alice");
+    let secret1 = hash_password("testpass123");
+    let commitment1 = pq_commitment(id1, secret1);
+    println!("@alice + testpass123:");
+    println!("  id_hash: {}", id1.value());
+    println!("  secret: {}", secret1.value());
+    println!("  commitment: {}", hex::encode(commitment1));
+    
+    // Test alice without @
+    let id2 = hash_identifier("alice");
+    let commitment2 = pq_commitment(id2, secret1);
+    println!("\nalice + testpass123:");
+    println!("  id_hash: {}", id2.value());
+    println!("  secret: {}", secret1.value());
+    println!("  commitment: {}", hex::encode(commitment2));
+}

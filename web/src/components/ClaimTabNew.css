@@ -222,42 +222,104 @@
   margin: 0;
 }
 
-/* Manual claim section */
-.manual-claim {
-  margin-top: 2rem;
+/* Manual claim section - improved design */
+.manual-claim-section {
+  margin-top: 1.5rem;
 }
 
-.manual-claim summary {
+.manual-claim-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-secondary, #14141f);
+  border: 1px dashed var(--border, #27272a);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 56px;
+}
+
+.manual-claim-trigger:hover {
+  border-color: var(--text-muted, #52525b);
+  background: var(--bg-tertiary, #1e1e2e);
+}
+
+.trigger-icon {
+  font-size: 1.25rem;
+  opacity: 0.7;
+}
+
+.trigger-text {
+  flex: 1;
+  text-align: left;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+}
+
+.trigger-arrow {
+  color: var(--text-muted, #52525b);
+  font-size: 1rem;
+  transition: transform 0.2s;
+}
+
+.manual-claim-trigger:hover .trigger-arrow {
+  transform: translateX(3px);
+}
+
+.manual-claim-form {
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.manual-claim-header {
+  margin-bottom: 1rem;
+}
+
+.manual-claim-back {
+  background: none;
+  border: none;
   color: var(--text-secondary, #a1a1aa);
   font-size: 0.9rem;
   cursor: pointer;
-  padding: 0.5rem 0;
+  padding: 0.25rem 0;
+  margin-bottom: 0.5rem;
+  transition: color 0.2s;
 }
 
-.manual-claim summary:hover {
+.manual-claim-back:hover {
   color: var(--text-primary, #fff);
 }
 
-.manual-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1rem;
+.manual-claim-header h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin: 0;
 }
 
-.manual-form .input {
+.manual-claim-input {
   width: 100%;
-  padding: 1rem;
+  padding: 1rem 1.25rem;
   font-size: 1rem;
   color: var(--text-primary, #fff);
   background: var(--bg-tertiary, #1e1e2e);
   border: 1px solid var(--border, #27272a);
   border-radius: 12px;
   outline: none;
+  margin-bottom: 1rem;
+  transition: border-color 0.2s;
 }
 
-.manual-form .input:focus {
+.manual-claim-input:focus {
   border-color: var(--border-focus, #3d95ce);
+}
+
+.manual-claim-input::placeholder {
+  color: var(--text-muted, #52525b);
 }
 
 /* Password bottom sheet */

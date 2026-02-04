@@ -36,7 +36,7 @@ const GoogleIcon = () => (
 
 const providers: OAuthProvider[] = [
   { id: 'twitter', name: 'X (Twitter)', icon: <XIcon />, placeholder: 'satoshi', prefix: '@' },
-  { id: 'discord', name: 'Discord', icon: <DiscordIcon />, placeholder: 'user#1234', prefix: '' },
+  { id: 'discord', name: 'Discord', icon: <DiscordIcon />, placeholder: 'vitalik', prefix: '' },
   { id: 'google', name: 'Google', icon: <GoogleIcon />, placeholder: 'you@gmail.com', prefix: '' },
 ];
 
@@ -165,21 +165,12 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
         ))}
       </div>
 
-      <motion.div 
-        className="oauth-divider"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-      >
-        <span>or enter manually below</span>
-      </motion.div>
-
       {/* Privacy note */}
       <motion.div 
         className="oauth-privacy"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45 }}
+        transition={{ delay: 0.4 }}
       >
         <span className="oauth-privacy-icon" aria-hidden="true">🛡️</span>
         <p>
@@ -266,8 +257,8 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.2 }}
                 >
-                  {selectedProvider.id === 'twitter' && 'Your X/Twitter username without the @'}
-                  {selectedProvider.id === 'discord' && 'Your Discord username (e.g., user#1234)'}
+                  {selectedProvider.id === 'twitter' && 'Your X/Twitter username (we\'ll add the @)'}
+                  {selectedProvider.id === 'discord' && 'Your Discord username'}
                   {selectedProvider.id === 'google' && 'Your Gmail or Google account email'}
                 </motion.p>
 

@@ -76,16 +76,21 @@ function hashIdentifier(id: string): number {
 }
 
 function computeCommitment(identifierHash: number, secretHash: number): Buffer {
-  const data = Buffer.alloc(8);
-  data.writeUInt32LE(identifierHash, 0);
-  data.writeUInt32LE(secretHash, 4);
+  // FIXED: Added domain prefix to match WASM prover
+  const prefix = Buffer.from('murkl_m31_hash_v1');
+  const data = Buffer.alloc(prefix.length + 8);
+  prefix.copy(data, 0);
+  data.writeUInt32LE(identifierHash, prefix.length);
+  data.writeUInt32LE(secretHash, prefix.length + 4);
   return Buffer.from(keccak256(data), 'hex');
 }
 
 function computeNullifier(secretHash: number, leafIndex: number): Buffer {
-  const data = Buffer.alloc(8);
-  data.writeUInt32LE(secretHash, 0);
-  data.writeUInt32LE(leafIndex, 4);
+  const prefix = Buffer.from('murkl_m31_hash_v1');
+  const data = Buffer.alloc(prefix.length + 8);
+  prefix.copy(data, 0);
+  data.writeUInt32LE(identifierHash, prefix.length);
+  data.writeUInt32LE(secretHash, prefix.length + 4);
   return Buffer.from(keccak256(data), 'hex');
 }
 
