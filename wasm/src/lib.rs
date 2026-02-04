@@ -505,11 +505,15 @@ fn generate_stark_proof(
     proof.extend_from_slice(&composition_oods.c.0.to_le_bytes());
     proof.extend_from_slice(&composition_oods.d.0.to_le_bytes());
 
-    // 5. FRI layer count (1 byte)
+    // 5. Mix OODS values into channel (before FRI phase)
+    channel.mix_qm31(&trace_oods);
+    channel.mix_qm31(&composition_oods);
+
+    // 6. FRI layer count (1 byte)
     proof.push(N_FRI_LAYERS as u8);
 
-    // 6. FRI layer commitments (32 bytes each)
-    // Mix into channel as we go
+    // 7. FRI layer commitments (32 bytes each)
+    // For each layer: mix commitment, then squeeze fri_alpha
     let mut fri_layer_commitments = Vec::with_capacity(N_FRI_LAYERS);
     for i in 0..N_FRI_LAYERS {
         let fri_commitment = keccak_multi(&[
@@ -519,7 +523,10 @@ fn generate_stark_proof(
         ]);
         fri_layer_commitments.push(fri_commitment);
         proof.extend_from_slice(&fri_commitment);
+        
+        // Match verifier: mix then squeeze QM31
         channel.mix_digest(&fri_commitment);
+        let _fri_alpha = channel.squeeze_qm31(); // Must squeeze to advance channel state
     }
 
     // 7. Final polynomial count (2 bytes u16)
