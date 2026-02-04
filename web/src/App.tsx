@@ -63,10 +63,12 @@ function AppContent() {
 
       <footer className="footer">
         <p>
-          Built for <a href="https://colosseum.org" target="_blank" rel="noopener noreferrer">Colosseum Hackathon</a> 🏛️
+          Private payments, built in-browser 🐈‍⬛
         </p>
         <p className="tech">
-          Circle STARKs • M31 Field • keccak256 • Post-Quantum • WASM Prover
+          <a href="https://github.com/exidz/murkl" target="_blank" rel="noopener noreferrer">Source</a>
+          {' • '}
+          <a href="https://colosseum.org" target="_blank" rel="noopener noreferrer">Colosseum</a>
         </p>
       </footer>
     </div>

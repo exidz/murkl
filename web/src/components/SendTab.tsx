@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { buildDepositTransaction, generatePassword, createShareLink } from '../lib/deposit';
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
 import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
+import { HowItWorks } from './HowItWorks';
 import './SendTab.css';
 
 interface Props {
@@ -36,6 +37,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<DepositSuccess | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
   
   // Refs
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -375,9 +377,11 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               Continue
             </button>
 
-            <button className="help-link" onClick={() => {}}>
+            <button className="help-link" onClick={() => setShowHowItWorks(true)}>
               How it works →
             </button>
+            
+            <HowItWorks isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} />
           </motion.div>
         )}
 
