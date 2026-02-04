@@ -2,7 +2,6 @@ import { useMemo, useCallback } from 'react';
 import type { FC, ReactNode } from 'react';
 import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
 import type { WalletError } from '@solana/wallet-adapter-base';
 
@@ -18,7 +17,8 @@ export const WalletProvider: FC<Props> = ({ children }) => {
     []
   );
 
-  const wallets = useMemo(() => [new PhantomWalletAdapter()], []);
+  // Empty array - Standard Wallets (Phantom, Solflare, etc.) auto-register
+  const wallets = useMemo(() => [], []);
 
   const onError = useCallback((error: WalletError) => {
     console.error('[Wallet Error]', error.name, error.message);

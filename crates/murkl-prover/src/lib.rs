@@ -29,6 +29,8 @@
 //! # Components
 //!
 //! - [`m31`] - Mersenne-31 field implementation with optional SIMD
+//! - [`qm31`] - QM31 quartic extension field (M31[i][j])
+//! - [`hash`] - Keccak256-based hash functions (commitments, nullifiers)
 //! - [`circle`] - Circle group operations for Circle STARKs
 //! - [`merkle`] - Keccak256-based Merkle tree
 //! - [`fri`] - FRI (Fast Reed-Solomon IOPP) protocol
