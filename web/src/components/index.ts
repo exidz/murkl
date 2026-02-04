@@ -12,6 +12,7 @@ export type { Token } from './TokenSelector';
 export { Confetti } from './Confetti';
 export { Skeleton, SkeletonText, SkeletonCard, SkeletonList, SkeletonAmount } from './Skeleton';
 export { EmptyState } from './EmptyState';
+export { ErrorState } from './ErrorState';
 export { Button, IconButton } from './Button';
 export { ConfirmationSummary } from './ConfirmationSummary';
 export { ShareSheet } from './ShareSheet';
