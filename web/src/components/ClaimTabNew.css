@@ -319,27 +319,110 @@
   margin: 0;
 }
 
+/* Password input wrapper with toggle */
+.password-input-wrapper {
+  position: relative;
+  margin-bottom: 0.75rem;
+}
+
 .password-input {
   width: 100%;
-  padding: 1rem 1.25rem;
+  padding: 1rem 3.5rem 1rem 1.25rem;
   font-size: 1.125rem;
   color: var(--text-primary, #fff);
   background: var(--bg-tertiary, #1e1e2e);
-  border: 1px solid var(--border, #27272a);
+  border: 2px solid var(--border, #27272a);
   border-radius: 14px;
   outline: none;
   text-align: center;
   letter-spacing: 0.1em;
-  margin-bottom: 1.5rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .password-input:focus {
   border-color: var(--border-focus, #3d95ce);
+  box-shadow: 0 0 0 3px rgba(61, 149, 206, 0.15);
+}
+
+.password-input.has-value {
+  border-color: var(--text-muted, #52525b);
+}
+
+.password-input.ready {
+  border-color: var(--accent-success, #22c55e);
+}
+
+.password-input.ready:focus {
+  border-color: var(--accent-success, #22c55e);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
 }
 
 .password-input::placeholder {
   letter-spacing: normal;
   color: var(--text-muted, #52525b);
+}
+
+/* Show/hide password toggle */
+.password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.password-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.password-toggle:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Password hint / character count */
+.password-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted, #52525b);
+  text-align: center;
+  margin-bottom: 1.5rem;
+  min-height: 1.2em;
+  transition: color 0.2s;
+}
+
+.password-hint.ready {
+  color: var(--accent-success, #22c55e);
+}
+
+.password-hint .ready-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 500;
+}
+
+/* Button spinner */
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: btn-spin 0.8s linear infinite;
+  margin-right: 0.5rem;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
 }
 
 .sheet-actions {
