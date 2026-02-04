@@ -183,7 +183,7 @@ try {
     pubkey: relayerKeypair.publicKey.toBase58().slice(0, 8) + '...' 
   });
 } catch (e) {
-  log('error', 'Failed to load relayer keypair', { path: RELAYER_KEYPAIR_PATH });
+  log('error', 'Failed to load relayer keypair', { error: String(e) });
   process.exit(1);
 }
 
@@ -361,6 +361,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       proof,
       commitment,
       nullifier,
+      merkleRoot,
       leafIndex,
       recipientTokenAccount,
       poolAddress,
@@ -373,7 +374,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     const errors: string[] = [];
     
-    if (!isValidHex(proof, 100, 8192)) {
+    if (!isValidHex(proof, 100, 16384)) {
       errors.push('Invalid proof format');
     }
     if (!isValidHex(commitment, 32, 32)) {
@@ -381,6 +382,10 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     }
     if (!isValidHex(nullifier, 32, 32)) {
       errors.push('Invalid nullifier format');
+    }
+    // merkleRoot is optional - fetched from pool if not provided
+    if (merkleRoot && !isValidHex(merkleRoot, 32, 32)) {
+      errors.push('Invalid merkle root format');
     }
     if (!isValidBase58(recipientTokenAccount)) {
       errors.push('Invalid recipient address');
@@ -417,6 +422,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // ========================================
     
     const proofBytes = sanitizeHex(proof);
+    log('info', 'Proof size', { requestId, size: proofBytes.length, maxAllowed: 16384 });
     const commitment32 = Buffer.alloc(32);
     const nullifier32 = Buffer.alloc(32);
     sanitizeHex(commitment).slice(0, 32).copy(commitment32);
@@ -424,6 +430,22 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     const pool = new PublicKey(poolAddress);
     const recipient = new PublicKey(recipientTokenAccount);
+    
+    // Fetch pool to get merkle_root (if not provided in request)
+    const poolInfo = await connection.getAccountInfo(pool);
+    if (!poolInfo) {
+      return res.status(400).json({ error: 'Pool not found' });
+    }
+    
+    // Pool layout: [8 discriminator][32 admin][32 token_mint][32 vault][32 merkle_root]...
+    // merkle_root is at offset 104
+    const merkleRoot32 = Buffer.alloc(32);
+    if (merkleRoot) {
+      sanitizeHex(merkleRoot).slice(0, 32).copy(merkleRoot32);
+    } else {
+      poolInfo.data.slice(104, 136).copy(merkleRoot32);
+      log('info', 'Fetched merkle_root from pool', { requestId, merkleRoot: merkleRoot32.toString('hex').slice(0, 16) + '...' });
+    }
     
     // Derive deposit PDA from pool + leafIndex
     const leafIndexBuffer = Buffer.alloc(4);
@@ -471,37 +493,45 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     let numChunks = Math.ceil(proofBytes.length / config.chunkSize);
     
     if (existingBuffer) {
-      const finalizedByte = existingBuffer.data[8 + 32 + 32 + 32 + 4 + 4];
+      // Buffer layout: [owner:32][size:4][expected_size:4][finalized:1][commitment:32][nullifier:32][merkle_root:32][proof...]
+      // Finalized byte is at offset 40 (32 + 4 + 4)
+      const finalizedByte = existingBuffer.data[40];
       bufferFinalized = finalizedByte === 1;
       
       if (bufferFinalized) {
         log('info', 'Buffer already finalized', { requestId });
       }
     } else {
-      // Create buffer
-      const createData = Buffer.concat([
+      // Create buffer via init_proof_buffer(expected_size: u32, seed_nonce: [u8; 8])
+      // The program creates the PDA account via CPI internally
+      const expectedSizeBuffer = Buffer.alloc(4);
+      expectedSizeBuffer.writeUInt32LE(proofBytes.length);
+      
+      // seed_nonce is the first 8 bytes of commitment (used for PDA derivation)
+      const seedNonce = commitment32.slice(0, 8);
+      
+      const initData = Buffer.concat([
         getDiscriminator('init_proof_buffer'),
-        commitment32,
-        nullifier32,
-        Buffer.from(new Uint32Array([proofBytes.length]).buffer),
+        expectedSizeBuffer,
+        seedNonce,
       ]);
       
-      const createIx = new TransactionInstruction({
-        programId: STARK_VERIFIER_ID,  // init_buffer is on stark-verifier
+      const initIx = new TransactionInstruction({
+        programId: STARK_VERIFIER_ID,
         keys: [
           { pubkey: proofBufferPda, isSigner: false, isWritable: true },
           { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: true },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         ],
-        data: createData,
+        data: initData,
       });
       
-      const createTx = new Transaction().add(createIx);
+      const createTx = new Transaction().add(initIx);
       createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
       createTx.feePayer = relayerKeypair.publicKey;
       
       await sendAndConfirmTransaction(connection, createTx, [relayerKeypair]);
-      log('info', 'Buffer created', { requestId });
+      log('info', 'Buffer created', { requestId, proofSize: proofBytes.length });
     }
     
     // ========================================
@@ -542,7 +572,13 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       // Step 3: Finalize Buffer
       // ========================================
       
-      const finalizeData = getDiscriminator('finalize_and_verify');
+      // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32])
+      const finalizeData = Buffer.concat([
+        getDiscriminator('finalize_and_verify'),
+        commitment32,
+        nullifier32,
+        merkleRoot32,
+      ]);
       
       const finalizeIx = new TransactionInstruction({
         programId: STARK_VERIFIER_ID,  // finalize_proof_buffer is on stark-verifier
@@ -565,11 +601,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // Step 4: Prepare ATA & Claim
     // ========================================
     
-    const poolInfo = await connection.getAccountInfo(pool);
-    if (!poolInfo) {
-      return res.status(400).json({ error: 'Pool not found' });
-    }
-    
+    // poolInfo already fetched above for merkle_root
     const tokenMint = new PublicKey(poolInfo.data.slice(8 + 32, 8 + 32 + 32));
     const recipientWallet = recipient;
     const recipientAta = await getAssociatedTokenAddress(tokenMint, recipientWallet);

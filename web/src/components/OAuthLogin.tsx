@@ -1,15 +1,18 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { FC } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from './Button';
 import './OAuthLogin.css';
 
 interface OAuthProvider {
   id: 'twitter' | 'discord' | 'google';
   name: string;
   icon: React.ReactNode;
+  placeholder: string;
+  prefix: string;
 }
 
-// SVG icons for providers (better than emoji)
+// SVG icons for providers
 const XIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor">
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -32,9 +35,9 @@ const GoogleIcon = () => (
 );
 
 const providers: OAuthProvider[] = [
-  { id: 'twitter', name: 'X (Twitter)', icon: <XIcon /> },
-  { id: 'discord', name: 'Discord', icon: <DiscordIcon /> },
-  { id: 'google', name: 'Google', icon: <GoogleIcon /> },
+  { id: 'twitter', name: 'X (Twitter)', icon: <XIcon />, placeholder: 'satoshi', prefix: '@' },
+  { id: 'discord', name: 'Discord', icon: <DiscordIcon />, placeholder: 'user#1234', prefix: '' },
+  { id: 'google', name: 'Google', icon: <GoogleIcon />, placeholder: 'you@gmail.com', prefix: '' },
 ];
 
 interface Props {
@@ -42,33 +45,73 @@ interface Props {
   loading?: boolean;
 }
 
+/**
+ * Venmo-style OAuth login with inline identity input sheet.
+ * No browser prompts - everything stays in the app UI.
+ */
 export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<OAuthProvider | null>(null);
+  const [identity, setIdentity] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleOAuth = useCallback(async (provider: OAuthProvider) => {
-    setSelectedProvider(provider.id);
-    
-    // In production, this would redirect to OAuth flow
-    // For demo, we'll simulate with a prompt
-    const mockIdentities: Record<string, string> = {
-      twitter: '@demo_user',
-      discord: 'demo#1234',
-      google: 'demo@example.com',
-    };
-
-    // Simulate OAuth delay
-    await new Promise(r => setTimeout(r, 600));
-    
-    // For demo - in production this comes from OAuth callback
-    const identity = prompt(`Enter your ${provider.name} handle:`, mockIdentities[provider.id]);
-    
-    if (identity?.trim()) {
-      onLogin(provider.id, identity.trim());
+  // Focus input when sheet opens
+  useEffect(() => {
+    if (selectedProvider) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 150);
+      return () => clearTimeout(timer);
     }
-    setSelectedProvider(null);
-  }, [onLogin]);
+  }, [selectedProvider]);
 
-  const isDisabled = loading || selectedProvider !== null;
+  // Reset identity when provider changes
+  useEffect(() => {
+    setIdentity('');
+  }, [selectedProvider?.id]);
+
+  // Handle provider selection
+  const handleProviderClick = useCallback((provider: OAuthProvider) => {
+    setSelectedProvider(provider);
+  }, []);
+
+  // Handle identity submission
+  const handleSubmit = useCallback(async () => {
+    if (!selectedProvider || !identity.trim()) return;
+    
+    setIsSubmitting(true);
+    
+    // Format identity with prefix if needed
+    let formattedIdentity = identity.trim();
+    if (selectedProvider.prefix && !formattedIdentity.startsWith(selectedProvider.prefix)) {
+      formattedIdentity = selectedProvider.prefix + formattedIdentity;
+    }
+    
+    // Brief delay for UX feedback
+    await new Promise(r => setTimeout(r, 400));
+    
+    onLogin(selectedProvider.id, formattedIdentity);
+    setSelectedProvider(null);
+    setIdentity('');
+    setIsSubmitting(false);
+  }, [selectedProvider, identity, onLogin]);
+
+  // Handle enter key
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && identity.trim()) {
+      e.preventDefault();
+      handleSubmit();
+    }
+    if (e.key === 'Escape') {
+      setSelectedProvider(null);
+    }
+  }, [identity, handleSubmit]);
+
+  // Close sheet
+  const handleClose = useCallback(() => {
+    setSelectedProvider(null);
+    setIdentity('');
+  }, []);
+
+  const isDisabled = loading || isSubmitting;
 
   return (
     <div className="oauth-login">
@@ -101,32 +144,25 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
       
       {/* OAuth buttons */}
       <div className="oauth-buttons" role="group" aria-label="Sign in options">
-        <AnimatePresence mode="wait">
-          {providers.map((provider, index) => {
-            const isLoading = selectedProvider === provider.id;
-            
-            return (
-              <motion.button
-                key={provider.id}
-                className={`oauth-btn oauth-${provider.id} ${isLoading ? 'loading' : ''}`}
-                onClick={() => handleOAuth(provider)}
-                disabled={isDisabled}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 + index * 0.05 }}
-                whileTap={{ scale: 0.98 }}
-                aria-busy={isLoading}
-              >
-                <span className="oauth-icon-wrapper" aria-hidden="true">
-                  {provider.icon}
-                </span>
-                <span className="oauth-text">
-                  {isLoading ? 'Connecting...' : `Continue with ${provider.name}`}
-                </span>
-              </motion.button>
-            );
-          })}
-        </AnimatePresence>
+        {providers.map((provider, index) => (
+          <motion.button
+            key={provider.id}
+            className={`oauth-btn oauth-${provider.id}`}
+            onClick={() => handleProviderClick(provider)}
+            disabled={isDisabled}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 + index * 0.05 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <span className="oauth-icon-wrapper" aria-hidden="true">
+              {provider.icon}
+            </span>
+            <span className="oauth-text">
+              Continue with {provider.name}
+            </span>
+          </motion.button>
+        ))}
       </div>
 
       <motion.div 
@@ -150,6 +186,120 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
           <strong>Your identity stays private.</strong> We only check if deposits were sent to your handle — nothing else.
         </p>
       </motion.div>
+
+      {/* Identity input bottom sheet */}
+      <AnimatePresence>
+        {selectedProvider && (
+          <>
+            <motion.div 
+              className="identity-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleClose}
+            />
+            <motion.div 
+              className="identity-sheet"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 350 }}
+            >
+              <div className="sheet-handle" onClick={handleClose} />
+              
+              <div className="identity-sheet-content">
+                {/* Header with provider icon */}
+                <div className="identity-sheet-header">
+                  <motion.div 
+                    className={`identity-provider-icon oauth-${selectedProvider.id}`}
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', delay: 0.1 }}
+                  >
+                    {selectedProvider.icon}
+                  </motion.div>
+                  <motion.h4
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    Enter your {selectedProvider.name} handle
+                  </motion.h4>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.15 }}
+                  >
+                    This is where your funds were sent
+                  </motion.p>
+                </div>
+
+                {/* Input field */}
+                <motion.div 
+                  className="identity-input-wrapper"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                >
+                  {selectedProvider.prefix && (
+                    <span className="identity-prefix">{selectedProvider.prefix}</span>
+                  )}
+                  <input
+                    ref={inputRef}
+                    type={selectedProvider.id === 'google' ? 'email' : 'text'}
+                    className="identity-input"
+                    placeholder={selectedProvider.placeholder}
+                    value={identity}
+                    onChange={e => setIdentity(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    disabled={isSubmitting}
+                  />
+                </motion.div>
+
+                {/* Hint text */}
+                <motion.p 
+                  className="identity-hint"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  {selectedProvider.id === 'twitter' && 'Your X/Twitter username without the @'}
+                  {selectedProvider.id === 'discord' && 'Your Discord username (e.g., user#1234)'}
+                  {selectedProvider.id === 'google' && 'Your Gmail or Google account email'}
+                </motion.p>
+
+                {/* Actions */}
+                <motion.div 
+                  className="identity-actions"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <Button 
+                    variant="ghost"
+                    onClick={handleClose}
+                    disabled={isSubmitting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    variant="primary"
+                    onClick={handleSubmit}
+                    disabled={!identity.trim()}
+                    loading={isSubmitting}
+                    loadingText="Checking..."
+                  >
+                    Continue
+                  </Button>
+                </motion.div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
