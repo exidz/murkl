@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { FC } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,6 +12,7 @@ import { HowItWorks } from './HowItWorks';
 import { AmountInput } from './AmountInput';
 import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
 import { Confetti } from './Confetti';
+import { EmptyState } from './EmptyState';
 import './SendTab.css';
 
 interface Props {
@@ -269,32 +271,33 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     setStep('amount');
   }, []);
 
+  // Wallet modal for connect action
+  const { setVisible: openWalletModal } = useWalletModal();
+
   // Not connected state
   if (!connected) {
     return (
       <div className="send-tab">
+        <EmptyState
+          illustration="wallet"
+          title="Connect to Send"
+          description="Send tokens privately with zero-knowledge proofs — no signature needed to claim"
+          action={{
+            label: 'Connect Wallet',
+            onClick: () => openWalletModal(true),
+          }}
+        />
+        
         <motion.div 
-          className="connect-prompt"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          className="features-footer"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
         >
-          <div className="prompt-icon">🔐</div>
-          <h2>Connect to Send</h2>
-          <p>Connect your wallet to send tokens privately</p>
-          
-          <div className="features">
-            <div className="feature">
-              <span className="feature-icon">🔒</span>
-              <span>Completely private</span>
-            </div>
-            <div className="feature">
-              <span className="feature-icon">⚡</span>
-              <span>No signature needed to claim</span>
-            </div>
-            <div className="feature">
-              <span className="feature-icon">🛡️</span>
-              <span>Post-quantum secure</span>
-            </div>
+          <div className="feature-chips">
+            <span className="feature-chip">🔒 Private</span>
+            <span className="feature-chip">⚡ Instant</span>
+            <span className="feature-chip">🛡️ Post-quantum</span>
           </div>
         </motion.div>
       </div>

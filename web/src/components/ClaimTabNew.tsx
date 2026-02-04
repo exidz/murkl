@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { OAuthLogin } from './OAuthLogin';
 import { ProofProgress } from './ProofProgress';
 import { SkeletonCard } from './Skeleton';
-import { RELAYER_URL, getExplorerUrl } from '../lib/constants';
+import { EmptyState } from './EmptyState';
+import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
 
 // WASM imports
@@ -159,8 +160,10 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
           proof: proofResult.proof,
           commitment: proofResult.commitment,
           nullifier: proofResult.nullifier,
-          recipient: publicKey.toBase58(),
+          recipientTokenAccount: publicKey.toBase58(),
+          poolAddress: POOL_ADDRESS.toBase58(),
           leafIndex: deposit.leafIndex,
+          feeBps: 50,
         }),
       });
 
@@ -325,11 +328,12 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
             </div>
           </div>
         ) : deposits.length === 0 ? (
-          <div className="empty-state">
-            <span className="empty-icon">📭</span>
-            <h3>No deposits yet</h3>
-            <p>Ask someone to send you tokens via Murkl!</p>
-          </div>
+          <EmptyState
+            illustration="inbox"
+            title="No deposits yet"
+            description="Ask someone to send you tokens via Murkl — or switch tabs to send yourself!"
+            compact
+          />
         ) : (
           <div className="deposits-list">
             {deposits.map(deposit => (

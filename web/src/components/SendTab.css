@@ -573,6 +573,32 @@
   min-width: 44px;
 }
 
+/* Feature chips footer (connect state) */
+.features-footer {
+  margin-top: auto;
+  padding: 1.5rem 0 1rem;
+}
+
+.feature-chips {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.feature-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #a1a1aa);
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
 /* Reduced motion: disable animations for accessibility */
 @media (prefers-reduced-motion: reduce) {
   .success-check::before {

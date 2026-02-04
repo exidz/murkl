@@ -1,0 +1,184 @@
+/* EmptyState.css - Venmo-style empty states */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem 1.5rem;
+  min-height: 280px;
+}
+
+.empty-state.compact {
+  padding: 2rem 1rem;
+  min-height: 200px;
+}
+
+/* Illustration container */
+.empty-illustration {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 1.5rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state.compact .empty-illustration {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 1rem;
+}
+
+.empty-illustration svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Large emoji icon fallback */
+.empty-illustration > span {
+  font-size: 3.5rem;
+  line-height: 1;
+}
+
+.empty-state.compact .empty-illustration > span {
+  font-size: 2.5rem;
+}
+
+/* Content */
+.empty-content {
+  max-width: 280px;
+}
+
+.empty-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+  line-height: 1.3;
+}
+
+.empty-state.compact .empty-title {
+  font-size: 1.1rem;
+}
+
+.empty-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.empty-state.compact .empty-description {
+  font-size: 0.85rem;
+}
+
+/* Actions */
+.empty-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  width: 100%;
+  max-width: 240px;
+}
+
+.empty-state.compact .empty-actions {
+  margin-top: 1rem;
+}
+
+/* Primary action button */
+.empty-action-primary {
+  width: 100%;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.empty-action-primary:hover {
+  background: color-mix(in srgb, var(--accent-primary) 90%, white);
+}
+
+.empty-action-primary:active {
+  transform: scale(0.98);
+}
+
+.empty-action-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Secondary action (link-style) */
+.empty-action-secondary {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.empty-action-secondary:hover {
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+/* Feature list (for connect states) */
+.empty-features {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.empty-feature {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.empty-feature-icon {
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .empty-state {
+    padding: 2rem 1rem;
+    min-height: 240px;
+  }
+
+  .empty-illustration {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 1rem;
+  }
+
+  .empty-title {
+    font-size: 1.1rem;
+  }
+
+  .empty-description {
+    font-size: 0.85rem;
+  }
+
+  .empty-action-primary {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.95rem;
+  }
+}
