@@ -36,6 +36,8 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { auth, getMurklIdentifier } from './auth';
+import { toNodeHandler } from 'better-auth/node';
 
 // ============================================================================
 // Configuration & Validation
@@ -250,7 +252,8 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true, // Required for Better Auth cookies
   maxAge: 86400, // 24 hours
 }));
 
@@ -314,6 +317,48 @@ if (fs.existsSync(distPath)) {
 }
 
 // ============================================================================
+// Better Auth Routes
+// ============================================================================
+
+// Mount Better Auth handler
+app.all('/api/auth/*', toNodeHandler(auth));
+
+// Get current user's Murkl identifier
+app.get('/api/me', async (req: Request, res: Response) => {
+  try {
+    const session = await auth.api.getSession({
+      headers: req.headers as Record<string, string>,
+    });
+    
+    if (!session?.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    // Get the provider from accounts
+    const accounts = await auth.api.listUserAccounts({
+      headers: req.headers as Record<string, string>,
+    });
+    
+    const provider = accounts?.[0]?.providerId || 'unknown';
+    const identifier = getMurklIdentifier(session.user, provider);
+    
+    res.json({
+      user: {
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        image: session.user.image,
+      },
+      provider,
+      murklIdentifier: identifier,
+    });
+  } catch (e: unknown) {
+    log('error', 'Get user failed', { error: String(e) });
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// ============================================================================
 // Anchor Helpers
 // ============================================================================
 
@@ -331,6 +376,51 @@ app.get('/health', (_req: Request, res: Response) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
   });
+});
+
+// Debug: Verify commitment computation (REMOVE IN PRODUCTION)
+app.post('/debug/commitment', (req: Request, res: Response) => {
+  // @ts-ignore - js-sha3 doesn't have types
+  const { keccak256 } = require('js-sha3');
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'identifier and password required' });
+    }
+    
+    const M31_PRIME = 0x7FFFFFFF;
+    
+    // Hash identifier (lowercased, with domain prefix) - using keccak256 like Rust SDK
+    const normalizedId = identifier.toLowerCase();
+    const idData = Buffer.concat([Buffer.from('murkl_identifier_v1'), Buffer.from(normalizedId)]);
+    const idHash = Buffer.from(keccak256(idData), 'hex');
+    const idM31 = idHash.readUInt32LE(0) % M31_PRIME;
+    
+    // Hash password (with domain prefix)
+    const pwData = Buffer.concat([Buffer.from('murkl_password_v1'), Buffer.from(password)]);
+    const pwHash = Buffer.from(keccak256(pwData), 'hex');
+    const secretM31 = pwHash.readUInt32LE(0) % M31_PRIME;
+    
+    // Compute commitment (with domain prefix)
+    const idBuf = Buffer.alloc(4);
+    const secretBuf = Buffer.alloc(4);
+    idBuf.writeUInt32LE(idM31, 0);
+    secretBuf.writeUInt32LE(secretM31, 0);
+    
+    const commitData = Buffer.concat([Buffer.from('murkl_m31_hash_v1'), idBuf, secretBuf]);
+    const commitment = keccak256(commitData);
+    
+    res.json({
+      identifier,
+      normalizedId,
+      idM31,
+      secretM31,
+      commitment,
+      expected: '433eb88de690969948462fea8e41877fb203913bebebf1a5a47025d48734bb0d', // E2E test deposit
+    });
+  } catch (e: unknown) {
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 app.get('/info', async (_req: Request, res: Response) => {
@@ -413,6 +503,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     log('info', 'Processing claim', {
       requestId,
+      commitmentFull: commitment, // TEMP: full commitment for debugging
       commitment: commitment.slice(0, 16) + '...',
       recipient: recipientTokenAccount.slice(0, 8) + '...',
     });

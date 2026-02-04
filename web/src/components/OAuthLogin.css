@@ -479,3 +479,41 @@
     transition: transform 0.15s ease;
   }
 }
+
+/* ============================================
+   Better Auth - New Styles
+   ============================================ */
+
+/* Logged in state */
+.oauth-logged-in {
+  text-align: center;
+}
+
+.oauth-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Error message */
+.oauth-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  max-width: 340px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Coming soon text */
+.oauth-coming-soon {
+  color: var(--text-tertiary, #71717a);
+  font-size: 0.8125rem;
+  margin: 0.5rem 0 0;
+  font-style: italic;
+}

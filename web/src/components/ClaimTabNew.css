@@ -511,43 +511,121 @@
   font-size: 1rem;
 }
 
-/* Success view */
+/* Success view - Venmo-style celebration */
 .claim-success {
   text-align: center;
-  padding: 2rem 1rem;
+  padding: 1.5rem 1rem;
+  position: relative;
 }
 
-.success-icon {
+.success-header {
+  margin-bottom: 1.5rem;
+}
+
+.success-check {
   width: 72px;
   height: 72px;
-  background: var(--accent-success, #22c55e);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem;
+  font-size: 2.25rem;
   color: white;
-  margin: 0 auto 1.5rem;
+  margin: 0 auto 1.25rem;
+  box-shadow: 
+    0 0 0 8px rgba(34, 197, 94, 0.15),
+    0 0 40px rgba(34, 197, 94, 0.3),
+    0 8px 32px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+/* Pulse ring animation */
+.success-check::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(34, 197, 94, 0.4);
+  animation: claim-success-pulse 2s ease-out infinite;
+}
+
+@keyframes claim-success-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
 }
 
 .claim-success h2 {
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary, #fff);
-  margin-bottom: 0.5rem;
+  margin: 0 0 0.5rem;
 }
 
 .claim-amount {
-  font-size: 2rem;
+  font-size: 2.25rem;
   font-weight: 700;
   color: var(--text-primary, #fff);
-  margin: 0 0 0.25rem;
+  margin: 0;
+  /* Subtle gradient shine */
+  background: linear-gradient(90deg, #fff 0%, #22c55e 50%, #fff 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: claim-shine 3s ease-in-out infinite;
+}
+
+@keyframes claim-shine {
+  0%, 100% {
+    background-position: 200% center;
+    -webkit-text-fill-color: initial;
+  }
+  50% {
+    background-position: 0% center;
+    -webkit-text-fill-color: transparent;
+  }
 }
 
 .claim-to {
   color: var(--text-secondary, #a1a1aa);
   font-size: 1rem;
-  margin: 0 0 1.5rem;
+  margin: 0.25rem 0 0;
+}
+
+/* Celebration message */
+.success-celebration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 14px;
+  margin-bottom: 1.5rem;
+}
+
+.celebration-emoji {
+  font-size: 1.25rem;
+  animation: celebrate-bounce 1s ease-in-out infinite;
+}
+
+@keyframes celebrate-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.success-celebration p {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.4;
 }
 
 .claim-success .tx-link {
@@ -556,15 +634,12 @@
   font-size: 0.9rem;
   text-decoration: none;
   margin-bottom: 1.5rem;
+  transition: color 0.2s;
 }
 
 .claim-success .tx-link:hover {
   text-decoration: underline;
-}
-
-.claim-success .btn {
-  width: 100%;
-  max-width: 240px;
+  color: #5ba8d9;
 }
 
 /* Mobile optimizations */
@@ -595,4 +670,37 @@
 .btn,
 .manual-claim summary {
   min-height: 44px;
+}
+
+/* Reduced motion: disable animations for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .success-check::before {
+    animation: none;
+  }
+  
+  .claim-amount {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: initial;
+  }
+  
+  .celebration-emoji {
+    animation: none;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .success-check {
+    box-shadow: none;
+    outline: 3px solid var(--accent-success);
+  }
+  
+  .success-check::before {
+    display: none;
+  }
+  
+  .success-celebration {
+    border-width: 2px;
+  }
 }

@@ -7,6 +7,7 @@ import { ProofProgress } from './ProofProgress';
 import { SkeletonCard } from './Skeleton';
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
+import { Confetti } from './Confetti';
 import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
 
@@ -487,32 +488,92 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
             >
+              {/* Celebration confetti! */}
+              <Confetti active={true} count={50} duration={3500} />
+              
+              {/* Animated success header */}
+              <div className="success-header">
+                <motion.div 
+                  className="success-check"
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ 
+                    type: 'spring', 
+                    stiffness: 300,
+                    damping: 15,
+                    delay: 0.1 
+                  }}
+                >
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.3, duration: 0.2 }}
+                  >
+                    ✓
+                  </motion.span>
+                </motion.div>
+                
+                <motion.h2
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  Claimed!
+                </motion.h2>
+                
+                <motion.p 
+                  className="claim-amount"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
+                >
+                  {claimingDeposit.amount} {claimingDeposit.token}
+                </motion.p>
+                
+                <motion.p 
+                  className="claim-to"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  is now in your wallet
+                </motion.p>
+              </div>
+
+              {/* Celebration message */}
               <motion.div 
-                className="success-icon"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', delay: 0.1 }}
+                className="success-celebration"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
               >
-                ✓
+                <span className="celebration-emoji">🎉</span>
+                <p>Private transfer complete — no trace left behind</p>
               </motion.div>
-              <h2>Claimed!</h2>
-              <p className="claim-amount">{claimingDeposit.amount} {claimingDeposit.token}</p>
-              <p className="claim-to">sent to your wallet</p>
               
               {successSignature && (
-                <a 
+                <motion.a 
                   href={getExplorerUrl(successSignature)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="tx-link"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.6 }}
                 >
                   View transaction ↗
-                </a>
+                </motion.a>
               )}
               
-              <Button variant="primary" fullWidth onClick={handleClaimComplete}>
-                Done
-              </Button>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+              >
+                <Button variant="primary" size="lg" fullWidth onClick={handleClaimComplete}>
+                  Done
+                </Button>
+              </motion.div>
             </motion.div>
           ) : (
             <motion.div

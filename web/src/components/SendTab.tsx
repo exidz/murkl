@@ -2,7 +2,6 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { FC } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { buildDepositTransaction, generatePassword, createShareLink } from '../lib/deposit';
@@ -15,6 +14,7 @@ import { Confetti } from './Confetti';
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
+import { ShareSheet } from './ShareSheet';
 import './SendTab.css';
 
 interface Props {
@@ -47,6 +47,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [success, setSuccess] = useState<DepositSuccess | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [showShareSheet, setShowShareSheet] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   
   // Refs
@@ -363,72 +364,49 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             </motion.p>
           </div>
 
-          <motion.div 
-            className="share-section"
+          {/* Primary action: Share */}
+          <motion.div
+            className="success-actions"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <h3>Share with recipient</h3>
-            <p className="share-hint">Send them the password securely (call, Signal, etc)</p>
+            <Button 
+              variant="primary"
+              size="lg"
+              fullWidth
+              icon={<span>📤</span>}
+              onClick={() => setShowShareSheet(true)}
+            >
+              Share with {success.identifier.split('@')[0] || success.identifier}
+            </Button>
             
-            <motion.div 
-              className="share-field"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 }}
-            >
-              <label>Password</label>
-              <div className="copy-row">
-                <code>{success.password}</code>
-                <motion.button 
-                  className="copy-btn"
-                  onClick={() => copyToClipboard(success.password, 'password')}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  {copiedField === 'password' ? '✓' : '📋'}
-                </motion.button>
-              </div>
-            </motion.div>
+            <p className="success-hint">
+              They'll need the password to claim
+            </p>
+          </motion.div>
 
-            <motion.div 
-              className="share-field"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.7 }}
+          {/* Quick copy row */}
+          <motion.div 
+            className="quick-copy-row"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+          >
+            <button 
+              className="quick-copy-btn"
+              onClick={() => copyToClipboard(success.password, 'password')}
             >
-              <label>Claim link</label>
-              <div className="copy-row">
-                <code className="truncate">{success.shareLink}</code>
-                <motion.button 
-                  className="copy-btn"
-                  onClick={() => copyToClipboard(success.shareLink, 'link')}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  {copiedField === 'link' ? '✓' : '📋'}
-                </motion.button>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              className="qr-section"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.8, type: 'spring' }}
+              <span className="quick-copy-icon">{copiedField === 'password' ? '✓' : '🔑'}</span>
+              <span>{copiedField === 'password' ? 'Copied!' : 'Copy password'}</span>
+            </button>
+            <button 
+              className="quick-copy-btn"
+              onClick={() => copyToClipboard(success.shareLink, 'link')}
             >
-              <p>Or scan to claim</p>
-              <div className="qr-code">
-                <QRCodeSVG 
-                  value={success.shareLink} 
-                  size={160}
-                  bgColor="#ffffff"
-                  fgColor="#0a0a0f"
-                  level="M"
-                />
-              </div>
-            </motion.div>
+              <span className="quick-copy-icon">{copiedField === 'link' ? '✓' : '🔗'}</span>
+              <span>{copiedField === 'link' ? 'Copied!' : 'Copy link'}</span>
+            </button>
           </motion.div>
 
           <motion.a 
@@ -438,7 +416,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             className="tx-link"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.9 }}
+            transition={{ delay: 0.7 }}
           >
             View transaction ↗
           </motion.a>
@@ -446,7 +424,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1 }}
+            transition={{ delay: 0.8 }}
           >
             <Button 
               variant="secondary"
@@ -458,6 +436,19 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             </Button>
           </motion.div>
         </motion.div>
+
+        {/* Share bottom sheet */}
+        <ShareSheet
+          isOpen={showShareSheet}
+          onClose={() => setShowShareSheet(false)}
+          data={{
+            link: success.shareLink,
+            password: success.password,
+            amount: String(success.amount),
+            token: success.token,
+            recipient: success.identifier,
+          }}
+        />
       </div>
     );
   }
