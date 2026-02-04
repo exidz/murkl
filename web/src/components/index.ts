@@ -7,4 +7,6 @@ export { ProofProgress } from './ProofProgress';
 export { HowItWorks } from './HowItWorks';
 export { TabBar } from './TabBar';
 export { AmountInput } from './AmountInput';
+export { TokenSelector, SUPPORTED_TOKENS } from './TokenSelector';
+export type { Token } from './TokenSelector';
 export { Confetti } from './Confetti';

@@ -9,6 +9,7 @@ import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from
 import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
 import { HowItWorks } from './HowItWorks';
 import { AmountInput } from './AmountInput';
+import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
 import { Confetti } from './Confetti';
 import './SendTab.css';
 
@@ -23,6 +24,7 @@ interface DepositSuccess {
   password: string;
   identifier: string;
   amount: number;
+  token: string;
 }
 
 type Step = 'amount' | 'recipient' | 'password' | 'confirm' | 'success';
@@ -33,6 +35,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   
   // Form state
   const [amount, setAmount] = useState('');
+  const [selectedToken, setSelectedToken] = useState<Token>(SUPPORTED_TOKENS[0]);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [step, setStep] = useState<Step>('amount');
@@ -40,6 +43,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [success, setSuccess] = useState<DepositSuccess | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   
   // Refs
   const identifierInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +63,39 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     if (!password) {
       setPassword(generatePassword(16));
     }
+  }, []);
+
+  // Fetch token balance when wallet connects or token changes
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      setTokenBalance(null);
+      return;
+    }
+
+    const fetchBalance = async () => {
+      try {
+        if (selectedToken.symbol === 'SOL') {
+          const balance = await connection.getBalance(publicKey);
+          setTokenBalance(balance / 1e9); // Convert lamports to SOL
+        } else {
+          // For SPL tokens, would need to fetch token account
+          // For now, show null (no balance shown)
+          setTokenBalance(null);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch balance:', e);
+        setTokenBalance(null);
+      }
+    };
+
+    fetchBalance();
+  }, [connected, publicKey, selectedToken, connection]);
+
+  // Handle token change
+  const handleTokenChange = useCallback((token: Token) => {
+    setSelectedToken(token);
+    // Reset amount when switching tokens
+    setAmount('');
   }, []);
 
   // Copy to clipboard
@@ -175,6 +212,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         password,
         identifier: cleanIdentifier,
         amount: amountNum,
+        token: selectedToken.symbol,
       });
       
       // Register deposit with relayer for OAuth lookup
@@ -185,7 +223,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           body: JSON.stringify({
             identifier: cleanIdentifier,
             amount: amountNum,
-            token: 'SOL',
+            token: selectedToken.symbol,
             leafIndex: depositResult.leafIndex,
             pool: POOL_ADDRESS.toBase58(),
             commitment: depositResult.commitment,
@@ -294,7 +332,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
             >
-              {success.amount} SOL
+              {success.amount} {success.token}
             </motion.p>
             <motion.p 
               className="success-to"
@@ -419,10 +457,17 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               value={amount}
               onChange={handleAmountChange}
               onSubmit={goNext}
-              currency="SOL"
-              currencySymbol="◎"
-              maxDecimals={9}
+              currency={selectedToken.symbol}
+              currencySymbol={selectedToken.icon}
+              maxDecimals={selectedToken.decimals}
               autoFocus
+            />
+
+            <TokenSelector
+              tokens={SUPPORTED_TOKENS}
+              selected={selectedToken}
+              onChange={handleTokenChange}
+              balance={tokenBalance}
             />
 
             <button 
@@ -455,7 +500,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             </button>
 
             <div className="step-header">
-              <p className="step-amount">Sending {amount} SOL</p>
+              <p className="step-amount">Sending {amount} {selectedToken.symbol}</p>
               <h2>Who's it for?</h2>
             </div>
 
@@ -499,7 +544,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             </button>
 
             <div className="step-header">
-              <p className="step-amount">Sending {amount} SOL to {identifier}</p>
+              <p className="step-amount">Sending {amount} {selectedToken.symbol} to {identifier}</p>
               <h2>Create a password</h2>
             </div>
 
@@ -552,7 +597,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
 
             <div className="confirm-card">
               <p className="confirm-label">You're sending</p>
-              <p className="confirm-amount">{amount} SOL</p>
+              <p className="confirm-amount">{amount} {selectedToken.symbol}</p>
               <p className="confirm-to">to {identifier}</p>
               
               <div className="confirm-details">
