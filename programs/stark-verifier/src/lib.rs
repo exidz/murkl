@@ -29,10 +29,9 @@ declare_id!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
 pub const MAX_PROOF_SIZE: usize = 8192;
 pub const NUM_FRI_QUERIES: usize = 8;
 
-/// DEMO MODE: Set to false for production!
-/// When true, skips constraint verification for demo purposes.
-/// Full cryptographic verification requires proper STWO-compatible proofs.
-pub const DEMO_MODE: bool = true;
+/// Demo mode toggle - set to true to skip verification for testing
+/// Currently disabled: full cryptographic verification enabled
+pub const DEMO_MODE: bool = false;
 pub const LOG_BLOWUP: u32 = 4;
 pub const LOG_FOLDING_FACTOR: u32 = 2; // Fold by 4 each round
 pub const BLOWUP_FACTOR: usize = 1 << LOG_BLOWUP;

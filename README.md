@@ -18,7 +18,7 @@ Murkl is an **experimental Circle STARK verifier** using the M31 (Mersenne-31) f
 | **On-chain verification** | ✅ Working | Proof parsing + validation |
 | **Full E2E claim** | ✅ Working | Pool → Deposit → Prove → Verify → Claim |
 
-> ⚠️ **Demo Mode:** The verifier currently runs in demo mode (skips cryptographic constraint checks). Full verification requires STWO-compatible proof generation. Architecture and flow are production-ready.
+> 🔒 **Full Verification Enabled:** The STARK verifier performs complete cryptographic verification including constraint checks, FRI folding, and Merkle path validation.
 
 ### Devnet Addresses
 

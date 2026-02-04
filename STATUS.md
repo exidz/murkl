@@ -10,7 +10,7 @@
 | Deposit | ✅ Working |
 | CLI Proof Generation | ✅ Working |
 | Proof Upload | ✅ Working |
-| On-chain Verification | ✅ Demo Mode |
+| On-chain Verification | ✅ Full Verification |
 | Claim | ✅ Working |
 
 ## Programs (Devnet)
@@ -52,13 +52,13 @@ cargo build --release -p murkl-cli
 anchor build
 ```
 
-## Demo Mode Warning
+## Verification Status
 
-⚠️ The STARK verifier is in **demo mode** (`DEMO_MODE = true`):
-- Skips constraint verification
-- Skips Merkle path checks
-
-For production, set `DEMO_MODE = false` and integrate proper STWO proofs.
+🔒 **Full verification enabled** (`DEMO_MODE = false`):
+- ✅ Constraint verification (AIR evaluation at OODS)
+- ✅ FRI folding checks
+- ✅ Merkle path validation
+- ✅ Fiat-Shamir query index enforcement
 
 ## Proof Specs
 
