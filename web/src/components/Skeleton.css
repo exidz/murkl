@@ -1,16 +1,21 @@
 /* Skeleton - Venmo-style shimmer loading placeholders */
 
 .skeleton {
+  /* Smoother gradient with softer highlight for premium feel */
   background: linear-gradient(
-    90deg,
+    105deg,
     var(--bg-tertiary, #1e1e2e) 0%,
-    var(--bg-tertiary, #1e1e2e) 40%,
-    rgba(255, 255, 255, 0.05) 50%,
-    var(--bg-tertiary, #1e1e2e) 60%,
+    var(--bg-tertiary, #1e1e2e) 35%,
+    rgba(255, 255, 255, 0.03) 42%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.03) 58%,
+    var(--bg-tertiary, #1e1e2e) 65%,
     var(--bg-tertiary, #1e1e2e) 100%
   );
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  /* Subtle inner shadow for depth */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
 @keyframes skeleton-shimmer {
@@ -18,8 +23,13 @@
     background-position: 200% 0;
   }
   100% {
-    background-position: -200% 0;
+    background-position: -100% 0;
   }
+}
+
+/* Subtle pulse variation for smaller skeletons */
+.skeleton-text .skeleton {
+  animation: skeleton-shimmer 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 /* Skeleton text block */

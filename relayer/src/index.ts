@@ -590,17 +590,21 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       [Buffer.from('vault'), pool.toBuffer()],
       config.programId
     );
+    log('info', 'DEBUG: vaultPda derived', { requestId, vaultPda: vaultPda.toBase58() });
     
     const [nullifierPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('nullifier'), pool.toBuffer(), nullifier32],
       config.programId
     );
+    log('info', 'DEBUG: nullifierPda derived', { requestId, nullifierPda: nullifierPda.toBase58() });
     
     // ========================================
     // Check on-chain nullifier status
     // ========================================
     
+    log('info', 'DEBUG: fetching nullifier account...', { requestId });
     const nullifierAccount = await connection.getAccountInfo(nullifierPda);
+    log('info', 'DEBUG: nullifier account fetched', { requestId, exists: !!nullifierAccount });
     if (nullifierAccount) {
       log('warn', 'Nullifier already used on-chain', { requestId });
       return res.status(400).json({ error: 'Funds already claimed' });
@@ -657,9 +661,12 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // Step 2: Write Proof Chunks
     // ========================================
     
+    log('info', 'DEBUG: Writing chunks', { requestId, numChunks, chunkSize: config.chunkSize });
     for (let i = 0; i < numChunks; i++) {
       const offset = i * config.chunkSize;
       const chunk = proofBytes.slice(offset, offset + config.chunkSize);
+      
+      log('info', `DEBUG: Writing chunk ${i+1}/${numChunks}`, { requestId, offset, chunkLen: chunk.length });
       
       const writeData = Buffer.concat([
         getDiscriminator('upload_chunk'),
@@ -681,7 +688,13 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       writeTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
       writeTx.feePayer = relayerKeypair.publicKey;
       
-      await sendAndConfirmTransaction(connection, writeTx, [relayerKeypair]);
+      try {
+        await sendAndConfirmTransaction(connection, writeTx, [relayerKeypair]);
+        log('info', `DEBUG: Chunk ${i+1} written successfully`, { requestId });
+      } catch (chunkErr) {
+        log('error', `DEBUG: Chunk ${i+1} failed`, { requestId, error: String(chunkErr) });
+        throw chunkErr;
+      }
     }
     
     log('info', 'Chunks written', { requestId, numChunks });
@@ -837,16 +850,22 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
-    log('error', 'Claim error', { requestId, error: message });
+    const stack = e instanceof Error ? e.stack : undefined;
+    log('error', 'Claim error', { requestId, error: message, stack });
+    console.error('❌ Claim error:', message);
+    if (stack) console.error(stack);
     
     // Remove nullifier from cache so user can retry
     if (claimNullifier) {
       processedNullifiers.delete(claimNullifier);
     }
     
-    // Don't leak internal error details
+    // Return more detail in development
+    const isDev = process.env.NODE_ENV !== 'production';
     if (message.includes('insufficient funds')) {
       res.status(503).json({ error: 'Relayer temporarily unavailable' });
+    } else if (isDev) {
+      res.status(500).json({ error: message, requestId });
     } else {
       res.status(500).json({ error: 'Internal error' });
     }
