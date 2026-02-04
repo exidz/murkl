@@ -337,11 +337,11 @@ pub struct Deposit<'info> {
     #[account(
         init,
         payer = depositor,
-        space = 8 + DepositRecord::SIZE,
+        space = 8 + DepositAccount::SIZE,
         seeds = [b"deposit", pool.key().as_ref(), &pool.leaf_count.to_le_bytes()],
         bump
     )]
-    pub deposit: Account<'info, DepositRecord>,
+    pub deposit: Account<'info, DepositAccount>,
     
     #[account(
         mut,
@@ -374,7 +374,7 @@ pub struct Claim<'info> {
         seeds = [b"deposit", pool.key().as_ref(), &deposit.leaf_index.to_le_bytes()],
         bump = deposit.bump
     )]
-    pub deposit: Account<'info, DepositRecord>,
+    pub deposit: Account<'info, DepositAccount>,
     
     /// CHECK: stark-verifier's proof buffer (verified via finalized flag + public inputs)
     #[account(
@@ -475,7 +475,7 @@ impl Default for PoolConfig {
 }
 
 #[account]
-pub struct DepositRecord {
+pub struct DepositAccount {
     pub pool: Pubkey,
     pub commitment: [u8; 32],
     pub amount: u64,
@@ -484,7 +484,7 @@ pub struct DepositRecord {
     pub bump: u8,
 }
 
-impl DepositRecord {
+impl DepositAccount {
     pub const SIZE: usize = 32 + 32 + 8 + 8 + 1 + 1;
 }
 

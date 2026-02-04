@@ -423,23 +423,27 @@ async function main() {
     );
   }
   
-  const feeBps = 0; // No fee for self-claim
+  const relayerFee = BigInt(0); // No fee for self-claim (u64)
+  const feeBuffer = Buffer.alloc(8);
+  feeBuffer.writeBigUInt64LE(relayerFee);
+  
   const claimData = Buffer.concat([
     getDiscriminator('claim'),
-    Buffer.from(new Uint16Array([feeBps]).buffer),
+    feeBuffer,           // relayer_fee: u64 (8 bytes)
+    nullifier,           // nullifier: [u8; 32] (32 bytes)
   ]);
   
   const claimIx = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
-      { pubkey: pool, isSigner: false, isWritable: true },
-      { pubkey: deposit, isSigner: false, isWritable: true },
-      { pubkey: proofBufferPda, isSigner: false, isWritable: false },
-      { pubkey: nullifierPda, isSigner: false, isWritable: true },
-      { pubkey: vaultPda, isSigner: false, isWritable: true },
-      { pubkey: recipientAta, isSigner: false, isWritable: true },
-      { pubkey: recipientAta, isSigner: false, isWritable: true }, // relayer = recipient
-      { pubkey: relayer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: pool, isSigner: false, isWritable: false },           // pool (not writable)
+      { pubkey: deposit, isSigner: false, isWritable: true },         // deposit
+      { pubkey: proofBufferPda, isSigner: false, isWritable: false }, // verifier_buffer
+      { pubkey: nullifierPda, isSigner: false, isWritable: true },    // nullifier_record (init)
+      { pubkey: vaultPda, isSigner: false, isWritable: true },        // vault
+      { pubkey: recipientAta, isSigner: false, isWritable: true },    // recipient_token
+      { pubkey: relayer.publicKey, isSigner: true, isWritable: true },// relayer (signer)
+      { pubkey: recipientAta, isSigner: false, isWritable: true },    // relayer_token
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],

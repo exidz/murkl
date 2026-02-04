@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { FC, ChangeEvent } from 'react';
+import type { FC } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
@@ -8,6 +8,7 @@ import { buildDepositTransaction, generatePassword, createShareLink } from '../l
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
 import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
 import { HowItWorks } from './HowItWorks';
+import { AmountInput } from './AmountInput';
 import './SendTab.css';
 
 interface Props {
@@ -40,14 +41,12 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   
   // Refs
-  const amountInputRef = useRef<HTMLInputElement>(null);
   const identifierInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input on step change
+  // Focus input on step change (AmountInput handles its own focus)
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (step === 'amount') amountInputRef.current?.focus();
       if (step === 'recipient') identifierInputRef.current?.focus();
       if (step === 'password') passwordInputRef.current?.focus();
     }, 100);
@@ -73,15 +72,10 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     }
   }, []);
 
-  // Handle amount change with formatting
-  const handleAmountChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^0-9.]/g, '');
-    // Allow only one decimal point
-    const parts = value.split('.');
-    if (parts.length > 2) return;
-    if (parts[1]?.length > 9) return; // Max 9 decimals for SOL
+  // Handle amount change (AmountInput handles validation)
+  const handleAmountChange = useCallback((value: string) => {
     setAmount(value);
-  };
+  }, []);
 
   // Navigation
   const goNext = useCallback(() => {
@@ -351,23 +345,15 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <div className="amount-input-container">
-              <div className="amount-display">
-                <span className="currency">◎</span>
-                <input
-                  ref={amountInputRef}
-                  type="text"
-                  inputMode="decimal"
-                  className="amount-input"
-                  placeholder="0"
-                  value={amount}
-                  onChange={handleAmountChange}
-                  onKeyDown={handleKeyDown}
-                  autoComplete="off"
-                />
-              </div>
-              <p className="amount-label">SOL</p>
-            </div>
+            <AmountInput
+              value={amount}
+              onChange={handleAmountChange}
+              onSubmit={goNext}
+              currency="SOL"
+              currencySymbol="◎"
+              maxDecimals={9}
+              autoFocus
+            />
 
             <button 
               className="action-btn primary"
