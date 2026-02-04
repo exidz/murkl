@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useEffect, type FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from './Toast';
 import { OAuthLogin } from './OAuthLogin';
@@ -10,6 +12,9 @@ import { Button } from './Button';
 import { Confetti } from './Confetti';
 import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
+
+// WSOL mint address
+const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
 
 // WASM imports
 import { generate_proof } from '../wasm/murkl_wasm';
@@ -427,6 +432,12 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
 
       // Submit to relayer
       setStage('verifying');
+      // Derive recipient's WSOL Associated Token Account
+      const recipientATA = await getAssociatedTokenAddress(
+        WSOL_MINT,
+        publicKey
+      );
+
       const response = await fetch(`${RELAYER_URL}/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -434,7 +445,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
           proof: proofResult.proof,
           commitment: proofResult.commitment,
           nullifier: proofResult.nullifier,
-          recipientTokenAccount: publicKey.toBase58(),
+          recipientTokenAccount: recipientATA.toBase58(),
           poolAddress: POOL_ADDRESS.toBase58(),
           leafIndex: deposit.leafIndex,
           feeBps: 50,
