@@ -7,9 +7,32 @@
 
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
+use sha3::{Digest, Keccak256};
 
 // Import from murkl-prover SDK
-use murkl_prover::{M31_PRIME, keccak_hash};
+use murkl_prover::M31_PRIME;
+
+/// Simple keccak256 hash (matches on-chain verifier)
+fn keccak_single(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Keccak256::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&result);
+    hash
+}
+
+/// Multi-input keccak (for compatibility with SDK)
+fn keccak_multi(inputs: &[&[u8]]) -> [u8; 32] {
+    let mut hasher = Keccak256::new();
+    for input in inputs {
+        hasher.update(input);
+    }
+    let result = hasher.finalize();
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&result);
+    hash
+}
 
 // Prover config (matches verifier)
 const N_FRI_LAYERS: usize = 3;
@@ -186,7 +209,7 @@ impl Channel {
         let mut data = [0u8; 64];
         data[..32].copy_from_slice(&self.state);
         data[32..].copy_from_slice(digest);
-        self.state = keccak_hash(&[&data[..]]);
+        self.state = keccak_single(&data);
         self.counter += 1;
     }
     
@@ -197,7 +220,7 @@ impl Channel {
         data[36..40].copy_from_slice(&elem.b.0.to_le_bytes());
         data[40..44].copy_from_slice(&elem.c.0.to_le_bytes());
         data[44..48].copy_from_slice(&elem.d.0.to_le_bytes());
-        self.state = keccak_hash(&[&data[..]]);
+        self.state = keccak_single(&data);
         self.counter += 1;
     }
     
@@ -205,7 +228,7 @@ impl Channel {
         let mut data = [0u8; 40];
         data[..32].copy_from_slice(&self.state);
         data[32..40].copy_from_slice(&self.counter.to_le_bytes());
-        let hash = keccak_hash(&[&data[..]]);
+        let hash = keccak_single(&data);
         self.state = hash;
         self.counter += 1;
         M31::new(u32::from_le_bytes([hash[0], hash[1], hash[2], hash[3]]))
@@ -225,7 +248,7 @@ impl Channel {
 // ============================================================================
 
 fn bytes_to_qm31(bytes: &[u8; 32]) -> QM31 {
-    let hash = keccak_hash(&[bytes]);
+    let hash = keccak_single(bytes);
     QM31::new(
         M31::new(u32::from_le_bytes([hash[0], hash[1], hash[2], hash[3]])),
         M31::new(u32::from_le_bytes([hash[4], hash[5], hash[6], hash[7]])),
@@ -388,7 +411,7 @@ fn generate_stark_proof(
     let nullifier_m31 = compute_m31_nullifier(secret_m31, leaf_index);
 
     // 1. Trace commitment (32 bytes)
-    let trace_commitment = keccak_hash(&[
+    let trace_commitment = keccak_multi(&[
         b"murkl_trace_v3",
         &id_m31.to_le_bytes(),
         &secret_m31.to_le_bytes(),
@@ -396,7 +419,7 @@ fn generate_stark_proof(
     proof.extend_from_slice(&trace_commitment);
 
     // 2. Composition commitment (32 bytes)
-    let composition_commitment = keccak_hash(&[
+    let composition_commitment = keccak_multi(&[
         b"murkl_composition_v3",
         &trace_commitment,
     ]);
@@ -458,7 +481,7 @@ fn generate_stark_proof(
     // Mix into channel as we go
     let mut fri_layer_commitments = Vec::with_capacity(N_FRI_LAYERS);
     for i in 0..N_FRI_LAYERS {
-        let fri_commitment = keccak_hash(&[
+        let fri_commitment = keccak_multi(&[
             b"fri_layer_v3",
             &(i as u32).to_le_bytes(),
             &trace_commitment,
@@ -497,7 +520,7 @@ fn generate_stark_proof(
         proof.extend_from_slice(&(idx as u32).to_le_bytes());
         
         // Trace value at query (32 bytes - full hash, not QM31)
-        let trace_val = keccak_hash(&[
+        let trace_val = keccak_multi(&[
             b"trace_val_v3",
             &(idx as u32).to_le_bytes(),
             &trace_commitment,
@@ -509,7 +532,7 @@ fn generate_stark_proof(
         
         // Trace Merkle path (path_len * 32 bytes)
         for level in 0..log_domain_size {
-            let node = keccak_hash(&[
+            let node = keccak_multi(&[
                 b"trace_path_v3",
                 &(q as u32).to_le_bytes(),
                 &(level as u32).to_le_bytes(),
@@ -519,7 +542,7 @@ fn generate_stark_proof(
         }
         
         // Composition value at query (32 bytes)
-        let comp_val = keccak_hash(&[
+        let comp_val = keccak_multi(&[
             b"comp_val_v3",
             &(idx as u32).to_le_bytes(),
             &composition_commitment,
@@ -531,7 +554,7 @@ fn generate_stark_proof(
         
         // Composition Merkle path (path_len * 32 bytes)
         for level in 0..log_domain_size {
-            let node = keccak_hash(&[
+            let node = keccak_multi(&[
                 b"comp_path_v3",
                 &(q as u32).to_le_bytes(),
                 &(level as u32).to_le_bytes(),
@@ -544,7 +567,7 @@ fn generate_stark_proof(
         for (layer_idx, fri_commitment) in fri_layer_commitments.iter().enumerate() {
             // 4 FRI sibling values (4 × 16 bytes = 64 bytes total)
             for sibling in 0..4 {
-                let fri_val = keccak_hash(&[
+                let fri_val = keccak_multi(&[
                     b"fri_val_v3",
                     &(q as u32).to_le_bytes(),
                     &(layer_idx as u32).to_le_bytes(),
@@ -561,7 +584,7 @@ fn generate_stark_proof(
             
             // FRI Merkle path (shrinks each layer)
             for level in 0..layer_log_size {
-                let node = keccak_hash(&[
+                let node = keccak_multi(&[
                     b"fri_path_v3",
                     &(q as u32).to_le_bytes(),
                     &(layer_idx as u32).to_le_bytes(),
