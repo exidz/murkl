@@ -13,6 +13,7 @@ import { AmountInput } from './AmountInput';
 import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
 import { Confetti } from './Confetti';
 import { EmptyState } from './EmptyState';
+import { Button } from './Button';
 import './SendTab.css';
 
 interface Props {
@@ -441,17 +442,20 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             View transaction ↗
           </motion.a>
 
-          <motion.button 
-            className="action-btn secondary" 
-            onClick={handleNewSend}
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
           >
-            Send another
-          </motion.button>
+            <Button 
+              variant="secondary"
+              size="lg"
+              fullWidth
+              onClick={handleNewSend}
+            >
+              Send another
+            </Button>
+          </motion.div>
         </motion.div>
       </div>
     );
@@ -488,13 +492,15 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               balance={tokenBalance}
             />
 
-            <button 
-              className="action-btn primary"
+            <Button 
+              variant="primary"
+              size="lg"
+              fullWidth
               onClick={goNext}
               disabled={!amount || parseFloat(amount) <= 0}
             >
               Continue
-            </button>
+            </Button>
 
             <button className="help-link" onClick={() => setShowHowItWorks(true)}>
               How it works →
@@ -538,13 +544,15 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               <p className="input-hint">Their handle — only they can claim</p>
             </div>
 
-            <button 
-              className="action-btn primary"
+            <Button 
+              variant="primary"
+              size="lg"
+              fullWidth
               onClick={goNext}
               disabled={!identifier}
             >
               Continue
-            </button>
+            </Button>
           </motion.div>
         )}
 
@@ -590,13 +598,15 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               <p className="input-hint">Share this with the recipient secretly</p>
             </div>
 
-            <button 
-              className="action-btn primary"
+            <Button 
+              variant="primary"
+              size="lg"
+              fullWidth
               onClick={goNext}
               disabled={password.length < 8}
             >
               Review
-            </button>
+            </Button>
           </motion.div>
         )}
 
@@ -626,20 +636,17 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               </div>
             </div>
 
-            <button 
-              className="action-btn primary"
+            <Button 
+              variant="primary"
+              size="lg"
+              fullWidth
               onClick={handleDeposit}
-              disabled={loading || !wasmReady}
+              disabled={!wasmReady}
+              loading={loading}
+              loadingText="Sending..."
             >
-              {loading ? (
-                <>
-                  <span className="spinner" />
-                  Sending...
-                </>
-              ) : (
-                'Send privately'
-              )}
-            </button>
+              Send privately
+            </Button>
 
             {!wasmReady && (
               <p className="wasm-loading">Loading prover...</p>

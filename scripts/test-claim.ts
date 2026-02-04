@@ -1,99 +1,112 @@
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount } from "@solana/spl-token";
-import * as fs from "fs";
-import * as os from "os";
+/**
+ * Test claim instruction discriminator
+ */
+import { 
+  Connection, 
+  Keypair, 
+  PublicKey, 
+  Transaction,
+  TransactionInstruction,
+  SystemProgram,
+} from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import * as fs from 'fs';
+import * as crypto from 'crypto';
 
-const MURKL_ID = new PublicKey("74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92");
-const STARK_VERIFIER_ID = new PublicKey("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");
-const TOKEN_MINT = new PublicKey("DTMXeBXH1vRbRvcsHTN46jksTo9tSQwq7WYQSX8MYPA9");
+const PROGRAM_ID = new PublicKey('muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF');
+const STARK_VERIFIER_ID = new PublicKey('StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw');
+const POOL = new PublicKey('8MU3WQzxLDHi6Up2ksk255LWrRm17i7UQ6Hap4zeF3qJ');
 
-// Anchor discriminators
-const INIT_BUFFER_DISC = Buffer.from([49,27,28,88,19,99,133,194]); 
-const UPLOAD_CHUNK_DISC = Buffer.from([130,219,165,153,119,149,252,162]);
-const FINALIZE_DISC = Buffer.from([130,34,68,173,21,213,183,236]);
-const CLAIM_DISC = Buffer.from([62, 198, 214, 193, 213, 159, 108, 210]); // sha256("global:claim")[:8]
+function getDiscriminator(name: string): Buffer {
+  const hash = crypto.createHash('sha256').update(`global:${name}`).digest();
+  return hash.slice(0, 8);
+}
 
 async function main() {
-  const connection = new Connection("https://api.devnet.solana.com", "confirmed");
+  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
   
-  // Use test relayer keypair
-  const keypairPath = `/tmp/test-relayer.json`;
-  const wallet = Keypair.fromSecretKey(new Uint8Array(JSON.parse(fs.readFileSync(keypairPath, "utf8"))));
+  const walletPath = `${process.env.HOME}/.config/solana/id.json`;
+  const secretKey = JSON.parse(fs.readFileSync(walletPath, 'utf-8'));
+  const payer = Keypair.fromSecretKey(new Uint8Array(secretKey));
+
+  console.log('Payer:', payer.publicKey.toBase58());
+  console.log('Program:', PROGRAM_ID.toBase58());
+  console.log('Pool:', POOL.toBase58());
   
-  console.log("Wallet:", wallet.publicKey.toBase58());
+  // Print discriminators
+  console.log('\n=== Discriminators ===');
+  console.log('initialize_config:', getDiscriminator('initialize_config').toString('hex'));
+  console.log('initialize_pool:', getDiscriminator('initialize_pool').toString('hex'));
+  console.log('deposit:', getDiscriminator('deposit').toString('hex'));
+  console.log('claim:', getDiscriminator('claim').toString('hex'));
+  console.log('pause_pool:', getDiscriminator('pause_pool').toString('hex'));
+  console.log('unpause_pool:', getDiscriminator('unpause_pool').toString('hex'));
   
-  // Load proof
-  const proofData = fs.readFileSync("/tmp/proof.bin");
-  console.log("Proof size:", proofData.length, "bytes");
+  // Try to call with deposit discriminator (which we know works)
+  console.log('\n=== Testing deposit discriminator (should fail with different error) ===');
   
-  // Load proof bundle for public inputs
-  const proofBundle = JSON.parse(fs.readFileSync("/tmp/proof.json", "utf8"));
-  const commitment = Buffer.from(proofBundle.commitment || proofBundle.public_inputs?.commitment || []);
-  const nullifier = Buffer.from(proofBundle.nullifier || proofBundle.public_inputs?.nullifier || []);
+  const depositDisc = getDiscriminator('deposit');
+  const dummyData = Buffer.concat([
+    depositDisc,
+    Buffer.alloc(40, 0) // dummy amount + commitment
+  ]);
   
-  // PDAs
-  const [proofBufferPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("proof_buffer"), wallet.publicKey.toBuffer()],
-    STARK_VERIFIER_ID
-  );
-  const [poolPda] = PublicKey.findProgramAddressSync([Buffer.from("pool"), TOKEN_MINT.toBuffer()], MURKL_ID);
-  
-  console.log("Proof buffer PDA:", proofBufferPda.toBase58());
-  
-  // Step 1: Initialize proof buffer
-  console.log("\n=== Step 1: Init proof buffer ===");
-  const expectedSize = Buffer.alloc(4);
-  expectedSize.writeUInt32LE(proofData.length);
-  
-  const initIx = new TransactionInstruction({
-    programId: STARK_VERIFIER_ID,
+  const testIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
     keys: [
-      { pubkey: proofBufferPda, isSigner: false, isWritable: true },
-      { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: POOL, isSigner: false, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
-    data: Buffer.concat([INIT_BUFFER_DISC, expectedSize]),
+    data: dummyData,
   });
   
-  try {
-    const tx1 = new Transaction().add(initIx);
-    const sig1 = await sendAndConfirmTransaction(connection, tx1, [wallet]);
-    console.log("Init tx:", sig1);
-  } catch (e: any) {
-    if (e.message?.includes("already in use")) {
-      console.log("Buffer already exists, continuing...");
-    } else {
-      throw e;
-    }
-  }
+  const tx = new Transaction().add(testIx);
+  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  tx.feePayer = payer.publicKey;
   
-  // Step 2: Upload proof in chunks
-  console.log("\n=== Step 2: Upload proof ===");
-  const CHUNK_SIZE = 800; // Leave room for instruction data
-  for (let offset = 0; offset < proofData.length; offset += CHUNK_SIZE) {
-    const chunk = proofData.slice(offset, Math.min(offset + CHUNK_SIZE, proofData.length));
-    
-    const offsetBuf = Buffer.alloc(4);
-    offsetBuf.writeUInt32LE(offset);
-    
-    const chunkLenBuf = Buffer.alloc(4);
-    chunkLenBuf.writeUInt32LE(chunk.length);
-    
-    const uploadIx = new TransactionInstruction({
-      programId: STARK_VERIFIER_ID,
-      keys: [
-        { pubkey: proofBufferPda, isSigner: false, isWritable: true },
-        { pubkey: wallet.publicKey, isSigner: true, isWritable: false },
-      ],
-      data: Buffer.concat([UPLOAD_CHUNK_DISC, offsetBuf, chunkLenBuf, chunk]),
-    });
-    
-    const tx2 = new Transaction().add(uploadIx);
-    const sig2 = await sendAndConfirmTransaction(connection, tx2, [wallet]);
-    console.log(`Uploaded ${offset}-${offset + chunk.length}:`, sig2.slice(0, 20) + "...");
-  }
+  const sim = await connection.simulateTransaction(tx, [payer]);
+  console.log('Simulation result:', sim.value.err);
+  console.log('Logs:', sim.value.logs?.slice(0, 5));
   
-  console.log("✅ Proof uploaded!");
+  // Now try claim discriminator
+  console.log('\n=== Testing claim discriminator ===');
+  
+  const claimDisc = getDiscriminator('claim');
+  const claimData = Buffer.concat([
+    claimDisc,
+    Buffer.alloc(8, 0),   // relayer_fee u64
+    Buffer.alloc(32, 0),  // nullifier [u8; 32]
+  ]);
+  
+  const claimIx = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: POOL, isSigner: false, isWritable: false },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: false },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: claimData,
+  });
+  
+  const claimTx = new Transaction().add(claimIx);
+  claimTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  claimTx.feePayer = payer.publicKey;
+  
+  const claimSim = await connection.simulateTransaction(claimTx, [payer]);
+  console.log('Simulation result:', claimSim.value.err);
+  console.log('Logs:', claimSim.value.logs?.slice(0, 5));
 }
 
 main().catch(console.error);

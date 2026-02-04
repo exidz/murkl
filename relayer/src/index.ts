@@ -54,8 +54,11 @@ interface Config {
   requestTimeoutMs: number;
 }
 
+// STARK Verifier program ID
+const STARK_VERIFIER_ID = new PublicKey('StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw');
+
 function loadConfig(): Config {
-  const programId = process.env.PROGRAM_ID || '74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92';
+  const programId = process.env.PROGRAM_ID || 'muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF';
   
   // Validate program ID format
   try {
@@ -441,7 +444,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     const [proofBufferPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('proof'), relayerKeypair.publicKey.toBuffer(), commitment32.slice(0, 8)],
-      config.programId
+      STARK_VERIFIER_ID  // Proof buffer is owned by stark-verifier, not murkl
     );
     
     const [nullifierPda] = PublicKey.findProgramAddressSync(
@@ -477,14 +480,14 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     } else {
       // Create buffer
       const createData = Buffer.concat([
-        getDiscriminator('create_proof_buffer'),
+        getDiscriminator('init_proof_buffer'),
         commitment32,
         nullifier32,
         Buffer.from(new Uint32Array([proofBytes.length]).buffer),
       ]);
       
       const createIx = new TransactionInstruction({
-        programId: config.programId,
+        programId: STARK_VERIFIER_ID,  // init_buffer is on stark-verifier
         keys: [
           { pubkey: proofBufferPda, isSigner: false, isWritable: true },
           { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: true },
@@ -511,14 +514,14 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
         const chunk = proofBytes.slice(offset, offset + config.chunkSize);
         
         const writeData = Buffer.concat([
-          getDiscriminator('write_proof_chunk'),
+          getDiscriminator('upload_chunk'),
           Buffer.from(new Uint32Array([offset]).buffer),
           Buffer.from(new Uint32Array([chunk.length]).buffer),
           chunk,
         ]);
         
         const writeIx = new TransactionInstruction({
-          programId: config.programId,
+          programId: STARK_VERIFIER_ID,  // write_chunk is on stark-verifier
           keys: [
             { pubkey: proofBufferPda, isSigner: false, isWritable: true },
             { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: false },
@@ -539,10 +542,10 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       // Step 3: Finalize Buffer
       // ========================================
       
-      const finalizeData = getDiscriminator('finalize_proof_buffer');
+      const finalizeData = getDiscriminator('finalize_and_verify');
       
       const finalizeIx = new TransactionInstruction({
-        programId: config.programId,
+        programId: STARK_VERIFIER_ID,  // finalize_proof_buffer is on stark-verifier
         keys: [
           { pubkey: proofBufferPda, isSigner: false, isWritable: true },
           { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: false },
@@ -599,23 +602,27 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       );
     }
     
-    // Claim instruction
+    // Claim instruction: (relayer_fee: u64, nullifier: [u8; 32])
+    const relayerFeeBuffer = Buffer.alloc(8);
+    relayerFeeBuffer.writeBigUInt64LE(BigInt(feeBps));
+    
     const claimData = Buffer.concat([
       getDiscriminator('claim'),
-      Buffer.from(new Uint16Array([feeBps]).buffer),
+      relayerFeeBuffer,
+      nullifier32,
     ]);
     
     const claimIx = new TransactionInstruction({
       programId: config.programId,
       keys: [
-        { pubkey: pool, isSigner: false, isWritable: true },
-        { pubkey: deposit, isSigner: false, isWritable: true },
-        { pubkey: proofBufferPda, isSigner: false, isWritable: false },
-        { pubkey: nullifierPda, isSigner: false, isWritable: true },
-        { pubkey: vaultPda, isSigner: false, isWritable: true },
-        { pubkey: recipientAta, isSigner: false, isWritable: true },
-        { pubkey: relayerAta, isSigner: false, isWritable: true },
-        { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: true },
+        { pubkey: pool, isSigner: false, isWritable: false },           // pool (read-only)
+        { pubkey: deposit, isSigner: false, isWritable: true },         // deposit
+        { pubkey: proofBufferPda, isSigner: false, isWritable: false }, // verifier_buffer
+        { pubkey: nullifierPda, isSigner: false, isWritable: true },    // nullifier_record
+        { pubkey: vaultPda, isSigner: false, isWritable: true },        // vault
+        { pubkey: recipientAta, isSigner: false, isWritable: true },    // recipient_token
+        { pubkey: relayerKeypair.publicKey, isSigner: true, isWritable: true }, // relayer (SIGNER - before relayer_token!)
+        { pubkey: relayerAta, isSigner: false, isWritable: true },      // relayer_token
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],

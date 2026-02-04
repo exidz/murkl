@@ -6,6 +6,7 @@ import { OAuthLogin } from './OAuthLogin';
 import { ProofProgress } from './ProofProgress';
 import { SkeletonCard } from './Skeleton';
 import { EmptyState } from './EmptyState';
+import { Button } from './Button';
 import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
 
@@ -142,27 +143,21 @@ const PasswordSheet: FC<PasswordSheetProps> = ({
           </motion.div>
           
           <div className="sheet-actions">
-            <button 
-              className="btn btn-ghost"
+            <Button 
+              variant="ghost"
               onClick={onClose}
             >
               Cancel
-            </button>
-            <motion.button 
-              className="btn btn-primary"
+            </Button>
+            <Button 
+              variant="primary"
               onClick={onSubmit}
-              disabled={!password || !wasmReady || password.length < 8}
-              whileTap={{ scale: 0.98 }}
+              disabled={!password || password.length < 8}
+              loading={!wasmReady}
+              loadingText="Loading..."
             >
-              {!wasmReady ? (
-                <>
-                  <span className="btn-spinner" />
-                  Loading...
-                </>
-              ) : (
-                'Claim'
-              )}
-            </motion.button>
+              Claim
+            </Button>
           </div>
         </div>
       </motion.div>
@@ -412,9 +407,9 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
                 </a>
               )}
               
-              <button className="btn btn-primary" onClick={handleClaimComplete}>
+              <Button variant="primary" fullWidth onClick={handleClaimComplete}>
                 Done
-              </button>
+              </Button>
             </motion.div>
           ) : (
             <motion.div
@@ -495,13 +490,14 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
                 {deposit.claimed ? (
                   <span className="claimed-badge">✓ Claimed</span>
                 ) : (
-                  <button
-                    className="btn btn-primary claim-btn"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => initiateClaim(deposit)}
                     disabled={!connected}
                   >
                     Claim
-                  </button>
+                  </Button>
                 )}
               </motion.div>
             ))}
