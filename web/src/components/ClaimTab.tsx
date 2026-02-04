@@ -110,9 +110,21 @@ export const ClaimTab: FC<Props> = ({ wasmReady }) => {
       const cleanIdentifier = sanitizeInput(identifier);
       const leafIndexNum = parseInt(leafIndex, 10);
       
+      // Fetch merkle root from pool
+      let merkleRoot = '0'.repeat(64);
+      try {
+        const poolInfoRes = await fetch(`${RELAYER_URL}/pool-info?pool=${POOL_ADDRESS.toBase58()}`);
+        if (poolInfoRes.ok) {
+          const poolInfo = await poolInfoRes.json();
+          merkleRoot = poolInfo.merkleRoot || merkleRoot;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch merkle root:', e);
+      }
+      
       // Generate proof using WASM
       const proofToastId = toast.loading('Generating STARK proof...');
-      const proofBundle = generate_proof(cleanIdentifier, password, leafIndexNum);
+      const proofBundle = await generate_proof(cleanIdentifier, password, leafIndexNum, merkleRoot);
       toast.dismiss(proofToastId);
       
       if (!proofBundle || !proofBundle.commitment) {
