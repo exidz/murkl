@@ -1,11 +1,13 @@
 import { PublicKey } from '@solana/web3.js';
 
-// Program and pool addresses
-export const PROGRAM_ID = new PublicKey('74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92');
-// Test token pool (working on devnet)
+// Program and pool addresses (vanity deployment)
+export const PROGRAM_ID = new PublicKey('muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF');
+// WSOL pool (devnet)
 export const POOL_ADDRESS = new PublicKey(
-  import.meta.env.VITE_POOL_ADDRESS || '6ujDMwXXwEBwxmmKG6TD6cMhfw8g9XU33AHrJmEAEYzn'
+  import.meta.env.VITE_POOL_ADDRESS || '8MU3WQzxLDHi6Up2ksk255LWrRm17i7UQ6Hap4zeF3qJ'
 );
+// WSOL mint (native SOL wrapper)
+export const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
 
 // STARK Verifier program
 export const STARK_VERIFIER_ID = new PublicKey('StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw');

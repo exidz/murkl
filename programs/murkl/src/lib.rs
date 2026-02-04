@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
-declare_id!("74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92");
+declare_id!("muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF");
 
 /// STARK Verifier program ID  
 pub const STARK_VERIFIER_ID: Pubkey = pubkey!("StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw");

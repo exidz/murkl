@@ -3,11 +3,15 @@ import {
   PublicKey, 
   Transaction,
   TransactionInstruction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import { 
   TOKEN_PROGRAM_ID, 
+  NATIVE_MINT,
   getAssociatedTokenAddress,
-  createAssociatedTokenAccountInstruction 
+  createAssociatedTokenAccountInstruction,
+  createSyncNativeInstruction,
 } from '@solana/spl-token';
 import { keccak256 } from 'js-sha3';
 import { PROGRAM_ID, TOKEN_DECIMALS } from './constants';
@@ -93,7 +97,8 @@ export async function fetchPoolInfo(connection: Connection, pool: PublicKey): Pr
   const mint = new PublicKey(data.slice(40, 72));
   const vault = new PublicKey(data.slice(72, 104));
   const root = data.slice(104, 136);
-  const nextLeafIndex = data.readUInt32LE(136);
+  // leaf_count is u64
+  const nextLeafIndex = Number(data.readBigUInt64LE(136));
   
   return {
     authority,
@@ -112,7 +117,7 @@ export interface DepositResult {
 }
 
 /**
- * Build deposit transaction
+ * Build deposit transaction (auto-wraps SOL to WSOL if needed)
  */
 export async function buildDepositTransaction(
   connection: Connection,
@@ -129,29 +134,32 @@ export async function buildDepositTransaction(
   // Compute commitment
   const commitment = computeCommitment(identifier, password);
   
+  // Check if pool uses WSOL (native SOL)
+  const isWsol = poolInfo.mint.equals(NATIVE_MINT);
+  
   // Get user's token account
   const userAta = await getAssociatedTokenAddress(poolInfo.mint, depositor);
   
   // Check if user ATA exists
   const userAtaInfo = await connection.getAccountInfo(userAta);
   
-  // Derive deposit PDA
-  const leafIndexBuffer = Buffer.alloc(4);
-  leafIndexBuffer.writeUInt32LE(leafIndex);
+  // Derive deposit PDA (leaf_count is u64 = 8 bytes)
+  const leafIndexBuffer = Buffer.alloc(8);
+  leafIndexBuffer.writeBigUInt64LE(BigInt(leafIndex));
   
   const [depositPda] = PublicKey.findProgramAddressSync(
     [Buffer.from('deposit'), pool.toBuffer(), leafIndexBuffer],
     PROGRAM_ID
   );
   
-  // Build instruction data
+  // Build instruction data: discriminator (8) + amount (8) + commitment (32)
   const discriminator = await getDiscriminator('deposit');
   const amountLamports = BigInt(Math.floor(amount * Math.pow(10, TOKEN_DECIMALS)));
   
-  const instructionData = Buffer.alloc(8 + 32 + 8);
+  const instructionData = Buffer.alloc(48);
   instructionData.set(discriminator, 0);
-  instructionData.set(commitment, 8);
-  instructionData.writeBigUInt64LE(amountLamports, 40);
+  instructionData.writeBigUInt64LE(amountLamports, 8);
+  instructionData.set(commitment, 16);
   
   const tx = new Transaction();
   
@@ -167,6 +175,21 @@ export async function buildDepositTransaction(
     );
   }
   
+  // If WSOL pool, wrap SOL → WSOL
+  if (isWsol) {
+    // Transfer SOL to the WSOL ATA
+    tx.add(
+      SystemProgram.transfer({
+        fromPubkey: depositor,
+        toPubkey: userAta,
+        lamports: Number(amountLamports),
+      })
+    );
+    
+    // Sync native balance (tells the token program about the new SOL)
+    tx.add(createSyncNativeInstruction(userAta));
+  }
+  
   // Add deposit instruction
   const ix = new TransactionInstruction({
     programId: PROGRAM_ID,
@@ -174,8 +197,8 @@ export async function buildDepositTransaction(
       { pubkey: pool, isSigner: false, isWritable: true },
       { pubkey: depositPda, isSigner: false, isWritable: true },
       { pubkey: poolInfo.vault, isSigner: false, isWritable: true },
+      { pubkey: depositor, isSigner: true, isWritable: true },  // depositor BEFORE depositor_token
       { pubkey: userAta, isSigner: false, isWritable: true },
-      { pubkey: depositor, isSigner: true, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false },
     ],

@@ -4,11 +4,11 @@ skip-lint = false
 
 [programs.localnet]
 stark_verifier = "StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw"
-murkl_program = "74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92"
+murkl_program = "muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF"
 
 [programs.devnet]
 stark_verifier = "StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw"
-murkl_program = "74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92"
+murkl_program = "muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF"
 
 [registry]
 url = "https://api.apr.dev"
