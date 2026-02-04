@@ -75,9 +75,9 @@ pub fn verify_and_act(ctx: Context<VerifyAndAct>) -> Result<()> {
     // Check the proof buffer is finalized (proof was verified)
     let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
     
-    // ProofBuffer layout: discriminator(8) + owner(32) + size(4) + expected_size(4) + finalized(1)
-    require!(data.len() >= 49, YourError::InvalidBuffer);
-    let finalized = data[8 + 32 + 4 + 4] == 1;
+    // ProofBuffer layout: owner(32) + size(4) + expected_size(4) + finalized(1) + ...
+    require!(data.len() >= 41, YourError::InvalidBuffer);
+    let finalized = data[40] == 1;  // OFFSET_FINALIZED
     require!(finalized, YourError::ProofNotVerified);
     
     // Proof is valid! Take your action
@@ -213,7 +213,7 @@ pub fn claim_airdrop(
 ) -> Result<()> {
     // Check verifier buffer is finalized
     let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
-    let finalized = data[48] == 1;
+    let finalized = data[40] == 1;  // OFFSET_FINALIZED
     require!(finalized, AirdropError::InvalidProof);
     
     // Check nullifier not used (prevent double-claim)
@@ -240,7 +240,7 @@ pub fn cast_vote(
 ) -> Result<()> {
     // Verify proof via buffer
     let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
-    require!(data[48] == 1, VoteError::NotEligible);
+    require!(data[40] == 1, VoteError::NotEligible);
     
     // Check this nullifier hasn't voted
     require!(!ctx.accounts.ballot.has_voted(&nullifier), VoteError::AlreadyVoted);
@@ -260,7 +260,7 @@ pub fn mint_exclusive_nft(
 ) -> Result<()> {
     // Verify proof
     let data = ctx.accounts.verifier_buffer.try_borrow_data()?;
-    require!(data[48] == 1, MintError::InvalidProof);
+    require!(data[40] == 1, MintError::InvalidProof);
     
     // Track nullifier (one mint per proof)
     let nullifier_pda = &mut ctx.accounts.nullifier_record;
