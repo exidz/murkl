@@ -110,36 +110,7 @@ body {
   margin-right: 0.5rem !important;
 }
 
-/* Tabs - Segmented control style */
-.tabs {
-  display: flex;
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  padding: 4px;
-  margin-bottom: 1.5rem;
-}
-
-.tab {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  background: transparent;
-  border: none;
-  border-radius: 10px;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab:hover:not(.active) {
-  color: var(--text-primary);
-}
-
-.tab.active {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
+/* Old tabs removed - replaced by TabBar component */
 
 /* Main content */
 .content {
@@ -233,11 +204,6 @@ body {
     font-size: 0.8rem !important;
     height: 38px !important;
     padding: 0 0.75rem !important;
-  }
-
-  .tab {
-    padding: 0.625rem 0.75rem;
-    font-size: 0.875rem;
   }
 
   .footer {
