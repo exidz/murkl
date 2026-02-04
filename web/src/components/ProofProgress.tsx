@@ -8,21 +8,28 @@ interface Props {
   onComplete?: () => void;
 }
 
-const stageConfig = {
-  generating: { label: 'Proving', icon: '🔐', hint: 'Creating STARK proof in your browser' },
-  uploading: { label: 'Uploading', icon: '📤', hint: 'Sending proof to network' },
-  verifying: { label: 'Verifying', icon: '✓', hint: 'On-chain verification' },
-  claiming: { label: 'Claiming', icon: '💰', hint: 'Sending to your wallet' },
-  complete: { label: 'Done!', icon: '🎉', hint: 'Funds are yours' },
+// Stage configuration with friendlier copy
+const stages = [
+  { id: 'generating', label: 'Proving', icon: '🔐', shortLabel: 'Prove' },
+  { id: 'uploading', label: 'Uploading', icon: '📤', shortLabel: 'Upload' },
+  { id: 'verifying', label: 'Verifying', icon: '✓', shortLabel: 'Verify' },
+  { id: 'claiming', label: 'Claiming', icon: '💰', shortLabel: 'Claim' },
+] as const;
+
+const stageHints: Record<string, string> = {
+  generating: 'Creating proof in your browser...',
+  uploading: 'Sending proof to network...',
+  verifying: 'On-chain verification...',
+  claiming: 'Transferring to your wallet...',
+  complete: 'All done!',
 };
 
 // Estimate time based on stage
 function estimateTimeRemaining(stage: Props['stage'], progress: number): string {
   if (stage === 'complete') return '';
   
-  // Rough estimates in seconds
   const estimates: Record<string, number> = {
-    generating: Math.max(1, Math.round((100 - progress) * 0.15)), // ~15s total for proof
+    generating: Math.max(1, Math.round((100 - progress) * 0.15)),
     uploading: 3,
     verifying: 5,
     claiming: 3,
@@ -35,12 +42,14 @@ function estimateTimeRemaining(stage: Props['stage'], progress: number): string 
 
 export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) => {
   const [displayProgress, setDisplayProgress] = useState(0);
-  const config = stageConfig[stage];
   
-  // Smooth progress animation
+  const currentStageIndex = stages.findIndex(s => s.id === stage);
+  const currentStage = stages[currentStageIndex] || stages[0];
+  const isComplete = stage === 'complete';
+  
+  // Smooth progress animation for generating stage
   useEffect(() => {
     if (stage === 'generating') {
-      // Animate to actual progress
       const timer = setInterval(() => {
         setDisplayProgress(prev => {
           const diff = progress - prev;
@@ -49,16 +58,6 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
         });
       }, 50);
       return () => clearInterval(timer);
-    } else {
-      // For other stages, show stage-based progress
-      const stageProgress: Record<string, number> = {
-        generating: 25,
-        uploading: 50,
-        verifying: 75,
-        claiming: 90,
-        complete: 100,
-      };
-      setDisplayProgress(stageProgress[stage] || 0);
     }
   }, [stage, progress]);
 
@@ -72,60 +71,110 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
 
   const eta = estimateTimeRemaining(stage, progress);
   
+  // Calculate overall progress percentage
+  const overallProgress = isComplete 
+    ? 100 
+    : stage === 'generating'
+      ? displayProgress * 0.6 // Generating is 60% of the journey
+      : (currentStageIndex / stages.length) * 100 + 15;
+  
   return (
     <motion.div 
       className="proof-progress"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      {/* Main icon with pulse */}
-      <motion.div 
-        className="progress-icon-container"
-        animate={stage !== 'complete' ? { scale: [1, 1.1, 1] } : {}}
-        transition={{ duration: 1.5, repeat: Infinity }}
-      >
-        <span className="progress-main-icon">{config.icon}</span>
-      </motion.div>
-
-      {/* Stage label */}
-      <div className="progress-label-row">
-        <span className="progress-stage-label">{config.label}</span>
+      {/* Main status with pulsing icon */}
+      <div className="progress-hero">
+        <motion.div 
+          className={`progress-icon-ring ${isComplete ? 'complete' : ''}`}
+          animate={!isComplete ? { scale: [1, 1.05, 1] } : {}}
+          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <span className="progress-icon">{isComplete ? '✓' : currentStage.icon}</span>
+        </motion.div>
+        
+        <motion.h2 
+          className="progress-title"
+          key={stage}
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          {isComplete ? 'Done!' : currentStage.label}
+        </motion.h2>
+        
         {stage === 'generating' && progress > 0 && (
-          <span className="progress-percent">{Math.round(progress)}%</span>
+          <motion.span 
+            className="progress-percent"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            {Math.round(progress)}%
+          </motion.span>
         )}
       </div>
 
-      {/* Progress bar */}
-      <div className="progress-bar-container">
+      {/* Hint text */}
+      <motion.p 
+        className="progress-hint"
+        key={`hint-${stage}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        {stageHints[stage]}
+      </motion.p>
+
+      {/* Main progress bar */}
+      <div className="progress-bar-wrapper">
         <div className="progress-bar-track">
           <motion.div 
-            className="progress-bar-fill"
+            className={`progress-bar-fill ${isComplete ? 'complete' : ''}`}
             initial={{ width: 0 }}
-            animate={{ width: `${displayProgress}%` }}
-            transition={{ ease: 'easeOut', duration: 0.3 }}
+            animate={{ width: `${overallProgress}%` }}
+            transition={{ ease: 'easeOut', duration: 0.4 }}
           />
         </div>
-        {eta && <span className="progress-eta">{eta}</span>}
+        {eta && !isComplete && (
+          <span className="progress-eta">{eta}</span>
+        )}
       </div>
 
-      {/* Hint text */}
-      <p className="progress-hint">{config.hint}</p>
-
-      {/* Stage dots */}
-      <div className="progress-dots">
-        {(['generating', 'uploading', 'verifying', 'claiming'] as const).map((s, i) => {
-          const stageIndex = ['generating', 'uploading', 'verifying', 'claiming'].indexOf(stage);
-          const isComplete = stage === 'complete' || i < stageIndex;
-          const isActive = i === stageIndex;
+      {/* Step indicators - horizontal journey */}
+      <div className="progress-steps" role="list" aria-label="Claim progress">
+        {stages.map((s, idx) => {
+          const isStepComplete = isComplete || idx < currentStageIndex;
+          const isStepActive = !isComplete && idx === currentStageIndex;
           
           return (
-            <motion.div 
-              key={s}
-              className={`progress-dot ${isComplete ? 'complete' : ''} ${isActive ? 'active' : ''}`}
-              initial={false}
-              animate={isActive ? { scale: [1, 1.2, 1] } : { scale: 1 }}
-              transition={{ duration: 0.8, repeat: isActive ? Infinity : 0 }}
-            />
+            <div 
+              key={s.id} 
+              className={`progress-step ${isStepComplete ? 'complete' : ''} ${isStepActive ? 'active' : ''}`}
+              role="listitem"
+              aria-current={isStepActive ? 'step' : undefined}
+            >
+              {/* Connector line (before each step except first) */}
+              {idx > 0 && (
+                <div className={`step-connector ${isStepComplete ? 'complete' : ''}`} />
+              )}
+              
+              {/* Step circle */}
+              <motion.div 
+                className="step-circle"
+                animate={isStepActive ? { scale: [1, 1.15, 1] } : {}}
+                transition={{ duration: 1, repeat: isStepActive ? Infinity : 0 }}
+              >
+                {isStepComplete ? (
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="step-check">
+                    <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+                  </svg>
+                ) : (
+                  <span className="step-number">{idx + 1}</span>
+                )}
+              </motion.div>
+              
+              {/* Step label */}
+              <span className="step-label">{s.shortLabel}</span>
+            </div>
           );
         })}
       </div>
