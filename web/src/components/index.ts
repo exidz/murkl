@@ -15,3 +15,4 @@ export { EmptyState } from './EmptyState';
 export { Button, IconButton } from './Button';
 export { ConfirmationSummary } from './ConfirmationSummary';
 export { ShareSheet } from './ShareSheet';
+export { BalanceDisplay } from './BalanceDisplay';

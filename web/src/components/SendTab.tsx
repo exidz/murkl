@@ -16,6 +16,7 @@ import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
 import { ShareSheet } from './ShareSheet';
+import { BalanceDisplay } from './BalanceDisplay';
 import './SendTab.css';
 
 // Token-specific preset amounts
@@ -500,6 +501,13 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
+            {/* Balance context - Venmo-style */}
+            <BalanceDisplay
+              variant="inline"
+              onClick={(balance) => setAmount(String(Math.floor(balance * 10000) / 10000))}
+              className="send-balance"
+            />
+
             <AmountInput
               value={amount}
               onChange={handleAmountChange}

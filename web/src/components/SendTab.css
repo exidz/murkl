@@ -60,6 +60,12 @@
   padding: 1rem 0;
 }
 
+/* Balance context at top of amount step */
+.send-balance {
+  align-self: center;
+  margin-bottom: 0.5rem;
+}
+
 .back-btn {
   background: none;
   border: none;

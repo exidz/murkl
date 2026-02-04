@@ -1,0 +1,421 @@
+/* BalanceDisplay - Venmo-style wallet balance */
+
+/* Base styles */
+.balance-display {
+  font-family: inherit;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: default;
+}
+
+.balance-display.clickable {
+  cursor: pointer;
+}
+
+/* ========================================
+   CARD VARIANT
+   ======================================== */
+
+.balance-display.card {
+  background: linear-gradient(
+    135deg,
+    var(--bg-secondary, #14141f) 0%,
+    color-mix(in srgb, var(--accent-primary, #3d95ce) 5%, var(--bg-secondary, #14141f)) 100%
+  );
+  border: 1px solid var(--border, #27272a);
+  border-radius: 16px;
+  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, transform 0.15s;
+}
+
+.balance-display.card.clickable:hover {
+  border-color: var(--accent-primary, #3d95ce);
+}
+
+.balance-display.card.clickable:active {
+  transform: scale(0.99);
+}
+
+/* Subtle gradient overlay */
+.balance-display.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(
+    circle at top right,
+    rgba(61, 149, 206, 0.08) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* Header row */
+.balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.balance-title {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary, #a1a1aa);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.balance-icon {
+  font-size: 0.9rem;
+}
+
+/* Refresh button */
+.balance-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 8px;
+  color: var(--text-secondary, #a1a1aa);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.balance-refresh:hover {
+  color: var(--text-primary, #fff);
+  border-color: var(--text-muted, #52525b);
+}
+
+.balance-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.balance-refresh svg {
+  width: 14px;
+  height: 14px;
+}
+
+.balance-refresh.spinning svg {
+  animation: balance-spin 0.8s ease-in-out;
+}
+
+@keyframes balance-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Main balance area */
+.balance-main {
+  position: relative;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+}
+
+/* Amount display */
+.balance-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.balance-amount .amount-symbol {
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: var(--text-secondary, #a1a1aa);
+  margin-right: 0.125rem;
+}
+
+.balance-amount .amount-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.balance-amount .amount-currency {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-muted, #52525b);
+  margin-left: 0.25rem;
+  align-self: center;
+}
+
+/* Balance change direction indicator */
+.balance-amount.up .amount-value {
+  color: var(--accent-success, #22c55e);
+}
+
+.balance-amount.down .amount-value {
+  color: var(--accent-error, #ef4444);
+}
+
+.balance-change {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.balance-change.up {
+  color: var(--accent-success, #22c55e);
+}
+
+.balance-change.down {
+  color: var(--accent-error, #ef4444);
+}
+
+/* Use max hint */
+.balance-hint {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #52525b);
+  text-align: center;
+}
+
+.balance-display.card.clickable:hover .balance-hint {
+  color: var(--accent-primary, #3d95ce);
+}
+
+/* Loading skeleton */
+.balance-skeleton-large {
+  width: 140px;
+  height: 40px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary, #1e1e2e) 0%,
+    var(--bg-secondary, #14141f) 50%,
+    var(--bg-tertiary, #1e1e2e) 100%
+  );
+  background-size: 200% 100%;
+  animation: balance-shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes balance-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Error state in card */
+.balance-error-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary, #a1a1aa);
+}
+
+.balance-error-card .error-icon {
+  font-size: 1rem;
+}
+
+.balance-error-card .error-text {
+  font-size: 0.9rem;
+}
+
+.balance-error-card .error-retry {
+  background: none;
+  border: none;
+  color: var(--accent-primary, #3d95ce);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.balance-error-card .error-retry:hover {
+  text-decoration: underline;
+}
+
+/* Not connected state */
+.balance-display.not-connected {
+  background: var(--bg-secondary, #14141f);
+  border: 1px dashed var(--border, #27272a);
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.balance-placeholder {
+  font-size: 0.9rem;
+  color: var(--text-muted, #52525b);
+}
+
+/* ========================================
+   INLINE VARIANT
+   ======================================== */
+
+.balance-display.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.balance-display.inline.clickable:hover {
+  border-color: var(--accent-primary, #3d95ce);
+  background: color-mix(in srgb, var(--accent-primary, #3d95ce) 10%, var(--bg-tertiary, #1e1e2e));
+}
+
+.balance-display.inline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.balance-display.inline .balance-label {
+  color: var(--text-muted, #52525b);
+  font-weight: 500;
+}
+
+.balance-display.inline .balance-value {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  color: var(--text-primary, #fff);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-display.inline .balance-value.up {
+  color: var(--accent-success, #22c55e);
+}
+
+.balance-display.inline .balance-value.down {
+  color: var(--accent-error, #ef4444);
+}
+
+.balance-display.inline .balance-symbol {
+  font-weight: 400;
+  color: var(--text-secondary, #a1a1aa);
+}
+
+.balance-display.inline .balance-skeleton {
+  display: inline-block;
+  width: 60px;
+  height: 16px;
+  background: linear-gradient(
+    90deg,
+    var(--border, #27272a) 0%,
+    var(--bg-tertiary, #1e1e2e) 50%,
+    var(--border, #27272a) 100%
+  );
+  background-size: 200% 100%;
+  animation: balance-shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.balance-display.inline .balance-error {
+  color: var(--text-muted, #52525b);
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 480px) {
+  .balance-display.card {
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .balance-amount .amount-symbol {
+    font-size: 1.25rem;
+  }
+
+  .balance-amount .amount-value {
+    font-size: 1.75rem;
+  }
+
+  .balance-amount .amount-currency {
+    font-size: 0.9rem;
+  }
+
+  .balance-hint {
+    font-size: 0.7rem;
+  }
+
+  .balance-display.inline {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .balance-amount .amount-value {
+    font-size: 1.5rem;
+  }
+}
+
+/* ========================================
+   ACCESSIBILITY
+   ======================================== */
+
+/* Focus states */
+.balance-display.card:focus-visible {
+  outline: 2px solid var(--accent-primary, #3d95ce);
+  outline-offset: 2px;
+}
+
+.balance-display.inline:focus-visible {
+  outline: 2px solid var(--accent-primary, #3d95ce);
+  outline-offset: 2px;
+}
+
+.balance-refresh:focus-visible {
+  outline: 2px solid var(--accent-primary, #3d95ce);
+  outline-offset: 2px;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .balance-display.card {
+    border-width: 2px;
+  }
+
+  .balance-display.card::before {
+    display: none;
+  }
+
+  .balance-amount .amount-value {
+    font-weight: 800;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .balance-refresh.spinning svg {
+    animation: none;
+  }
+
+  .balance-skeleton-large,
+  .balance-display.inline .balance-skeleton {
+    animation: none;
+    background: var(--bg-tertiary, #1e1e2e);
+  }
+
+  .balance-change {
+    display: none;
+  }
+}
