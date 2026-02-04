@@ -507,6 +507,68 @@
 }
 
 /* Transaction Link */
+/* Success Actions */
+.success-actions {
+  margin: 1.5rem 0;
+}
+
+.success-hint {
+  color: var(--text-muted, #52525b);
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+/* Quick Copy Row - Venmo-style action buttons */
+.quick-copy-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+.quick-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 12px;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+.quick-copy-btn:hover {
+  background: var(--bg-tertiary, #1e1e2e);
+  border-color: var(--text-muted, #52525b);
+  color: var(--text-primary, #fff);
+  transform: translateY(-1px);
+}
+
+.quick-copy-btn:active {
+  transform: scale(0.98);
+}
+
+.quick-copy-icon {
+  font-size: 1rem;
+  transition: transform 0.2s;
+}
+
+.quick-copy-btn:hover .quick-copy-icon {
+  transform: scale(1.1);
+}
+
+/* Copied state animation */
+.quick-copy-btn:has(.quick-copy-icon:first-child:contains('✓')) {
+  border-color: var(--accent-success, #22c55e);
+  color: var(--accent-success, #22c55e);
+}
+
 .tx-link {
   display: block;
   color: var(--accent-primary, #3d95ce);
@@ -560,6 +622,16 @@
   
   .currency {
     font-size: 1.75rem;
+  }
+  
+  .quick-copy-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .quick-copy-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -621,5 +693,21 @@
   .regenerate-btn:hover,
   .regenerate-btn:active {
     transform: none;
+  }
+  
+  .quick-copy-btn:hover,
+  .quick-copy-btn:active {
+    transform: none;
+  }
+  
+  .quick-copy-icon {
+    transition: none;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .quick-copy-btn {
+    border-width: 2px;
   }
 }
