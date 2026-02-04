@@ -836,6 +836,9 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     const message = e instanceof Error ? e.message : 'Unknown error';
     log('error', 'Claim error', { requestId, error: message });
     
+    // Remove nullifier from cache so user can retry
+    processedNullifiers.delete(nullifier);
+    
     // Don't leak internal error details
     if (message.includes('insufficient funds')) {
       res.status(503).json({ error: 'Relayer temporarily unavailable' });
