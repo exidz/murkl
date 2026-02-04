@@ -25,4 +25,33 @@ export default defineConfig({
       'stream': 'stream-browserify',
     },
   },
+  build: {
+    // Manual chunks for better caching and smaller initial load
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Solana libraries - large but stable, cached well
+          'solana': [
+            '@solana/web3.js',
+            '@solana/wallet-adapter-base',
+            '@solana/wallet-adapter-react',
+            '@solana/wallet-adapter-react-ui',
+          ],
+          // Animation and UI libraries
+          'vendor-ui': [
+            'framer-motion',
+            'react-hot-toast',
+            'qrcode.react',
+          ],
+          // React core
+          'vendor-react': [
+            'react',
+            'react-dom',
+          ],
+        },
+      },
+    },
+    // Increase warning limit since Solana libs are inherently large
+    chunkSizeWarningLimit: 600,
+  },
 })

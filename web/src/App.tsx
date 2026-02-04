@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Toaster } from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 import { WalletProvider } from './providers/WalletProvider';
 import { Header } from './components/Header';
 import { SendTab } from './components/SendTab';
@@ -19,9 +20,37 @@ const TABS = [
   { id: 'claim', label: 'Claim', icon: '📥' },
 ] as const;
 
+// Page transition variants - Venmo-style smooth slide
+const pageVariants = {
+  initial: (direction: number) => ({
+    x: direction > 0 ? 60 : -60,
+    opacity: 0,
+  }),
+  animate: {
+    x: 0,
+    opacity: 1,
+    transition: {
+      x: { type: 'spring' as const, stiffness: 300, damping: 30 },
+      opacity: { duration: 0.2 },
+    },
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -60 : 60,
+    opacity: 0,
+    transition: {
+      x: { type: 'spring' as const, stiffness: 300, damping: 30 },
+      opacity: { duration: 0.15 },
+    },
+  }),
+};
+
 function AppContent() {
   const [wasmReady, setWasmReady] = useState(false);
   const [tab, setTab] = useState<Tab>('send');
+  const prevTabRef = useRef<Tab>('send');
+  
+  // Track direction for slide animation (1 = right, -1 = left)
+  const direction = tab === 'claim' ? 1 : -1;
   
   // Memoize tabs to prevent unnecessary re-renders
   const tabs = useMemo(() => TABS.map(t => ({ ...t })), []);
@@ -46,6 +75,11 @@ function AppContent() {
     }
   }, []);
 
+  // Track previous tab for animation direction
+  useEffect(() => {
+    prevTabRef.current = tab;
+  }, [tab]);
+
   return (
     <div className="app">
       <Header wasmReady={wasmReady} />
@@ -57,8 +91,20 @@ function AppContent() {
       />
 
       <main className="content">
-        {tab === 'send' && <SendTab wasmReady={wasmReady} />}
-        {tab === 'claim' && <ClaimTab wasmReady={wasmReady} />}
+        <AnimatePresence mode="wait" custom={direction} initial={false}>
+          <motion.div
+            key={tab}
+            custom={direction}
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            style={{ width: '100%' }}
+          >
+            {tab === 'send' && <SendTab wasmReady={wasmReady} />}
+            {tab === 'claim' && <ClaimTab wasmReady={wasmReady} />}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <Footer />
