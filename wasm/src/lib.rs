@@ -546,7 +546,7 @@ fn generate_stark_proof(
     proof.push(N_QUERIES as u8);
 
     // 10. Generate query proofs (format must match verifier's parse_query_proof)
-    let log_domain_size: usize = 10 + 2; // LOG_TRACE_SIZE + LOG_BLOWUP
+    let log_domain_size: usize = 10 + 4; // LOG_TRACE_SIZE (10) + LOG_BLOWUP (4) = 14
     let domain_size = 1usize << log_domain_size;
     
     for q in 0..N_QUERIES {
