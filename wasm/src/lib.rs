@@ -484,28 +484,30 @@ fn generate_stark_proof(
     // 9. Query count (2 bytes u16)
     proof.extend_from_slice(&(N_QUERIES as u16).to_le_bytes());
 
-    // 10. Generate query proofs
-    // Get query indices from Fiat-Shamir (same as verifier)
-    let log_domain_size = 10 + 2; // LOG_TRACE_SIZE + LOG_BLOWUP
+    // 10. Generate query proofs (format must match verifier's parse_query_proof)
+    let log_domain_size: usize = 10 + 2; // LOG_TRACE_SIZE + LOG_BLOWUP
     let domain_size = 1usize << log_domain_size;
     
     for q in 0..N_QUERIES {
-        // Query index from channel
+        // Query index from channel (same as verifier)
         let query_index = channel.squeeze_m31();
         let idx = (query_index.0 as usize) % domain_size;
         
         // Query index (4 bytes)
         proof.extend_from_slice(&(idx as u32).to_le_bytes());
         
-        // Trace value at query (QM31 = 16 bytes)
-        let trace_val_seed = keccak_hash(&[
+        // Trace value at query (32 bytes - full hash, not QM31)
+        let trace_val = keccak_hash(&[
             b"trace_val_v3",
-            &idx.to_le_bytes()[..4],
+            &(idx as u32).to_le_bytes(),
             &trace_commitment,
         ]);
-        proof.extend_from_slice(&trace_val_seed[..16]);
+        proof.extend_from_slice(&trace_val);
         
-        // Trace Merkle path (log2(domain) * 32 bytes)
+        // Trace path length (1 byte)
+        proof.push(log_domain_size as u8);
+        
+        // Trace Merkle path (path_len * 32 bytes)
         for level in 0..log_domain_size {
             let node = keccak_hash(&[
                 b"trace_path_v3",
@@ -516,15 +518,18 @@ fn generate_stark_proof(
             proof.extend_from_slice(&node);
         }
         
-        // Composition value at query (QM31 = 16 bytes)
-        let comp_val_seed = keccak_hash(&[
+        // Composition value at query (32 bytes)
+        let comp_val = keccak_hash(&[
             b"comp_val_v3",
-            &idx.to_le_bytes()[..4],
+            &(idx as u32).to_le_bytes(),
             &composition_commitment,
         ]);
-        proof.extend_from_slice(&comp_val_seed[..16]);
+        proof.extend_from_slice(&comp_val);
         
-        // Composition Merkle path
+        // Composition path length (1 byte)
+        proof.push(log_domain_size as u8);
+        
+        // Composition Merkle path (path_len * 32 bytes)
         for level in 0..log_domain_size {
             let node = keccak_hash(&[
                 b"comp_path_v3",
@@ -537,17 +542,24 @@ fn generate_stark_proof(
         
         // FRI layer values and paths
         for (layer_idx, fri_commitment) in fri_layer_commitments.iter().enumerate() {
-            // FRI value (QM31 = 16 bytes)
-            let fri_val_seed = keccak_hash(&[
-                b"fri_val_v3",
-                &(q as u32).to_le_bytes(),
-                &(layer_idx as u32).to_le_bytes(),
-                fri_commitment,
-            ]);
-            proof.extend_from_slice(&fri_val_seed[..16]);
+            // 4 FRI sibling values (4 × 16 bytes = 64 bytes total)
+            for sibling in 0..4 {
+                let fri_val = keccak_hash(&[
+                    b"fri_val_v3",
+                    &(q as u32).to_le_bytes(),
+                    &(layer_idx as u32).to_le_bytes(),
+                    &(sibling as u32).to_le_bytes(),
+                    fri_commitment,
+                ]);
+                // QM31 = 16 bytes
+                proof.extend_from_slice(&fri_val[..16]);
+            }
+            
+            // FRI layer path length (1 byte)
+            let layer_log_size = log_domain_size.saturating_sub(layer_idx + 1);
+            proof.push(layer_log_size as u8);
             
             // FRI Merkle path (shrinks each layer)
-            let layer_log_size = log_domain_size - layer_idx - 1;
             for level in 0..layer_log_size {
                 let node = keccak_hash(&[
                     b"fri_path_v3",
