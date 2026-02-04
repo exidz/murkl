@@ -7,3 +7,4 @@ export { ProofProgress } from './ProofProgress';
 export { HowItWorks } from './HowItWorks';
 export { TabBar } from './TabBar';
 export { AmountInput } from './AmountInput';
+export { Confetti } from './Confetti';

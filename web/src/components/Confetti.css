@@ -1,0 +1,39 @@
+/* Confetti - Celebration animation */
+
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  will-change: transform, opacity;
+}
+
+/* Shape variants */
+.confetti-square {
+  border-radius: 2px;
+}
+
+.confetti-circle {
+  border-radius: 50%;
+}
+
+.confetti-strip {
+  border-radius: 1px;
+}
+
+/* Reduced motion: instant fade instead of animation */
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    animation: none !important;
+    opacity: 0;
+  }
+}

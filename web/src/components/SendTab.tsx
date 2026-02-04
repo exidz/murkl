@@ -9,6 +9,7 @@ import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from
 import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
 import { HowItWorks } from './HowItWorks';
 import { AmountInput } from './AmountInput';
+import { Confetti } from './Confetti';
 import './SendTab.css';
 
 interface Props {
@@ -252,56 +253,114 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   if (step === 'success' && success) {
     return (
       <div className="send-tab">
+        <Confetti active={true} count={60} duration={4000} />
+        
         <motion.div 
           className="success-view"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
         >
           <div className="success-header">
             <motion.div 
               className="success-check"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', delay: 0.1 }}
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ 
+                type: 'spring', 
+                stiffness: 300,
+                damping: 15,
+                delay: 0.1 
+              }}
             >
-              ✓
+              <motion.span
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3, duration: 0.2 }}
+              >
+                ✓
+              </motion.span>
             </motion.div>
-            <h2>Sent!</h2>
-            <p className="success-amount">{success.amount} SOL</p>
-            <p className="success-to">to {success.identifier}</p>
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              Sent!
+            </motion.h2>
+            <motion.p 
+              className="success-amount"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
+            >
+              {success.amount} SOL
+            </motion.p>
+            <motion.p 
+              className="success-to"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              to {success.identifier}
+            </motion.p>
           </div>
 
-          <div className="share-section">
+          <motion.div 
+            className="share-section"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
             <h3>Share with recipient</h3>
             <p className="share-hint">Send them the password securely (call, Signal, etc)</p>
             
-            <div className="share-field">
+            <motion.div 
+              className="share-field"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 }}
+            >
               <label>Password</label>
               <div className="copy-row">
                 <code>{success.password}</code>
-                <button 
+                <motion.button 
                   className="copy-btn"
                   onClick={() => copyToClipboard(success.password, 'password')}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                 >
                   {copiedField === 'password' ? '✓' : '📋'}
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="share-field">
+            <motion.div 
+              className="share-field"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.7 }}
+            >
               <label>Claim link</label>
               <div className="copy-row">
                 <code className="truncate">{success.shareLink}</code>
-                <button 
+                <motion.button 
                   className="copy-btn"
                   onClick={() => copyToClipboard(success.shareLink, 'link')}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                 >
                   {copiedField === 'link' ? '✓' : '📋'}
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="qr-section">
+            <motion.div 
+              className="qr-section"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.8, type: 'spring' }}
+            >
               <p>Or scan to claim</p>
               <div className="qr-code">
                 <QRCodeSVG 
@@ -312,21 +371,32 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                   level="M"
                 />
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
-          <a 
+          <motion.a 
             href={getExplorerUrl(success.signature)} 
             target="_blank" 
             rel="noopener noreferrer"
             className="tx-link"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.9 }}
           >
             View transaction ↗
-          </a>
+          </motion.a>
 
-          <button className="action-btn secondary" onClick={handleNewSend}>
+          <motion.button 
+            className="action-btn secondary" 
+            onClick={handleNewSend}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
             Send another
-          </button>
+          </motion.button>
         </motion.div>
       </div>
     );
