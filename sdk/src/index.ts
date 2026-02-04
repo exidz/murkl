@@ -27,6 +27,12 @@ export {
   STARK_VERIFIER_PROGRAM_ID,
   VERIFIER_BUFFER_HEADER_SIZE,
 } from './constants';
+export {
+  serializeProof,
+  parseProof,
+  generateMockProof,
+  calculateProofSize,
+} from './proof';
 export type {
   MurklConfig,
   DepositParams,
@@ -35,3 +41,8 @@ export type {
   PoolInfo,
   DepositInfo,
 } from './types';
+export type {
+  STWOProof,
+  FriLayer,
+  QueryProof,
+} from './proof';
