@@ -97,13 +97,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
       const rect = button.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
+      const ripple = rippleRef.current;
 
-      rippleRef.current.style.left = `${x}px`;
-      rippleRef.current.style.top = `${y}px`;
-      rippleRef.current.classList.remove('active');
-      // Force reflow
-      void rippleRef.current.offsetWidth;
-      rippleRef.current.classList.add('active');
+      ripple.style.left = `${x}px`;
+      ripple.style.top = `${y}px`;
+      ripple.classList.remove('active');
+      // Force reflow to restart animation
+      void ripple.offsetWidth;
+      ripple.classList.add('active');
+      
+      // Clean up after animation completes
+      const cleanup = () => {
+        ripple.classList.remove('active');
+        ripple.removeEventListener('animationend', cleanup);
+      };
+      ripple.addEventListener('animationend', cleanup, { once: true });
     }
 
     onClick?.(e);

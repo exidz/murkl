@@ -170,13 +170,11 @@
   }
 }
 
-/* Very small screens */
+/* Very small screens - Note: font size is controlled via JS inline styles */
 @media (max-width: 360px) {
-  .amount-display-value,
-  .amount-hidden-input,
-  .amount-measure {
-    /* Cap maximum font size on tiny screens */
-    max-font-size: 48px;
+  .amount-input-wrapper {
+    padding: 1rem 0.25rem;
+    min-height: 130px;
   }
 }
 
