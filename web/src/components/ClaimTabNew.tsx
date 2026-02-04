@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
-import type { FC } from 'react';
+import { useState, useCallback, useRef, useEffect, type FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 import { OAuthLogin } from './OAuthLogin';
+import { ProofProgress } from './ProofProgress';
 import { RELAYER_URL, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
 
@@ -22,7 +23,7 @@ interface Deposit {
   claimed: boolean;
 }
 
-type ClaimStatus = 'idle' | 'generating' | 'submitting' | 'success' | 'error';
+type ClaimStage = 'idle' | 'generating' | 'uploading' | 'verifying' | 'claiming' | 'complete';
 
 export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
   const { connected, publicKey } = useWallet();
@@ -33,10 +34,22 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
   const [loadingDeposits, setLoadingDeposits] = useState(false);
   
   // Claim state
-  const [claimingId, setClaimingId] = useState<string | null>(null);
-  const [status, setStatus] = useState<ClaimStatus>('idle');
+  const [claimingDeposit, setClaimingDeposit] = useState<Deposit | null>(null);
+  const [stage, setStage] = useState<ClaimStage>('idle');
+  const [proofProgress, setProofProgress] = useState(0);
   const [password, setPassword] = useState('');
-  const [showPasswordModal, setShowPasswordModal] = useState<Deposit | null>(null);
+  const [showPasswordSheet, setShowPasswordSheet] = useState<Deposit | null>(null);
+  const [successSignature, setSuccessSignature] = useState<string | null>(null);
+  
+  // Refs
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus password input when sheet opens
+  useEffect(() => {
+    if (showPasswordSheet) {
+      setTimeout(() => passwordInputRef.current?.focus(), 100);
+    }
+  }, [showPasswordSheet]);
 
   // Handle OAuth login
   const handleLogin = useCallback(async (provider: string, handle: string) => {
@@ -44,7 +57,6 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     setLoadingDeposits(true);
     
     try {
-      // Fetch deposits for this identity from relayer
       const response = await fetch(`${RELAYER_URL}/deposits?identity=${encodeURIComponent(handle)}`);
       
       if (response.ok) {
@@ -52,15 +64,15 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
         setDeposits(data.deposits || []);
         
         if (data.deposits?.length === 0) {
-          toast('No deposits found for this identity', { icon: '📭' });
+          toast('No deposits yet — ask someone to send!', { icon: '📭' });
         } else {
           toast.success(`Found ${data.deposits.length} deposit(s)!`);
         }
       } else {
-        // Demo mode: show mock deposits
+        // Demo mode
         setDeposits([
           {
-            id: '1',
+            id: 'demo-1',
             amount: 0.1,
             token: 'SOL',
             leafIndex: 1,
@@ -70,8 +82,8 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
         ]);
         toast.success('Demo: Found 1 deposit');
       }
-    } catch (error) {
-      // Demo mode fallback
+    } catch {
+      // Demo fallback
       setDeposits([
         {
           id: 'demo-1',
@@ -87,44 +99,58 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     }
   }, []);
 
-  // Handle claim
-  const handleClaim = useCallback(async (deposit: Deposit) => {
-    if (!wasmReady) {
-      toast.error('WASM prover not ready');
-      return;
-    }
-
+  // Initiate claim (opens password sheet)
+  const initiateClaim = useCallback((deposit: Deposit) => {
     if (!connected || !publicKey) {
-      toast.error('Please connect your wallet first');
+      toast.error('Connect your wallet first');
       return;
     }
+    setShowPasswordSheet(deposit);
+    setPassword('');
+  }, [connected, publicKey]);
 
-    if (!password) {
-      setShowPasswordModal(deposit);
-      return;
-    }
-
-    setClaimingId(deposit.id);
-    setStatus('generating');
+  // Execute claim with password
+  const executeClaim = useCallback(async () => {
+    if (!showPasswordSheet || !password || !identity || !publicKey || !wasmReady) return;
+    
+    const deposit = showPasswordSheet;
+    setShowPasswordSheet(null);
+    setClaimingDeposit(deposit);
+    setStage('generating');
+    setProofProgress(0);
 
     try {
-      toast.loading('Generating STARK proof...', { id: 'claim' });
+      // Simulate proof progress (in real impl, WASM would report progress)
+      const progressInterval = setInterval(() => {
+        setProofProgress(prev => {
+          if (prev >= 95) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + Math.random() * 8 + 2;
+        });
+      }, 200);
 
-      // Generate proof using WASM
+      // Generate proof
       const proofResult = await generate_proof(
-        identity!.handle,
+        identity.handle,
         password,
         deposit.leafIndex
       );
+      
+      clearInterval(progressInterval);
+      setProofProgress(100);
 
       if (proofResult.error) {
         throw new Error(proofResult.error);
       }
 
-      setStatus('submitting');
-      toast.loading('Submitting claim...', { id: 'claim' });
+      // Upload proof
+      setStage('uploading');
+      await new Promise(r => setTimeout(r, 500)); // Brief pause for UX
 
       // Submit to relayer
+      setStage('verifying');
       const response = await fetch(`${RELAYER_URL}/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,40 +164,41 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
       });
 
       if (!response.ok) {
-        throw new Error('Claim submission failed');
+        throw new Error('Claim failed — try again');
       }
 
       const result = await response.json();
       
-      setStatus('success');
-      toast.success('Claim successful! 🎉', { id: 'claim' });
-
-      // Update deposit as claimed
+      // Claiming
+      setStage('claiming');
+      await new Promise(r => setTimeout(r, 500));
+      
+      // Success!
+      setStage('complete');
+      setSuccessSignature(result.signature || null);
+      
+      // Update deposit list
       setDeposits(prev => 
         prev.map(d => d.id === deposit.id ? { ...d, claimed: true } : d)
       );
 
-      // Show confetti or success animation
-      if (result.signature) {
-        toast(
-          <div>
-            <p>View on explorer:</p>
-            <a href={getExplorerUrl(result.signature)} target="_blank" rel="noopener">
-              {result.signature.slice(0, 20)}...
-            </a>
-          </div>,
-          { duration: 10000 }
-        );
-      }
-    } catch (error: any) {
-      setStatus('error');
-      toast.error(error.message || 'Claim failed', { id: 'claim' });
-    } finally {
-      setClaimingId(null);
-      setPassword('');
-      setShowPasswordModal(null);
+      toast.success('Claimed! 🎉');
+      
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Claim failed';
+      toast.error(message);
+      setStage('idle');
+      setClaimingDeposit(null);
     }
-  }, [wasmReady, connected, publicKey, identity, password]);
+  }, [showPasswordSheet, password, identity, publicKey, wasmReady]);
+
+  // Reset after success
+  const handleClaimComplete = useCallback(() => {
+    setStage('idle');
+    setClaimingDeposit(null);
+    setProofProgress(0);
+    setSuccessSignature(null);
+  }, []);
 
   // Handle logout
   const handleLogout = () => {
@@ -179,30 +206,97 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     setDeposits([]);
   };
 
-  // If not logged in, show OAuth
+  // Handle key press in password input
+  const handlePasswordKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && password) {
+      e.preventDefault();
+      executeClaim();
+    }
+  };
+
+  // Not logged in → OAuth
   if (!identity) {
     return (
       <div className="claim-tab-new">
         <OAuthLogin onLogin={handleLogin} loading={loadingDeposits} />
         
-        <div className="manual-claim">
-          <details>
-            <summary>Have a share link?</summary>
-            <div className="manual-form">
-              <input 
-                type="text" 
-                placeholder="Paste share link or enter identifier..."
-                className="input"
-              />
-              <button className="btn btn-secondary">Continue</button>
-            </div>
-          </details>
-        </div>
+        <details className="manual-claim">
+          <summary>Have a claim link?</summary>
+          <div className="manual-form">
+            <input 
+              type="text" 
+              placeholder="Paste link or enter identifier..."
+              className="input"
+            />
+            <button className="btn btn-secondary">Continue</button>
+          </div>
+        </details>
       </div>
     );
   }
 
-  // Logged in - show deposits
+  // Claiming in progress → show ProofProgress
+  if (claimingDeposit && stage !== 'idle') {
+    return (
+      <div className="claim-tab-new">
+        <AnimatePresence mode="wait">
+          {stage === 'complete' ? (
+            <motion.div
+              key="success"
+              className="claim-success"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div 
+                className="success-icon"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', delay: 0.1 }}
+              >
+                ✓
+              </motion.div>
+              <h2>Claimed!</h2>
+              <p className="claim-amount">{claimingDeposit.amount} {claimingDeposit.token}</p>
+              <p className="claim-to">sent to your wallet</p>
+              
+              {successSignature && (
+                <a 
+                  href={getExplorerUrl(successSignature)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tx-link"
+                >
+                  View transaction ↗
+                </a>
+              )}
+              
+              <button className="btn btn-primary" onClick={handleClaimComplete}>
+                Done
+              </button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="progress"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <div className="claiming-header">
+                <p>Claiming {claimingDeposit.amount} {claimingDeposit.token}</p>
+              </div>
+              <ProofProgress 
+                stage={stage} 
+                progress={proofProgress}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  // Logged in → deposits list
   return (
     <div className="claim-tab-new">
       {/* Identity header */}
@@ -215,108 +309,126 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
           <span className="identity-handle">{identity.handle}</span>
         </div>
         <button className="btn btn-ghost" onClick={handleLogout}>
-          Switch account
+          Switch
         </button>
       </div>
 
-      {/* Deposits list */}
+      {/* Deposits section */}
       <div className="deposits-section">
-        <h3>Your Deposits</h3>
-        
         {loadingDeposits ? (
-          <div className="loading">
-            <div className="spinner" />
+          <div className="loading-state">
+            <div className="loading-spinner" />
             <p>Checking for deposits...</p>
           </div>
         ) : deposits.length === 0 ? (
           <div className="empty-state">
             <span className="empty-icon">📭</span>
-            <p>No deposits found</p>
-            <p className="empty-hint">
-              Ask someone to send you tokens via Murkl!
-            </p>
+            <h3>No deposits yet</h3>
+            <p>Ask someone to send you tokens via Murkl!</p>
           </div>
         ) : (
           <div className="deposits-list">
             {deposits.map(deposit => (
-              <div 
+              <motion.div 
                 key={deposit.id} 
                 className={`deposit-card ${deposit.claimed ? 'claimed' : ''}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
               >
-                <div className="deposit-info">
-                  <div className="deposit-amount">
-                    {deposit.amount} {deposit.token}
-                  </div>
-                  <div className="deposit-meta">
-                    {new Date(deposit.timestamp).toLocaleDateString()}
+                <div className="deposit-content">
+                  <div className="deposit-icon">💰</div>
+                  <div className="deposit-details">
+                    <span className="deposit-amount">
+                      {deposit.amount} {deposit.token}
+                    </span>
+                    <span className="deposit-date">
+                      {new Date(deposit.timestamp).toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
                 
-                <div className="deposit-actions">
-                  {deposit.claimed ? (
-                    <span className="claimed-badge">✓ Claimed</span>
-                  ) : (
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => handleClaim(deposit)}
-                      disabled={claimingId === deposit.id || !connected}
-                    >
-                      {claimingId === deposit.id ? (
-                        <>
-                          <span className="spinner-small" />
-                          {status === 'generating' ? 'Proving...' : 'Claiming...'}
-                        </>
-                      ) : (
-                        'Claim'
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
+                {deposit.claimed ? (
+                  <span className="claimed-badge">✓ Claimed</span>
+                ) : (
+                  <button
+                    className="btn btn-primary claim-btn"
+                    onClick={() => initiateClaim(deposit)}
+                    disabled={!connected}
+                  >
+                    Claim
+                  </button>
+                )}
+              </motion.div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Password modal */}
-      {showPasswordModal && (
-        <div className="modal-overlay" onClick={() => setShowPasswordModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>🔑 Enter Password</h3>
-            <p>Enter the password the sender shared with you</p>
-            <input
-              type="password"
-              className="input"
-              placeholder="Password..."
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              autoFocus
-            />
-            <div className="modal-actions">
-              <button 
-                className="btn btn-ghost"
-                onClick={() => setShowPasswordModal(null)}
-              >
-                Cancel
-              </button>
-              <button 
-                className="btn btn-primary"
-                onClick={() => handleClaim(showPasswordModal)}
-                disabled={!password}
-              >
-                Claim
-              </button>
-            </div>
-          </div>
+      {/* Wallet reminder */}
+      {!connected && deposits.some(d => !d.claimed) && (
+        <div className="wallet-reminder">
+          <p>👛 Connect your wallet to claim</p>
         </div>
       )}
 
-      {/* Wallet connection reminder */}
-      {!connected && (
-        <div className="wallet-reminder">
-          <p>👛 Connect your wallet to receive tokens</p>
-        </div>
-      )}
+      {/* Password bottom sheet */}
+      <AnimatePresence>
+        {showPasswordSheet && (
+          <>
+            <motion.div 
+              className="sheet-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPasswordSheet(null)}
+            />
+            <motion.div 
+              className="password-sheet"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            >
+              <div className="sheet-handle" />
+              
+              <div className="sheet-content">
+                <div className="sheet-header">
+                  <span className="sheet-icon">🔑</span>
+                  <h3>Enter Password</h3>
+                  <p>The sender shared this with you</p>
+                </div>
+                
+                <input
+                  ref={passwordInputRef}
+                  type="password"
+                  className="password-input"
+                  placeholder="Password..."
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={handlePasswordKeyDown}
+                  autoComplete="off"
+                />
+                
+                <div className="sheet-actions">
+                  <button 
+                    className="btn btn-ghost"
+                    onClick={() => setShowPasswordSheet(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={executeClaim}
+                    disabled={!password || !wasmReady}
+                  >
+                    {wasmReady ? 'Claim' : 'Loading...'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

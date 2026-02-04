@@ -1,17 +1,21 @@
+/* ClaimTabNew - Venmo-inspired claim flow */
+
 .claim-tab-new {
   max-width: 480px;
   margin: 0 auto;
+  padding: 1rem;
+  min-height: 60vh;
 }
 
-/* Identity Header */
+/* Identity header */
 .identity-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.25rem;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-radius: 12px;
-  border: 1px solid #2a2a4a;
+  justify-content: space-between;
+  padding: 1rem;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 14px;
   margin-bottom: 1.5rem;
 }
 
@@ -22,19 +26,71 @@
 }
 
 .identity-icon {
-  font-size: 1.5rem;
+  width: 36px;
+  height: 36px;
+  background: var(--bg-tertiary, #1e1e2e);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
 }
 
 .identity-handle {
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary, #fff);
+  font-size: 1rem;
 }
 
-/* Deposits Section */
-.deposits-section h3 {
-  margin: 0 0 1rem;
-  color: #fff;
-  font-size: 1.125rem;
+/* Buttons */
+.btn {
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 44px;
+}
+
+.btn-primary {
+  background: var(--accent-primary, #3d95ce);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+  background: var(--text-muted, #52525b);
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary, #1e1e2e);
+  color: var(--text-primary, #fff);
+  border: 1px solid var(--border, #27272a);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary, #a1a1aa);
+  padding: 0.5rem 0.75rem;
+}
+
+.btn-ghost:hover {
+  color: var(--text-primary, #fff);
+}
+
+/* Deposits section */
+.deposits-section {
+  margin-bottom: 1.5rem;
 }
 
 .deposits-list {
@@ -45,60 +101,99 @@
 
 .deposit-card {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 1.25rem;
-  background: #1a1a24;
-  border-radius: 12px;
-  border: 1px solid #2a2a3a;
-  transition: all 0.2s ease;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 14px;
+  transition: all 0.2s;
 }
 
 .deposit-card:hover:not(.claimed) {
-  border-color: #9945FF;
-  transform: translateX(4px);
+  border-color: var(--border-focus, #3d95ce);
 }
 
 .deposit-card.claimed {
   opacity: 0.6;
 }
 
-.deposit-amount {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #9945FF, #14F195);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.deposit-meta {
-  color: #666;
-  font-size: 0.85rem;
-  margin-top: 0.25rem;
-}
-
-.deposit-actions {
+.deposit-content {
   display: flex;
   align-items: center;
+  gap: 1rem;
+}
+
+.deposit-icon {
+  width: 44px;
+  height: 44px;
+  background: var(--bg-tertiary, #1e1e2e);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.deposit-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.deposit-amount {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+}
+
+.deposit-date {
+  font-size: 0.85rem;
+  color: var(--text-muted, #52525b);
+}
+
+.claim-btn {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.95rem;
 }
 
 .claimed-badge {
-  color: #14F195;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--accent-success, #22c55e);
+  font-weight: 500;
 }
 
-/* Empty State */
+/* Loading state */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem 1rem;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--bg-tertiary, #1e1e2e);
+  border-top-color: var(--accent-primary, #3d95ce);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-state p {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+}
+
+/* Empty state */
 .empty-state {
   text-align: center;
-  padding: 3rem 2rem;
-  background: #1a1a24;
-  border-radius: 16px;
-  border: 2px dashed #2a2a3a;
+  padding: 3rem 1.5rem;
 }
 
 .empty-icon {
@@ -107,190 +202,259 @@
   margin-bottom: 1rem;
 }
 
-.empty-state p {
-  margin: 0;
-  color: #888;
-}
-
-.empty-hint {
-  font-size: 0.85rem;
-  margin-top: 0.5rem !important;
-}
-
-/* Loading */
-.loading {
-  text-align: center;
-  padding: 2rem;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #2a2a3a;
-  border-top-color: #9945FF;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-.spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  display: inline-block;
-  margin-right: 0.5rem;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Buttons */
-.btn {
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+.empty-state h3 {
+  font-size: 1.25rem;
   font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: var(--text-secondary, #a1a1aa);
   font-size: 0.95rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #9945FF, #7B3FE4);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(153, 69, 255, 0.4);
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #2a2a3a;
-  color: #fff;
-}
-
-.btn-ghost {
-  background: transparent;
-  color: #888;
-  padding: 0.5rem 1rem;
-}
-
-.btn-ghost:hover {
-  color: #fff;
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
-}
-
-.modal {
-  background: #1a1a24;
-  border-radius: 16px;
-  padding: 2rem;
-  max-width: 400px;
-  width: 90%;
-  border: 1px solid #2a2a3a;
-}
-
-.modal h3 {
-  margin: 0 0 0.5rem;
-  color: #fff;
-}
-
-.modal p {
-  color: #888;
-  margin-bottom: 1.5rem;
-}
-
-.modal .input {
-  width: 100%;
-  margin-bottom: 1.5rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-/* Input */
-.input {
-  padding: 0.875rem 1rem;
-  background: #0a0a12;
-  border: 1px solid #2a2a3a;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 1rem;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.input:focus {
-  outline: none;
-  border-color: #9945FF;
-}
-
-/* Manual Claim */
-.manual-claim {
-  margin-top: 1.5rem;
-}
-
-.manual-claim summary {
-  color: #666;
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0.5rem;
-}
-
-.manual-claim summary:hover {
-  color: #888;
-}
-
-.manual-form {
-  margin-top: 1rem;
-  display: flex;
-  gap: 0.75rem;
-}
-
-.manual-form .input {
-  flex: 1;
-}
-
-/* Wallet Reminder */
+/* Wallet reminder */
 .wallet-reminder {
-  margin-top: 1.5rem;
   padding: 1rem;
-  background: rgba(153, 69, 255, 0.1);
-  border: 1px solid rgba(153, 69, 255, 0.3);
-  border-radius: 8px;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--accent-warning, #f59e0b);
+  border-radius: 12px;
   text-align: center;
 }
 
 .wallet-reminder p {
+  color: var(--accent-warning, #f59e0b);
+  font-size: 0.95rem;
   margin: 0;
-  color: #9945FF;
+}
+
+/* Manual claim section */
+.manual-claim {
+  margin-top: 2rem;
+}
+
+.manual-claim summary {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+
+.manual-claim summary:hover {
+  color: var(--text-primary, #fff);
+}
+
+.manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.manual-form .input {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1rem;
+  color: var(--text-primary, #fff);
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 12px;
+  outline: none;
+}
+
+.manual-form .input:focus {
+  border-color: var(--border-focus, #3d95ce);
+}
+
+/* Password bottom sheet */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.password-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary, #14141f);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  z-index: 101;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--text-muted, #52525b);
+  border-radius: 2px;
+  margin: 0.75rem auto;
+}
+
+.sheet-content {
+  padding: 1rem 1.5rem 2rem;
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0));
+}
+
+.sheet-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.sheet-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.sheet-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin-bottom: 0.25rem;
+}
+
+.sheet-header p {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.password-input {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  font-size: 1.125rem;
+  color: var(--text-primary, #fff);
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 14px;
+  outline: none;
+  text-align: center;
+  letter-spacing: 0.1em;
+  margin-bottom: 1.5rem;
+}
+
+.password-input:focus {
+  border-color: var(--border-focus, #3d95ce);
+}
+
+.password-input::placeholder {
+  letter-spacing: normal;
+  color: var(--text-muted, #52525b);
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.sheet-actions .btn {
+  flex: 1;
+}
+
+.sheet-actions .btn-ghost {
+  background: var(--bg-tertiary, #1e1e2e);
+}
+
+/* Claiming progress view */
+.claiming-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.claiming-header p {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 1rem;
+}
+
+/* Success view */
+.claim-success {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.success-icon {
+  width: 72px;
+  height: 72px;
+  background: var(--accent-success, #22c55e);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  color: white;
+  margin: 0 auto 1.5rem;
+}
+
+.claim-success h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin-bottom: 0.5rem;
+}
+
+.claim-amount {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin: 0 0 0.25rem;
+}
+
+.claim-to {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.claim-success .tx-link {
+  display: block;
+  color: var(--accent-primary, #3d95ce);
+  font-size: 0.9rem;
+  text-decoration: none;
+  margin-bottom: 1.5rem;
+}
+
+.claim-success .tx-link:hover {
+  text-decoration: underline;
+}
+
+.claim-success .btn {
+  width: 100%;
+  max-width: 240px;
+}
+
+/* Mobile optimizations */
+@media (max-width: 480px) {
+  .claim-tab-new {
+    padding: 0.75rem;
+  }
+  
+  .deposit-card {
+    padding: 0.875rem 1rem;
+  }
+  
+  .deposit-icon {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .deposit-amount {
+    font-size: 1rem;
+  }
+  
+  .sheet-content {
+    padding: 1rem 1.25rem 1.5rem;
+  }
+}
+
+/* Touch targets */
+.btn,
+.manual-claim summary {
+  min-height: 44px;
 }
