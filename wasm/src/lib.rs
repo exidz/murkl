@@ -63,6 +63,10 @@ impl M31 {
         M31::new(((self.0 as u64 * other.0 as u64) % M31_PRIME as u64) as u32)
     }
     
+    fn neg(self) -> Self {
+        if self.0 == 0 { M31::new(0) } else { M31::new(M31_PRIME - self.0) }
+    }
+    
     fn pow(self, mut exp: u32) -> Self {
         let mut base = self;
         let mut result = M31::new(1);
@@ -122,39 +126,42 @@ impl QM31 {
     }
     
     fn mul(self, other: Self) -> Self {
-        // QM31 multiplication (extension field)
-        // (a + bi + cj + dk) * (e + fi + gj + hk)
-        // where i^2 = 2, j^2 = i, k = ij
-        let a = self.a;
-        let b = self.b;
-        let c = self.c;
-        let d = self.d;
-        let e = other.a;
-        let f = other.b;
-        let g = other.c;
-        let h = other.d;
+        // QM31 multiplication matching on-chain verifier exactly
+        // Field: i² = -1, u² = 2 + i
+        // x = x0 + x1*u where x0 = a+bi, x1 = c+di
+        // y = y0 + y1*u where y0 = e+fi, y1 = g+hi
         
-        // Simplified multiplication for CM31 extension
-        // Real part: ae + 2bf + 2(cg + dh) + 2*2(bh + df)
-        // etc. This is complex - using schoolbook for now
-        let two = M31::new(2);
+        let (e, f) = (other.a, other.b);
+        let (g, h) = (other.c, other.d);
+
+        // Complex multiplication helper: (a+bi)(c+di) = (ac-bd) + (ad+bc)i
+        let mul_cm31 = |a: M31, b: M31, c: M31, d: M31| -> (M31, M31) {
+            let real = a.mul(c).sub(b.mul(d));
+            let imag = a.mul(d).add(b.mul(c));
+            (real, imag)
+        };
+
+        // x0*y0
+        let (r0, i0) = mul_cm31(self.a, self.b, e, f);
         
-        let r0 = a.mul(e)
-            .add(two.mul(b.mul(f)))
-            .add(two.mul(c.mul(h).add(d.mul(g))))
-            .add(two.mul(two).mul(d.mul(h)));
+        // x0*y1 + x1*y0
+        let (r1a, i1a) = mul_cm31(self.a, self.b, g, h);
+        let (r1b, i1b) = mul_cm31(self.c, self.d, e, f);
+        let (r1, i1) = (r1a.add(r1b), i1a.add(i1b));
         
-        let r1 = a.mul(f).add(b.mul(e))
-            .add(two.mul(c.mul(g)))
-            .add(two.mul(d.mul(h)))
-            .add(two.mul(d.mul(g).add(c.mul(h))));
-        
-        let r2 = a.mul(g).add(c.mul(e))
-            .add(two.mul(b.mul(h).add(d.mul(f))));
-        
-        let r3 = a.mul(h).add(b.mul(g)).add(c.mul(f)).add(d.mul(e));
-        
-        QM31::new(r0, r1, r2, r3)
+        // x1*y1 * u² = x1*y1 * (2+i)
+        let (cg_dh, ch_dg) = mul_cm31(self.c, self.d, g, h);
+        // (cg-dh + (ch+dg)i)(2+i) = 2(cg-dh) - (ch+dg) + (2(ch+dg) + (cg-dh))i
+        let r2_real = cg_dh.mul(M31::new(2)).sub(ch_dg);
+        let r2_imag = ch_dg.mul(M31::new(2)).add(cg_dh);
+
+        // Result: (r0 + r2_real) + (i0 + r2_imag)i + r1*u + i1*iu
+        QM31::new(
+            r0.add(r2_real),
+            i0.add(r2_imag),
+            r1,
+            i1,
+        )
     }
     
     fn pow(self, mut exp: u32) -> Self {
@@ -171,20 +178,44 @@ impl QM31 {
     }
     
     fn inv(self) -> Self {
-        // For QM31, we use the formula: a^(-1) = conj(a) / norm(a)
-        // This is complex - simplified version
-        let norm_sq = self.a.mul(self.a)
-            .add(M31::new(2).mul(self.b.mul(self.b)))
-            .add(M31::new(2).mul(self.c.mul(self.c)))
-            .add(M31::new(4).mul(self.d.mul(self.d)));
-        let norm_inv = norm_sq.inv();
+        // QM31 inverse matching on-chain verifier exactly
+        // x^(-1) = conj(x) / norm(x)
         
-        QM31::new(
-            self.a.mul(norm_inv),
-            M31::new(0).sub(self.b).mul(norm_inv),
-            M31::new(0).sub(self.c).mul(norm_inv),
-            self.d.mul(norm_inv),
-        )
+        // First compute norm in CM31
+        // x * conj(x) where conj over u: conj(a + bi + cu + diu) = a + bi - cu - diu
+        let a2_b2 = self.a.mul(self.a).sub(self.b.mul(self.b));
+        let two_ab = self.a.mul(self.b).mul(M31::new(2));
+        
+        let c2_d2 = self.c.mul(self.c).sub(self.d.mul(self.d));
+        let two_cd = self.c.mul(self.d).mul(M31::new(2));
+        
+        // (c²-d² + 2cdi)(2+i) = 2(c²-d²) - 2cd + (c²-d² + 4cd)i
+        let u2_real = c2_d2.mul(M31::new(2)).sub(two_cd);
+        let u2_imag = c2_d2.add(two_cd.mul(M31::new(2)));
+        
+        let nr = a2_b2.sub(u2_real);
+        let ni = two_ab.sub(u2_imag);
+        
+        // Norm of CM31 element to get M31: r² + s²
+        let norm_m31 = nr.mul(nr).add(ni.mul(ni));
+        let norm_inv = norm_m31.inv();
+        
+        // CM31 inverse: (r - si) / (r² + s²)
+        let cm31_inv_r = nr.mul(norm_inv);
+        let cm31_inv_i = ni.neg().mul(norm_inv);
+        
+        // conj(x) = (a + bi) - (c + di)u
+        // result = conj(x) * cm31_inv
+        
+        // (a+bi)(r+si) = ar-bs + (as+br)i
+        let res_a = self.a.mul(cm31_inv_r).sub(self.b.mul(cm31_inv_i));
+        let res_b = self.a.mul(cm31_inv_i).add(self.b.mul(cm31_inv_r));
+        
+        // -(c+di)(r+si) = -(cr-ds + (cs+dr)i) 
+        let res_c = self.c.mul(cm31_inv_r).sub(self.d.mul(cm31_inv_i)).neg();
+        let res_d = self.c.mul(cm31_inv_i).add(self.d.mul(cm31_inv_r)).neg();
+        
+        QM31::new(res_a, res_b, res_c, res_d)
     }
 }
 

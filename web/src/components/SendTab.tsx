@@ -9,6 +9,7 @@ import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from
 import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
 import { HowItWorks } from './HowItWorks';
 import { AmountInput } from './AmountInput';
+import { AmountPresets } from './AmountPresets';
 import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
 import { Confetti } from './Confetti';
 import { EmptyState } from './EmptyState';
@@ -16,6 +17,28 @@ import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
 import { ShareSheet } from './ShareSheet';
 import './SendTab.css';
+
+// Token-specific preset amounts
+const TOKEN_PRESETS: Record<string, { value: number; label: string }[]> = {
+  SOL: [
+    { value: 0.1, label: '0.1' },
+    { value: 0.5, label: '0.5' },
+    { value: 1, label: '1' },
+    { value: 5, label: '5' },
+  ],
+  USDC: [
+    { value: 5, label: '5' },
+    { value: 10, label: '10' },
+    { value: 25, label: '25' },
+    { value: 100, label: '100' },
+  ],
+  USDT: [
+    { value: 5, label: '5' },
+    { value: 10, label: '10' },
+    { value: 25, label: '25' },
+    { value: 100, label: '100' },
+  ],
+};
 
 interface Props {
   wasmReady: boolean;
@@ -473,6 +496,14 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               currencySymbol={selectedToken.icon}
               maxDecimals={selectedToken.decimals}
               autoFocus
+            />
+
+            {/* Quick amount presets - Venmo style */}
+            <AmountPresets
+              onSelect={handleAmountChange}
+              currentValue={amount}
+              currency={selectedToken.symbol}
+              presets={TOKEN_PRESETS[selectedToken.symbol] || TOKEN_PRESETS.SOL}
             />
 
             <TokenSelector

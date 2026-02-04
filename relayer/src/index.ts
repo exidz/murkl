@@ -534,8 +534,10 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     log('info', 'Processing claim', {
       requestId,
-      commitmentFull: commitment, // TEMP: full commitment for debugging
-      commitment: commitment.slice(0, 16) + '...',
+      commitment,
+      nullifier,
+      merkleRoot: merkleRoot || 'from-pool',
+      leafIndex,
       recipient: recipientTokenAccount.slice(0, 8) + '...',
     });
     
@@ -684,6 +686,16 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // ========================================
     // Step 3: Finalize Buffer
     // ========================================
+    
+    // DEBUG: Log exact values being sent to finalize
+    log('info', 'DEBUG: Finalize params', {
+      requestId,
+      commitment: commitment32.toString('hex'),
+      nullifier: nullifier32.toString('hex'),
+      merkleRoot: merkleRoot32.toString('hex'),
+      proofSize: proofBytes.length,
+      proofFirst32: proofBytes.slice(0, 32).toString('hex'), // trace_commitment
+    });
     
     // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32])
     const finalizeData = Buffer.concat([
