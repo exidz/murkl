@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { OAuthLogin } from './OAuthLogin';
 import { ProofProgress } from './ProofProgress';
+import { SkeletonCard } from './Skeleton';
 import { RELAYER_URL, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
 
@@ -317,8 +318,11 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
       <div className="deposits-section">
         {loadingDeposits ? (
           <div className="loading-state">
-            <div className="loading-spinner" />
-            <p>Checking for deposits...</p>
+            <p className="loading-label">Checking for deposits...</p>
+            <div className="skeleton-list">
+              <SkeletonCard />
+              <SkeletonCard />
+            </div>
           </div>
         ) : deposits.length === 0 ? (
           <div className="empty-state">
