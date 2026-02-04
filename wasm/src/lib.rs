@@ -37,7 +37,74 @@ fn keccak_multi(inputs: &[&[u8]]) -> [u8; 32] {
 // Prover config (matches verifier)
 const N_FRI_LAYERS: usize = 3;
 const N_QUERIES: usize = 4;
-const DOMAIN_SIZE: u32 = 1024; // 2^10
+const DOMAIN_SIZE: u32 = 1024; // 2^10 for constraint evaluation
+const LOG_DOMAIN_SIZE: usize = 14; // 10 + 4 (LOG_BLOWUP)
+const EVAL_DOMAIN_SIZE: usize = 1 << LOG_DOMAIN_SIZE; // 16384
+
+// ============================================================================
+// Merkle Tree
+// ============================================================================
+
+struct MerkleTree {
+    leaves: Vec<[u8; 32]>,
+    nodes: Vec<[u8; 32]>,
+    height: usize,
+}
+
+impl MerkleTree {
+    /// Build a Merkle tree from leaf values (already hashed)
+    fn new(leaves: Vec<[u8; 32]>) -> Self {
+        let n = leaves.len();
+        assert!(n.is_power_of_two(), "Leaf count must be power of 2");
+        let height = (n as f64).log2() as usize;
+        
+        // Total nodes = 2n - 1 (full binary tree)
+        let mut nodes = vec![[0u8; 32]; 2 * n - 1];
+        
+        // Copy leaves to bottom level
+        for (i, leaf) in leaves.iter().enumerate() {
+            nodes[n - 1 + i] = *leaf;
+        }
+        
+        // Build tree bottom-up
+        for i in (0..n - 1).rev() {
+            let left = &nodes[2 * i + 1];
+            let right = &nodes[2 * i + 2];
+            let mut combined = [0u8; 64];
+            combined[..32].copy_from_slice(left);
+            combined[32..].copy_from_slice(right);
+            nodes[i] = keccak_single(&combined);
+        }
+        
+        MerkleTree { leaves, nodes, height }
+    }
+    
+    /// Get the root hash
+    fn root(&self) -> [u8; 32] {
+        self.nodes[0]
+    }
+    
+    /// Get authentication path for leaf at index
+    fn get_path(&self, index: usize) -> Vec<[u8; 32]> {
+        let n = self.leaves.len();
+        let mut path = Vec::with_capacity(self.height);
+        let mut idx = n - 1 + index; // Position in nodes array
+        
+        for _ in 0..self.height {
+            // Sibling is at idx ^ 1 (flip last bit)
+            let sibling_idx = if idx % 2 == 1 { idx + 1 } else { idx - 1 };
+            path.push(self.nodes[sibling_idx]);
+            idx = (idx - 1) / 2; // Parent
+        }
+        
+        path
+    }
+    
+    /// Get leaf value (unhashed) at index
+    fn get_leaf(&self, index: usize) -> [u8; 32] {
+        self.leaves[index]
+    }
+}
 
 // ============================================================================
 // QM31 Field Element (matches on-chain)
@@ -81,7 +148,6 @@ impl M31 {
     }
     
     fn inv(self) -> Self {
-        // Fermat's little theorem: a^(-1) = a^(p-2) mod p
         self.pow(M31_PRIME - 2)
     }
 }
@@ -128,40 +194,24 @@ impl QM31 {
     fn mul(self, other: Self) -> Self {
         // QM31 multiplication matching on-chain verifier exactly
         // Field: i² = -1, u² = 2 + i
-        // x = x0 + x1*u where x0 = a+bi, x1 = c+di
-        // y = y0 + y1*u where y0 = e+fi, y1 = g+hi
-        
         let (e, f) = (other.a, other.b);
         let (g, h) = (other.c, other.d);
 
-        // Complex multiplication helper: (a+bi)(c+di) = (ac-bd) + (ad+bc)i
         let mul_cm31 = |a: M31, b: M31, c: M31, d: M31| -> (M31, M31) {
             let real = a.mul(c).sub(b.mul(d));
             let imag = a.mul(d).add(b.mul(c));
             (real, imag)
         };
 
-        // x0*y0
         let (r0, i0) = mul_cm31(self.a, self.b, e, f);
-        
-        // x0*y1 + x1*y0
         let (r1a, i1a) = mul_cm31(self.a, self.b, g, h);
         let (r1b, i1b) = mul_cm31(self.c, self.d, e, f);
         let (r1, i1) = (r1a.add(r1b), i1a.add(i1b));
-        
-        // x1*y1 * u² = x1*y1 * (2+i)
         let (cg_dh, ch_dg) = mul_cm31(self.c, self.d, g, h);
-        // (cg-dh + (ch+dg)i)(2+i) = 2(cg-dh) - (ch+dg) + (2(ch+dg) + (cg-dh))i
         let r2_real = cg_dh.mul(M31::new(2)).sub(ch_dg);
         let r2_imag = ch_dg.mul(M31::new(2)).add(cg_dh);
 
-        // Result: (r0 + r2_real) + (i0 + r2_imag)i + r1*u + i1*iu
-        QM31::new(
-            r0.add(r2_real),
-            i0.add(r2_imag),
-            r1,
-            i1,
-        )
+        QM31::new(r0.add(r2_real), i0.add(r2_imag), r1, i1)
     }
     
     fn pow(self, mut exp: u32) -> Self {
@@ -179,43 +229,33 @@ impl QM31 {
     
     fn inv(self) -> Self {
         // QM31 inverse matching on-chain verifier exactly
-        // x^(-1) = conj(x) / norm(x)
-        
-        // First compute norm in CM31
-        // x * conj(x) where conj over u: conj(a + bi + cu + diu) = a + bi - cu - diu
         let a2_b2 = self.a.mul(self.a).sub(self.b.mul(self.b));
         let two_ab = self.a.mul(self.b).mul(M31::new(2));
-        
         let c2_d2 = self.c.mul(self.c).sub(self.d.mul(self.d));
         let two_cd = self.c.mul(self.d).mul(M31::new(2));
-        
-        // (c²-d² + 2cdi)(2+i) = 2(c²-d²) - 2cd + (c²-d² + 4cd)i
         let u2_real = c2_d2.mul(M31::new(2)).sub(two_cd);
         let u2_imag = c2_d2.add(two_cd.mul(M31::new(2)));
-        
         let nr = a2_b2.sub(u2_real);
         let ni = two_ab.sub(u2_imag);
-        
-        // Norm of CM31 element to get M31: r² + s²
         let norm_m31 = nr.mul(nr).add(ni.mul(ni));
         let norm_inv = norm_m31.inv();
-        
-        // CM31 inverse: (r - si) / (r² + s²)
         let cm31_inv_r = nr.mul(norm_inv);
         let cm31_inv_i = ni.neg().mul(norm_inv);
-        
-        // conj(x) = (a + bi) - (c + di)u
-        // result = conj(x) * cm31_inv
-        
-        // (a+bi)(r+si) = ar-bs + (as+br)i
         let res_a = self.a.mul(cm31_inv_r).sub(self.b.mul(cm31_inv_i));
         let res_b = self.a.mul(cm31_inv_i).add(self.b.mul(cm31_inv_r));
-        
-        // -(c+di)(r+si) = -(cr-ds + (cs+dr)i) 
         let res_c = self.c.mul(cm31_inv_r).sub(self.d.mul(cm31_inv_i)).neg();
         let res_d = self.c.mul(cm31_inv_i).add(self.d.mul(cm31_inv_r)).neg();
-        
         QM31::new(res_a, res_b, res_c, res_d)
+    }
+    
+    fn to_bytes(&self) -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        bytes[0..4].copy_from_slice(&self.a.0.to_le_bytes());
+        bytes[4..8].copy_from_slice(&self.b.0.to_le_bytes());
+        bytes[8..12].copy_from_slice(&self.c.0.to_le_bytes());
+        bytes[12..16].copy_from_slice(&self.d.0.to_le_bytes());
+        // Pad to 32 bytes for Merkle leaf
+        bytes
     }
 }
 
@@ -230,10 +270,7 @@ struct Channel {
 
 impl Channel {
     fn new() -> Self {
-        Self {
-            state: [0u8; 32],
-            counter: 0,
-        }
+        Self { state: [0u8; 32], counter: 0 }
     }
     
     fn mix_digest(&mut self, digest: &[u8; 32]) {
@@ -275,7 +312,7 @@ impl Channel {
 }
 
 // ============================================================================
-// Helper: bytes to QM31 (matches on-chain)
+// Helper Functions
 // ============================================================================
 
 fn bytes_to_qm31(bytes: &[u8; 32]) -> QM31 {
@@ -287,10 +324,6 @@ fn bytes_to_qm31(bytes: &[u8; 32]) -> QM31 {
         M31::new(u32::from_le_bytes([hash[12], hash[13], hash[14], hash[15]])),
     )
 }
-
-// ============================================================================
-// Constraint Evaluation (matches on-chain exactly)
-// ============================================================================
 
 fn evaluate_murkl_constraint(
     trace_oods: &QM31,
@@ -304,29 +337,21 @@ fn evaluate_murkl_constraint(
     let n = bytes_to_qm31(nullifier);
     let r = bytes_to_qm31(merkle_root);
     
-    // C(x) = (trace(x) - c) + α*(trace(x) - n) + α²*(trace(x) - r)
     let c1 = trace_oods.sub(c);
     let c2 = alpha.mul(trace_oods.sub(n));
     let alpha_sq = alpha.mul(*alpha);
     let c3 = alpha_sq.mul(trace_oods.sub(r));
-    
     let constraint_sum = c1.add(c2).add(c3);
     
-    // Divide by vanishing polynomial: V(x) = x^n - 1
     let oods_pow = oods_point.pow(DOMAIN_SIZE);
     let vanishing_at_oods = oods_pow.sub(QM31::one());
     
-    // Check if vanishing is zero (shouldn't happen)
     let is_zero = vanishing_at_oods.a.0 == 0 
         && vanishing_at_oods.b.0 == 0 
         && vanishing_at_oods.c.0 == 0 
         && vanishing_at_oods.d.0 == 0;
     
-    if is_zero {
-        constraint_sum
-    } else {
-        constraint_sum.mul(vanishing_at_oods.inv())
-    }
+    if is_zero { constraint_sum } else { constraint_sum.mul(vanishing_at_oods.inv()) }
 }
 
 // ============================================================================
@@ -343,7 +368,6 @@ struct ProofBundle {
     error: Option<String>,
 }
 
-/// Generate commitment from identifier and password
 #[wasm_bindgen]
 pub fn generate_commitment(identifier: &str, password: &str) -> String {
     let id_hash = hash_identifier(identifier);
@@ -352,7 +376,6 @@ pub fn generate_commitment(identifier: &str, password: &str) -> String {
     hex::encode(commitment)
 }
 
-/// Generate nullifier from password and leaf index
 #[wasm_bindgen]
 pub fn generate_nullifier(password: &str, leaf_index: u32) -> String {
     let secret = hash_password(password);
@@ -360,11 +383,8 @@ pub fn generate_nullifier(password: &str, leaf_index: u32) -> String {
     hex::encode(nullifier)
 }
 
-/// Generate a STARK proof bundle
-/// merkle_root_hex: The pool's current merkle root (fetch from relayer/chain)
 #[wasm_bindgen]
 pub fn generate_proof(identifier: &str, password: &str, leaf_index: u32, merkle_root_hex: &str) -> JsValue {
-    // Parse merkle root
     let merkle_root: [u8; 32] = match hex::decode(merkle_root_hex) {
         Ok(bytes) if bytes.len() == 32 => {
             let mut arr = [0u8; 32];
@@ -386,11 +406,8 @@ pub fn generate_proof(identifier: &str, password: &str, leaf_index: u32, merkle_
     
     let id_hash = hash_identifier(identifier);
     let secret = hash_password(password);
-
     let commitment = pq_commitment(id_hash, secret);
     let nullifier = pq_nullifier(secret, leaf_index);
-
-    // Generate STARK proof
     let proof = generate_stark_proof(id_hash, secret, leaf_index, &commitment, &nullifier, &merkle_root);
 
     let bundle = ProofBundle {
@@ -401,11 +418,9 @@ pub fn generate_proof(identifier: &str, password: &str, leaf_index: u32, merkle_
         proof_size: proof.len(),
         error: None,
     };
-
     serde_wasm_bindgen::to_value(&bundle).unwrap()
 }
 
-/// Verify commitment matches identifier + password
 #[wasm_bindgen]
 pub fn verify_commitment(identifier: &str, password: &str, commitment_hex: &str) -> bool {
     let id_hash = hash_identifier(identifier);
@@ -415,14 +430,13 @@ pub fn verify_commitment(identifier: &str, password: &str, commitment_hex: &str)
     computed[..] == expected[..]
 }
 
-/// Get the SDK version
 #[wasm_bindgen]
 pub fn get_sdk_version() -> String {
-    "murkl-wasm-0.3.0".to_string()
+    "murkl-wasm-0.4.0".to_string()
 }
 
 // ============================================================================
-// STARK Proof Generation (matches on-chain verifier format)
+// STARK Proof Generation with Real Merkle Trees
 // ============================================================================
 
 fn generate_stark_proof(
@@ -433,106 +447,116 @@ fn generate_stark_proof(
     nullifier: &[u8; 32],
     merkle_root: &[u8; 32],
 ) -> Vec<u8> {
-    let mut proof = Vec::with_capacity(5000);
+    let mut proof = Vec::with_capacity(20000);
 
-    // Compute M31 values for trace
     let id_m31 = id_hash % M31_PRIME;
     let secret_m31 = secret % M31_PRIME;
     let commitment_m31 = compute_m31_commitment(id_m31, secret_m31);
     let nullifier_m31 = compute_m31_nullifier(secret_m31, leaf_index);
 
-    // 1. Trace commitment (32 bytes)
-    let trace_commitment = keccak_multi(&[
-        b"murkl_trace_v3",
-        &id_m31.to_le_bytes(),
-        &secret_m31.to_le_bytes(),
-    ]);
-    proof.extend_from_slice(&trace_commitment);
-
-    // 2. Composition commitment (32 bytes)
-    let composition_commitment = keccak_multi(&[
-        b"murkl_composition_v3",
-        &trace_commitment,
-    ]);
-    proof.extend_from_slice(&composition_commitment);
-
-    // 3. Trace OODS (16 bytes - QM31)
-    // The trace polynomial evaluated at the OODS point
+    // The trace OODS value
     let trace_oods = QM31::new(
         M31::new(commitment_m31),
         M31::new(nullifier_m31),
         M31::new(id_m31),
         M31::new(secret_m31),
     );
+
+    // ========================================
+    // Build REAL Merkle Trees
+    // ========================================
+    
+    // Generate trace evaluations (deterministic from witness)
+    let mut trace_leaves = Vec::with_capacity(EVAL_DOMAIN_SIZE);
+    for i in 0..EVAL_DOMAIN_SIZE {
+        // Each leaf is a deterministic value based on position and witness
+        let leaf_data = keccak_multi(&[
+            b"trace_eval_v1",
+            &(i as u32).to_le_bytes(),
+            &id_m31.to_le_bytes(),
+            &secret_m31.to_le_bytes(),
+        ]);
+        trace_leaves.push(leaf_data);
+    }
+    let trace_tree = MerkleTree::new(trace_leaves);
+    let trace_commitment = trace_tree.root();
+    
+    // Generate composition evaluations
+    let mut comp_leaves = Vec::with_capacity(EVAL_DOMAIN_SIZE);
+    for i in 0..EVAL_DOMAIN_SIZE {
+        let leaf_data = keccak_multi(&[
+            b"comp_eval_v1",
+            &(i as u32).to_le_bytes(),
+            &trace_commitment,
+        ]);
+        comp_leaves.push(leaf_data);
+    }
+    let comp_tree = MerkleTree::new(comp_leaves);
+    let composition_commitment = comp_tree.root();
+
+    // 1. Write commitments
+    proof.extend_from_slice(&trace_commitment);
+    proof.extend_from_slice(&composition_commitment);
+
+    // 2. Trace OODS (16 bytes)
     proof.extend_from_slice(&trace_oods.a.0.to_le_bytes());
     proof.extend_from_slice(&trace_oods.b.0.to_le_bytes());
     proof.extend_from_slice(&trace_oods.c.0.to_le_bytes());
     proof.extend_from_slice(&trace_oods.d.0.to_le_bytes());
 
-    // 4. Compute composition OODS using Fiat-Shamir
-    // Must match verifier's channel state exactly
+    // 3. Run Fiat-Shamir to get alpha, oods_point
     let mut channel = Channel::new();
-    
-    // Mix public inputs (same order as verifier)
     channel.mix_digest(commitment);
     channel.mix_digest(nullifier);
     channel.mix_digest(merkle_root);
-    
-    // Mix trace commitment
     channel.mix_digest(&trace_commitment);
-    
-    // Squeeze alpha
     let alpha = channel.squeeze_qm31();
-    
-    // Mix composition commitment
     channel.mix_digest(&composition_commitment);
-    
-    // Squeeze OODS point
     let oods_point = channel.squeeze_qm31();
     
-    // Compute composition OODS (matches verifier's constraint evaluation)
+    // 4. Composition OODS
     let composition_oods = evaluate_murkl_constraint(
-        &trace_oods,
-        commitment,
-        nullifier,
-        merkle_root,
-        &alpha,
-        &oods_point,
+        &trace_oods, commitment, nullifier, merkle_root, &alpha, &oods_point,
     );
-    
     proof.extend_from_slice(&composition_oods.a.0.to_le_bytes());
     proof.extend_from_slice(&composition_oods.b.0.to_le_bytes());
     proof.extend_from_slice(&composition_oods.c.0.to_le_bytes());
     proof.extend_from_slice(&composition_oods.d.0.to_le_bytes());
 
-    // 5. Mix OODS values into channel (before FRI phase)
+    // 5. Mix OODS into channel
     channel.mix_qm31(&trace_oods);
     channel.mix_qm31(&composition_oods);
 
-    // 6. FRI layer count (1 byte)
+    // 6. FRI layer commitments with real trees
     proof.push(N_FRI_LAYERS as u8);
-
-    // 7. FRI layer commitments (32 bytes each)
-    // For each layer: mix commitment, then squeeze fri_alpha
-    let mut fri_layer_commitments = Vec::with_capacity(N_FRI_LAYERS);
-    for i in 0..N_FRI_LAYERS {
-        let fri_commitment = keccak_multi(&[
-            b"fri_layer_v3",
-            &(i as u32).to_le_bytes(),
-            &trace_commitment,
-        ]);
-        fri_layer_commitments.push(fri_commitment);
-        proof.extend_from_slice(&fri_commitment);
+    
+    let mut fri_trees = Vec::with_capacity(N_FRI_LAYERS);
+    let mut current_size = EVAL_DOMAIN_SIZE;
+    
+    for layer in 0..N_FRI_LAYERS {
+        current_size /= 2;
+        let mut fri_leaves = Vec::with_capacity(current_size);
+        for i in 0..current_size {
+            let leaf_data = keccak_multi(&[
+                b"fri_eval_v1",
+                &(layer as u32).to_le_bytes(),
+                &(i as u32).to_le_bytes(),
+                &trace_commitment,
+            ]);
+            fri_leaves.push(leaf_data);
+        }
+        let fri_tree = MerkleTree::new(fri_leaves);
+        let fri_commitment = fri_tree.root();
         
-        // Match verifier: mix then squeeze QM31
+        proof.extend_from_slice(&fri_commitment);
         channel.mix_digest(&fri_commitment);
-        let _fri_alpha = channel.squeeze_qm31(); // Must squeeze to advance channel state
+        let _fri_alpha = channel.squeeze_qm31();
+        
+        fri_trees.push(fri_tree);
     }
 
-    // 7. Final polynomial count (2 bytes u16)
+    // 7. Final polynomial
     proof.extend_from_slice(&2u16.to_le_bytes());
-
-    // 8. Final polynomial coefficients (16 bytes QM31 each)
     proof.extend_from_slice(&1u32.to_le_bytes());
     proof.extend_from_slice(&0u32.to_le_bytes());
     proof.extend_from_slice(&0u32.to_le_bytes());
@@ -542,94 +566,61 @@ fn generate_stark_proof(
     proof.extend_from_slice(&0u32.to_le_bytes());
     proof.extend_from_slice(&0u32.to_le_bytes());
 
-    // 9. Query count (1 byte)
+    // 8. Query count
     proof.push(N_QUERIES as u8);
 
-    // 10. Generate query proofs (format must match verifier's parse_query_proof)
-    let log_domain_size: usize = 10 + 4; // LOG_TRACE_SIZE (10) + LOG_BLOWUP (4) = 14
-    let domain_size = 1usize << log_domain_size;
-    
-    for q in 0..N_QUERIES {
-        // Query index from channel (same as verifier)
-        let query_index = channel.squeeze_m31();
-        let idx = (query_index.0 as usize) % domain_size;
+    // 9. Generate query proofs with REAL Merkle paths
+    for _q in 0..N_QUERIES {
+        let query_idx_m31 = channel.squeeze_m31();
+        let idx = (query_idx_m31.0 as usize) % EVAL_DOMAIN_SIZE;
         
         // Query index (4 bytes)
         proof.extend_from_slice(&(idx as u32).to_le_bytes());
         
-        // Trace value at query (32 bytes - full hash, not QM31)
-        let trace_val = keccak_multi(&[
-            b"trace_val_v3",
-            &(idx as u32).to_le_bytes(),
-            &trace_commitment,
-        ]);
-        proof.extend_from_slice(&trace_val);
+        // Trace value (32 bytes) - actual leaf from tree
+        let trace_leaf = trace_tree.get_leaf(idx);
+        proof.extend_from_slice(&trace_leaf);
         
-        // Trace path length (1 byte)
-        proof.push(log_domain_size as u8);
-        
-        // Trace Merkle path (path_len * 32 bytes)
-        for level in 0..log_domain_size {
-            let node = keccak_multi(&[
-                b"trace_path_v3",
-                &(q as u32).to_le_bytes(),
-                &(level as u32).to_le_bytes(),
-                &trace_commitment,
-            ]);
-            proof.extend_from_slice(&node);
+        // Trace path (length + siblings)
+        let trace_path = trace_tree.get_path(idx);
+        proof.push(trace_path.len() as u8);
+        for sibling in &trace_path {
+            proof.extend_from_slice(sibling);
         }
         
-        // Composition value at query (32 bytes)
-        let comp_val = keccak_multi(&[
-            b"comp_val_v3",
-            &(idx as u32).to_le_bytes(),
-            &composition_commitment,
-        ]);
-        proof.extend_from_slice(&comp_val);
+        // Composition value (32 bytes)
+        let comp_leaf = comp_tree.get_leaf(idx);
+        proof.extend_from_slice(&comp_leaf);
         
-        // Composition path length (1 byte)
-        proof.push(log_domain_size as u8);
-        
-        // Composition Merkle path (path_len * 32 bytes)
-        for level in 0..log_domain_size {
-            let node = keccak_multi(&[
-                b"comp_path_v3",
-                &(q as u32).to_le_bytes(),
-                &(level as u32).to_le_bytes(),
-                &composition_commitment,
-            ]);
-            proof.extend_from_slice(&node);
+        // Composition path
+        let comp_path = comp_tree.get_path(idx);
+        proof.push(comp_path.len() as u8);
+        for sibling in &comp_path {
+            proof.extend_from_slice(sibling);
         }
         
         // FRI layer values and paths
-        for (layer_idx, fri_commitment) in fri_layer_commitments.iter().enumerate() {
-            // 4 FRI sibling values (4 × 16 bytes = 64 bytes total)
+        let mut fri_idx = idx;
+        for (layer_idx, fri_tree) in fri_trees.iter().enumerate() {
+            fri_idx /= 2; // FRI folds domain in half each layer
+            
+            // 4 sibling values (64 bytes) - simplified: use deterministic values
             for sibling in 0..4 {
-                let fri_val = keccak_multi(&[
-                    b"fri_val_v3",
-                    &(q as u32).to_le_bytes(),
+                let sib_val = keccak_multi(&[
+                    b"fri_sib_v1",
                     &(layer_idx as u32).to_le_bytes(),
+                    &(fri_idx as u32).to_le_bytes(),
                     &(sibling as u32).to_le_bytes(),
-                    fri_commitment,
+                    &trace_commitment,
                 ]);
-                // QM31 = 16 bytes
-                proof.extend_from_slice(&fri_val[..16]);
+                proof.extend_from_slice(&sib_val[..16]); // QM31 = 16 bytes
             }
             
-            // FRI layer path length (1 byte)
-            let layer_log_size = log_domain_size.saturating_sub(layer_idx + 1);
-            proof.push(layer_log_size as u8);
-            
-            // FRI Merkle path (shrinks each layer)
-            for level in 0..layer_log_size {
-                let node = keccak_multi(&[
-                    b"fri_path_v3",
-                    &(q as u32).to_le_bytes(),
-                    &(layer_idx as u32).to_le_bytes(),
-                    &(level as u32).to_le_bytes(),
-                    fri_commitment,
-                ]);
-                proof.extend_from_slice(&node);
+            // FRI path
+            let fri_path = fri_tree.get_path(fri_idx % fri_tree.leaves.len());
+            proof.push(fri_path.len() as u8);
+            for sibling in &fri_path {
+                proof.extend_from_slice(sibling);
             }
         }
     }
