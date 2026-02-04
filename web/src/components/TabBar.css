@@ -8,6 +8,14 @@
   margin-bottom: 1.5rem;
   position: relative;
   isolation: isolate;
+  touch-action: pan-y pinch-zoom; /* Allow vertical scroll, handle horizontal */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Slight feedback during swipe */
+.tab-bar.swiping {
+  transform: scale(0.995);
 }
 
 /* Sliding indicator (behind buttons) */
@@ -22,6 +30,7 @@
   box-shadow: 
     0 1px 2px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  will-change: left, width;
 }
 
 /* Tab button */
@@ -44,6 +53,7 @@
   z-index: 1;
   min-height: 44px; /* Touch-friendly */
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
 }
 
 .tab-item:hover:not(.active) {
@@ -58,22 +68,27 @@
 .tab-icon {
   font-size: 1.1rem;
   line-height: 1;
-  transition: transform 0.2s ease;
-}
-
-/* Subtle bounce on active icon */
-.tab-item.active .tab-icon {
-  animation: tab-bounce 0.4s ease;
-}
-
-@keyframes tab-bounce {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Label */
 .tab-label {
   line-height: 1;
+}
+
+/* Active glow effect (mobile satisfying feedback) */
+.tab-active-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    rgba(61, 149, 206, 0.15) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* Focus visible for accessibility */
@@ -85,6 +100,33 @@
 /* Active state feedback on press */
 .tab-item:active {
   transform: scale(0.98);
+}
+
+/* Swipe hint - appears briefly on first mobile visit */
+.swipe-hint {
+  position: absolute;
+  bottom: -1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: var(--text-muted, #52525b);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  white-space: nowrap;
+}
+
+/* Show swipe hint on touch devices only, briefly */
+@media (hover: none) and (pointer: coarse) {
+  .tab-bar:not(:focus-within) .swipe-hint {
+    animation: swipe-hint-reveal 4s ease-out forwards;
+  }
+}
+
+@keyframes swipe-hint-reveal {
+  0%, 40% { opacity: 0; }
+  50% { opacity: 0.6; }
+  100% { opacity: 0; }
 }
 
 /* Mobile optimizations */
@@ -127,6 +169,10 @@
   .tab-item.active {
     color: var(--bg-primary, #0a0a0f);
   }
+  
+  .tab-active-glow {
+    display: none;
+  }
 }
 
 /* Reduced motion - no sliding animation */
@@ -135,11 +181,28 @@
     transition: left 0.1s, width 0.1s;
   }
   
-  .tab-item.active .tab-icon {
-    animation: none;
-  }
-  
   .tab-item:active {
     transform: none;
+  }
+  
+  .tab-bar.swiping {
+    transform: none;
+  }
+  
+  .tab-active-glow {
+    display: none;
+  }
+  
+  .swipe-hint {
+    display: none;
+  }
+}
+
+/* Dark mode glow variant */
+@media (prefers-color-scheme: dark) {
+  .tab-indicator {
+    box-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 }
