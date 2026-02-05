@@ -1,4 +1,4 @@
-import { useCallback, type FC } from 'react';
+import { useCallback, type FC, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import './TokenSelector.css';
 
@@ -32,6 +32,13 @@ const formatBalance = (bal: number): string => {
   return bal.toLocaleString(undefined, { maximumFractionDigits: 2 });
 };
 
+const formatTokenName = (token: Token): string => {
+  // Keep names friendly and non-technical in the UI.
+  if (token.symbol === 'SOL') return 'Solana';
+  if (token.symbol === 'WSOL') return 'Wrapped SOL';
+  return token.name;
+};
+
 export const TokenSelector: FC<Props> = ({
   tokens,
   selected,
@@ -40,17 +47,27 @@ export const TokenSelector: FC<Props> = ({
   balance,
   disabled = false,
 }) => {
-  const handleSelect = useCallback((token: Token) => {
-    if (!disabled && token.symbol !== selected.symbol) {
-      onChange(token);
-    }
-  }, [disabled, selected, onChange]);
+  const handleSelect = useCallback(
+    (token: Token) => {
+      if (!disabled && token.symbol !== selected.symbol) {
+        onChange(token);
+      }
+    },
+    [disabled, selected.symbol, onChange],
+  );
+
+  const showBalanceRow = balance !== undefined;
+  const isBalanceLoading = balance === null;
+
+  const selectedLabel = useMemo(() => formatTokenName(selected), [selected]);
 
   return (
     <div className="token-selector">
       <div className="token-tabs" role="radiogroup" aria-label="Select token">
         {tokens.map((token) => {
           const isSelected = token.symbol === selected.symbol;
+          const tokenLabel = formatTokenName(token);
+
           return (
             <button
               key={token.symbol}
@@ -69,15 +86,25 @@ export const TokenSelector: FC<Props> = ({
                 />
               )}
               <span className="token-tab-content">
-                <span className="token-icon" aria-hidden="true">{token.icon}</span>
+                <span className="token-icon" aria-hidden="true">
+                  {token.icon}
+                </span>
                 <span className="token-symbol">{token.symbol}</span>
+              </span>
+              <span className="token-tab-sub" aria-hidden="true">
+                {tokenLabel}
               </span>
             </button>
           );
         })}
       </div>
 
-      {balance !== undefined && balance !== null && (
+      <div className="token-meta" aria-live="polite">
+        <span className="token-meta-label">Using</span>
+        <span className="token-meta-value">{selectedLabel}</span>
+      </div>
+
+      {showBalanceRow && (
         <motion.div
           className="token-balance"
           key={selected.symbol}
@@ -86,17 +113,23 @@ export const TokenSelector: FC<Props> = ({
           exit={{ opacity: 0, y: 5 }}
           transition={{ duration: 0.15 }}
         >
-          <span className="balance-label">Balance:</span>
-          <span className="balance-amount">
-            {formatBalance(balance)} {selected.symbol}
-          </span>
-          {onMaxClick && balance > 0 && (
+          <span className="balance-label">Balance</span>
+
+          {isBalanceLoading ? (
+            <span className="balance-skeleton" aria-label="Checking balance" />
+          ) : (
+            <span className="balance-amount">
+              {formatBalance(balance as number)} {selected.symbol}
+            </span>
+          )}
+
+          {onMaxClick && !isBalanceLoading && (balance as number) > 0 && (
             <button
               type="button"
               className="max-button"
-              onClick={() => onMaxClick(balance)}
+              onClick={() => onMaxClick(balance as number)}
               disabled={disabled}
-              aria-label={`Use maximum balance of ${formatBalance(balance)} ${selected.symbol}`}
+              aria-label={`Use maximum balance of ${formatBalance(balance as number)} ${selected.symbol}`}
             >
               Max
             </button>
