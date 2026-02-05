@@ -10,7 +10,7 @@
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF");
 
@@ -67,6 +67,13 @@ pub mod murkl {
         ctx: Context<InitializePool>,
         config: PoolConfig,
     ) -> Result<()> {
+        // Validate config to prevent fee-overflow and abusive settings.
+        require!(
+            config.max_relayer_fee_bps <= MAX_RELAYER_FEE_BPS,
+            MurklError::InvalidPoolConfig
+        );
+        require!(config.min_deposit > 0, MurklError::InvalidPoolConfig);
+
         let pool = &mut ctx.accounts.pool;
         pool.admin = ctx.accounts.admin.key();
         pool.token_mint = ctx.accounts.token_mint.key();
@@ -140,8 +147,12 @@ pub mod murkl {
         require!(!pool.paused, MurklError::PoolPaused);
         require!(!deposit.claimed, MurklError::AlreadyClaimed);
         
-        // Verify fee
-        let max_fee = (deposit.amount * pool.config.max_relayer_fee_bps as u64) / 10000;
+        // Verify fee (checked arithmetic to avoid overflow)
+        let max_fee = deposit
+            .amount
+            .checked_mul(pool.config.max_relayer_fee_bps as u64)
+            .ok_or(MurklError::MathOverflow)?
+            / 10000;
         require!(relayer_fee <= max_fee, MurklError::FeeTooHigh);
         
         // ========================================
@@ -216,7 +227,10 @@ pub mod murkl {
         deposit.claimed = true;
         
         // Calculate amounts
-        let recipient_amount = deposit.amount - relayer_fee;
+        let recipient_amount = deposit
+            .amount
+            .checked_sub(relayer_fee)
+            .ok_or(MurklError::MathOverflow)?;
         
         // Transfer to recipient
         let pool_seeds = &[
@@ -315,8 +329,7 @@ pub struct InitializePool<'info> {
     )]
     pub pool: Account<'info, Pool>,
     
-    /// CHECK: Token mint
-    pub token_mint: UncheckedAccount<'info>,
+    pub token_mint: Account<'info, Mint>,
     
     #[account(
         init,
@@ -570,4 +583,10 @@ pub enum MurklError {
     
     #[msg("Nullifier already used - replay attack detected")]
     NullifierReplay,
+
+    #[msg("Invalid pool config")]
+    InvalidPoolConfig,
+
+    #[msg("Arithmetic overflow/underflow")]
+    MathOverflow,
 }

@@ -109,10 +109,13 @@ export const auth = betterAuth({
   plugins: [
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
-        console.log(`📧 Sending ${type} OTP to ${email}: ${otp}`);
+        // Never log OTPs in production (Railway logs are effectively a side-channel).
+        if ((process.env.NODE_ENV || 'development') !== 'production') {
+          console.log(`📧 Sending ${type} OTP to ${email}: ${otp}`);
+        }
         
         if (!resend) {
-          console.warn('⚠️ Resend not configured — OTP logged to console only');
+          console.warn('⚠️ Resend not configured — OTP not sent');
           return;
         }
         
