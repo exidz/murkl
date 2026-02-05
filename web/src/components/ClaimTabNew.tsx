@@ -13,7 +13,6 @@ import { PasswordSheet } from './PasswordSheet';
 import { ClaimLanding, type ClaimLinkData } from './ClaimLanding';
 import { useClaimFlow } from '../hooks/useClaimFlow';
 import { useDeposits, depositKeys } from '../hooks/useDeposits';
-import { signOut } from '../lib/auth-client';
 import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
 
@@ -72,7 +71,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
       setClaimLinkData(linkData);
 
       // Try to fetch deposit info from relayer for the amount
-      if (RELAYER_URL) {
+      {
         fetch(`${RELAYER_URL}/deposits?identity=${encodeURIComponent(id)}`)
           .then(res => res.ok ? res.json() : null)
           .then(data => {
@@ -195,15 +194,10 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     setClaimingDeposit(null);
   }, [reset]);
 
-  // Handle logout — clear local state AND Better Auth session
-  const handleLogout = async () => {
-    try {
-      await signOut();
-    } catch (e) {
-      console.warn('Sign out error:', e);
-    }
+  // Switch identity — go back to picker without signing out
+  const handleSwitchIdentity = useCallback(() => {
     setIdentity(null);
-  };
+  }, []);
 
   // ─── RENDER ───────────────────────────────────────────────
 
@@ -364,7 +358,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
           </span>
           <span className="identity-handle">{identity.handle}</span>
         </div>
-        <button className="btn btn-ghost" onClick={handleLogout}>
+        <button className="btn btn-ghost" onClick={handleSwitchIdentity} style={{ flexShrink: 0 }}>
           Switch
         </button>
       </div>

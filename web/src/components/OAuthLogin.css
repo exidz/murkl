@@ -568,38 +568,6 @@
   color: var(--text-primary, #fff);
 }
 
-.oauth-otp-input-wrapper {
-  width: 100%;
-}
-
-.oauth-otp-input {
-  width: 100%;
-  padding: 1rem;
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: 0.5em;
-  text-align: center;
-  color: var(--text-primary, #fff);
-  background: var(--bg-tertiary, #1e1e2e);
-  border: 1px solid var(--border, #27272a);
-  border-radius: 12px;
-  outline: none;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
-  caret-color: var(--accent-primary, #3d95ce);
-  font-variant-numeric: tabular-nums;
-}
-
-.oauth-otp-input:focus {
-  border-color: var(--border-focus, #3d95ce);
-}
-
-.oauth-otp-input::placeholder {
-  color: var(--text-muted, #52525b);
-  letter-spacing: 0.3em;
-  font-weight: 400;
-}
-
 .oauth-otp-actions {
   display: flex;
   justify-content: center;
@@ -623,4 +591,73 @@
 .oauth-back-link:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ============================================
+   Identity Picker — multiple linked accounts
+   ============================================ */
+
+.identity-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  max-width: 340px;
+  margin: 0 auto 1.5rem;
+}
+
+.identity-option {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+  color: var(--text-primary, #fff);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.identity-option:hover {
+  border-color: var(--accent-primary, #3d95ce);
+  background: var(--bg-tertiary, #1e1e2e);
+}
+
+.identity-option:active {
+  background: rgba(61, 149, 206, 0.08);
+}
+
+.identity-option-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary, #1e1e2e);
+  border-radius: 10px;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.identity-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.identity-option-id {
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-option-provider {
+  font-size: 0.8rem;
+  color: var(--text-muted, #52525b);
 }

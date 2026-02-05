@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import type { FC } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from './Button';
-import { signInWithDiscord, signInWithTwitter, sendEmailOTP, verifyEmailOTP, getMurklIdentifier, useSession, signOut } from '../lib/auth-client';
+import { OtpInput } from './OtpInput';
+import { signInWithDiscord, signInWithTwitter, sendEmailOTP, verifyEmailOTP, getMurklIdentifier, useSession, signOut, type MurklIdentity } from '../lib/auth-client';
 import './OAuthLogin.css';
 
 // SVG icons for providers
@@ -36,6 +37,7 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
   const [otp, setOtp] = useState('');
   const [sendingOtp, setSendingOtp] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [linkedIdentities, setLinkedIdentities] = useState<MurklIdentity[] | null>(null);
 
   // Cooldown timer for resend
   useEffect(() => {
@@ -44,16 +46,27 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  // When session becomes available, get the Murkl identifier
+  // When session exists, fetch linked identities.
+  // If only one → auto-login. If multiple → show picker.
+  // Skip if email OTP flow is active (it calls onLogin directly).
   useEffect(() => {
-    if (session?.user && !isPending) {
+    if (session?.user && !isPending && emailStep === 'idle' && !linkedIdentities) {
       getMurklIdentifier().then((data) => {
-        if (data) {
+        if (!data) return;
+        
+        if (data.identities && data.identities.length > 1) {
+          // Multiple linked accounts — let user pick
+          setLinkedIdentities(data.identities);
+        } else if (data.identities?.length === 1) {
+          // Single account — auto-login
+          onLogin(data.identities[0].provider, data.identities[0].identifier);
+        } else {
+          // Legacy fallback
           onLogin(data.provider, data.murklIdentifier);
         }
       });
     }
-  }, [session, isPending, onLogin]);
+  }, [session, isPending, onLogin, emailStep, linkedIdentities]);
 
   // Handle social sign in
   const handleSocialLogin = useCallback(async (provider: 'discord' | 'twitter') => {
@@ -127,24 +140,105 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
       const result = await verifyEmailOTP(email, otp);
       if (result.error) {
         setError('Invalid or expired code. Try again.');
+      } else {
+        // We know the provider is email — call onLogin directly
+        // (don't rely on /api/me which may return a linked account's provider)
+        onLogin('email-otp', `email:${email.toLowerCase().trim()}`);
       }
-      // Session hook will pick up the new session automatically
     } catch (e) {
       setError('Verification failed. Try again.');
       console.error('Verify OTP error:', e);
     } finally {
       setIsLoggingIn(false);
     }
-  }, [email, otp]);
+  }, [email, otp, onLogin]);
 
   // Handle sign out
   const handleSignOut = useCallback(async () => {
+    setLinkedIdentities(null);
     await signOut();
   }, []);
 
+  // Pick a linked identity
+  const handlePickIdentity = useCallback((identity: MurklIdentity) => {
+    setLinkedIdentities(null);
+    onLogin(identity.provider, identity.identifier);
+  }, [onLogin]);
+
   const isDisabled = loading || isLoggingIn || isPending;
 
-  // If already signed in, show current user
+  // Multiple linked accounts → identity picker
+  if (linkedIdentities && linkedIdentities.length > 1 && session?.user) {
+    return (
+      <div className="oauth-login">
+        <div className="oauth-header">
+          <motion.div 
+            className="oauth-icon"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+          >
+            {session.user.image ? (
+              <img 
+                src={session.user.image} 
+                alt={session.user.name || 'User'} 
+                className="oauth-avatar"
+              />
+            ) : (
+              '👤'
+            )}
+          </motion.div>
+          <motion.h3
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            Which identity?
+          </motion.h3>
+          <motion.p 
+            className="oauth-subtitle"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            You have deposits on multiple accounts. Pick which one to claim.
+          </motion.p>
+        </div>
+
+        <div className="identity-picker">
+          {linkedIdentities.map((identity, i) => (
+            <motion.button
+              key={identity.identifier}
+              className="identity-option"
+              onClick={() => handlePickIdentity(identity)}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 + i * 0.05 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <span className="identity-option-icon">
+                {identity.provider === 'twitter' ? '𝕏' :
+                 identity.provider === 'discord' ? '💬' : '✉️'}
+              </span>
+              <span className="identity-option-text">
+                <span className="identity-option-id">{identity.identifier}</span>
+                <span className="identity-option-provider">
+                  {identity.provider === 'twitter' ? 'Twitter / X' :
+                   identity.provider === 'discord' ? 'Discord' :
+                   'Email'}
+                </span>
+              </span>
+            </motion.button>
+          ))}
+        </div>
+
+        <Button variant="ghost" onClick={handleSignOut}>
+          Sign out
+        </Button>
+      </div>
+    );
+  }
+
+  // Single account, signed in → loading deposits
   if (session?.user) {
     return (
       <div className="oauth-login oauth-logged-in">
@@ -328,21 +422,13 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
           <p className="oauth-otp-sent">
             Code sent to <strong>{email}</strong>
           </p>
-          <div className="oauth-otp-input-wrapper">
-            <input
-              type="text"
-              className="oauth-otp-input"
-              placeholder="000000"
-              value={otp}
-              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
-              autoFocus
-              inputMode="numeric"
-              maxLength={6}
-              autoComplete="one-time-code"
-              aria-label="6-digit verification code"
-            />
-          </div>
+          <OtpInput
+            value={otp}
+            onChange={setOtp}
+            onComplete={handleVerifyOtp}
+            length={6}
+            autoFocus
+          />
           <Button
             variant="primary"
             size="lg"
@@ -350,7 +436,7 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
             onClick={handleVerifyOtp}
             loading={isLoggingIn}
             loadingText="Verifying..."
-            disabled={otp.length < 6}
+            disabled={otp.length !== 6}
           >
             Verify & sign in
           </Button>

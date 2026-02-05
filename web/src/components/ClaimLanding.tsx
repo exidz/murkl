@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect, type FC } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useRef, useEffect, useCallback, type FC } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Button } from './Button';
+import { OtpInput } from './OtpInput';
+import { sendEmailOTP, verifyEmailOTP } from '../lib/auth-client';
 
 /** Data extracted from a claim link URL */
 export interface ClaimLinkData {
@@ -24,8 +26,8 @@ interface Props {
 
 /**
  * Claim Link Landing — Venmo-style "You received" hero screen.
- * Shown when user arrives via a claim link (?id=...&leaf=...).
- * Skips OAuth and goes directly to password entry → proof → claim.
+ * For email identifiers: requires OTP verification before password entry.
+ * For social identifiers: goes directly to password entry.
  */
 export const ClaimLanding: FC<Props> = ({
   data,
@@ -39,11 +41,65 @@ export const ClaimLanding: FC<Props> = ({
   const { setVisible: openWalletModal } = useWalletModal();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Email OTP verification state
+  const isEmailIdentifier = data.identifier.startsWith('email:');
+  const emailAddress = isEmailIdentifier ? data.identifier.slice('email:'.length) : '';
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Cooldown timer for resend
   useEffect(() => {
-    if (connected) {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown(c => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  // Focus inputs on state changes
+  useEffect(() => {
+    if (connected && (emailVerified || !isEmailIdentifier)) {
       setTimeout(() => inputRef.current?.focus(), 200);
     }
-  }, [connected]);
+  }, [connected, emailVerified, isEmailIdentifier]);
+
+  // Send OTP
+  const handleSendOtp = useCallback(async () => {
+    if (cooldown > 0) return;
+    setSendingOtp(true);
+    setOtpError(null);
+    try {
+      await sendEmailOTP(emailAddress);
+      setOtpSent(true);
+      setCooldown(300); // 5 minute cooldown
+    } catch {
+      setOtpError('Failed to send code. Try again.');
+    } finally {
+      setSendingOtp(false);
+    }
+  }, [emailAddress, cooldown]);
+
+  // Verify OTP
+  const handleVerifyOtp = useCallback(async () => {
+    if (otp.length < 6) return;
+    setVerifyingOtp(true);
+    setOtpError(null);
+    try {
+      const result = await verifyEmailOTP(emailAddress, otp);
+      if (result.error) {
+        setOtpError('Invalid or expired code.');
+      } else {
+        setEmailVerified(true);
+      }
+    } catch {
+      setOtpError('Verification failed. Try again.');
+    } finally {
+      setVerifyingOtp(false);
+    }
+  }, [emailAddress, otp]);
 
   const isReady = password.length >= 8;
 
@@ -60,11 +116,23 @@ export const ClaimLanding: FC<Props> = ({
   };
 
   // Friendly display of the identifier
-  const displayName = data.identifier.startsWith('@')
-    ? data.identifier
-    : data.identifier.includes('@')
-      ? data.identifier.split('@')[0]
-      : data.identifier;
+  const displayName = data.identifier.startsWith('email:')
+    ? data.identifier.slice('email:'.length)
+    : data.identifier.startsWith('twitter:')
+      ? data.identifier.slice('twitter:'.length)
+      : data.identifier.startsWith('discord:')
+        ? data.identifier.slice('discord:'.length)
+        : data.identifier;
+
+  // Format cooldown for display
+  const formatCooldown = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}:${sec.toString().padStart(2, '0')}` : `${sec}s`;
+  };
+
+  // Whether we need email verification before showing password
+  const needsEmailVerification = isEmailIdentifier && !emailVerified;
 
   return (
     <motion.div
@@ -101,8 +169,13 @@ export const ClaimLanding: FC<Props> = ({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <span className="landing-recipient-icon">👤</span>
+          <span className="landing-recipient-icon">
+            {isEmailIdentifier ? '✉️' : '👤'}
+          </span>
           <span className="landing-recipient-name">{displayName}</span>
+          {emailVerified && (
+            <span className="landing-verified-badge">✓ verified</span>
+          )}
         </motion.div>
 
         {data.amount && (
@@ -139,8 +212,82 @@ export const ClaimLanding: FC<Props> = ({
               Connect Wallet
             </Button>
           </div>
+        ) : needsEmailVerification ? (
+          /* Email OTP verification step */
+          <AnimatePresence mode="wait">
+            {!otpSent ? (
+              <motion.div
+                key="send-otp"
+                className="landing-email-verify"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <p className="landing-email-hint">
+                  Verify you own <strong>{emailAddress}</strong> to claim
+                </p>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  onClick={handleSendOtp}
+                  loading={sendingOtp}
+                  loadingText="Sending..."
+                  icon={<span>✉️</span>}
+                >
+                  Send verification code
+                </Button>
+                {otpError && (
+                  <p className="landing-otp-error">{otpError}</p>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="verify-otp"
+                className="landing-email-verify"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <p className="landing-email-hint">
+                  Enter the code sent to <strong>{emailAddress}</strong>
+                </p>
+                <OtpInput
+                  value={otp}
+                  onChange={setOtp}
+                  onComplete={handleVerifyOtp}
+                  length={6}
+                  size="lg"
+                  autoFocus
+                />
+                {otpError && (
+                  <p className="landing-otp-error">{otpError}</p>
+                )}
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  onClick={handleVerifyOtp}
+                  loading={verifyingOtp}
+                  loadingText="Verifying..."
+                  disabled={otp.length < 6}
+                >
+                  Verify
+                </Button>
+                <div className="landing-otp-actions">
+                  <button
+                    className="landing-otp-resend"
+                    onClick={handleSendOtp}
+                    disabled={cooldown > 0 || sendingOtp}
+                  >
+                    {cooldown > 0 ? `Resend in ${formatCooldown(cooldown)}` : 'Resend code'}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         ) : (
-          /* Password entry */
+          /* Password entry (shown after email verified or for non-email identifiers) */
           <div className="landing-password">
             <p className="landing-password-label">Enter the password to claim</p>
 
@@ -204,7 +351,11 @@ export const ClaimLanding: FC<Props> = ({
         transition={{ delay: 0.4 }}
       >
         <span className="landing-privacy-icon">🔒</span>
-        <span>Only someone with the password can claim</span>
+        <span>
+          {isEmailIdentifier
+            ? 'Email verification + password required to claim'
+            : 'Only someone with the password can claim'}
+        </span>
       </motion.div>
 
       {/* Switch to OAuth */}

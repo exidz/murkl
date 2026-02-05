@@ -301,21 +301,55 @@ interface RecipientMeta {
 
 /**
  * Detect recipient platform from handle for visual display.
+ * Handles namespaced identifiers: twitter:@user, discord:user, email:user@x.com
  * Returns appropriate icon, platform label, and short name.
  */
 function getRecipientMeta(recipient: string): RecipientMeta {
   const trimmed = recipient.trim();
 
-  // Discord: user#1234 or discord:username
-  if (trimmed.includes('#') || trimmed.toLowerCase().startsWith('discord:')) {
+  // ── Namespaced identifiers (from provider pills) ──
+
+  // Twitter / X: twitter:@handle
+  if (trimmed.toLowerCase().startsWith('twitter:')) {
+    const handle = trimmed.slice('twitter:'.length);
     return {
-      icon: '🎮',
-      platform: 'Discord',
-      shortName: trimmed.split('#')[0].replace(/^discord:/i, ''),
+      icon: '𝕏',
+      platform: 'Twitter',
+      shortName: handle.startsWith('@') ? handle : `@${handle}`,
     };
   }
 
-  // Twitter / X: @handle
+  // Discord: discord:username
+  if (trimmed.toLowerCase().startsWith('discord:')) {
+    return {
+      icon: '🎮',
+      platform: 'Discord',
+      shortName: trimmed.slice('discord:'.length),
+    };
+  }
+
+  // Email: email:user@example.com
+  if (trimmed.toLowerCase().startsWith('email:')) {
+    const addr = trimmed.slice('email:'.length);
+    return {
+      icon: '📧',
+      platform: 'Email',
+      shortName: addr.split('@')[0] || addr,
+    };
+  }
+
+  // ── Legacy / bare identifiers ──
+
+  // Discord: user#1234
+  if (trimmed.includes('#')) {
+    return {
+      icon: '🎮',
+      platform: 'Discord',
+      shortName: trimmed.split('#')[0],
+    };
+  }
+
+  // Twitter / X: @handle (bare, no namespace)
   if (trimmed.startsWith('@')) {
     return {
       icon: '𝕏',
@@ -324,7 +358,7 @@ function getRecipientMeta(recipient: string): RecipientMeta {
     };
   }
 
-  // Email: contains @
+  // Email: contains @ and . (bare, no namespace)
   if (trimmed.includes('@') && trimmed.includes('.')) {
     return {
       icon: '📧',
@@ -346,7 +380,7 @@ function getRecipientMeta(recipient: string): RecipientMeta {
   return {
     icon: '👤',
     platform: null,
-    shortName: trimmed.split('@')[0] || trimmed,
+    shortName: trimmed.split(':').pop()?.split('@')[0] || trimmed,
   };
 }
 
