@@ -1,0 +1,55 @@
+/* baseline.css — Global baseline-ui typography and accessibility fixes */
+
+/* ============================================
+   Typography: text-wrap
+   ============================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  text-wrap: balance;
+}
+
+p,
+.input-hint,
+.success-to,
+.claim-to,
+.oauth-subtitle,
+.oauth-otp-sent,
+.oauth-privacy p,
+.empty-description,
+.share-hint,
+.landing-connect-hint,
+.landing-password-label,
+.landing-email-hint {
+  text-wrap: pretty;
+}
+
+/* ============================================
+   Typography: tabular-nums for amounts
+   ============================================ */
+
+.deposit-amount,
+.success-amount,
+.claim-amount,
+.amount-display,
+.amount-input,
+.confirm-amount,
+.balance-amount,
+.landing-amount-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================
+   Reduced motion: respect for framer-motion
+   Global catch-all for any CSS animations missed
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -91,8 +91,7 @@
   position: absolute;
   bottom: 2rem;
   left: 50%;
-  transform: translateX(-50%);
-  width: 100px;
+  width: 140px;
   height: 2px;
   background: linear-gradient(
     90deg,
@@ -103,13 +102,15 @@
   );
   border-radius: 1px;
   opacity: 0.4;
-  transition: opacity 0.3s, width 0.3s ease, background 0.3s;
+  transition: opacity 0.3s, transform 0.3s ease, background 0.3s;
+  transform: translateX(-50%) scaleX(0.71); /* 100/140 */
+  transform-origin: center;
   z-index: 0;
 }
 
 /* Underline activates on focus */
 .amount-input-wrapper.focused::after {
-  width: 140px;
+  transform: translateX(-50%) scaleX(1);
   opacity: 0.8;
   background: linear-gradient(
     90deg,

@@ -13,7 +13,10 @@ interface Props {
   title: string;
   /** Supporting description */
   description?: string;
-  /** Primary action button */
+  /**
+   * Primary action button — baseline-ui requires every empty state
+   * to have at least one clear next action.
+   */
   action?: {
     label: string;
     onClick: () => void;
@@ -189,17 +192,27 @@ export const EmptyState: FC<Props> = ({
 }) => {
   const displayIcon = icon || (illustration ? illustrations[illustration] : null);
 
+  // Warn in dev if no action is provided — baseline-ui requires a next action
+  if (process.env.NODE_ENV === 'development' && !action && !secondaryAction) {
+    console.warn(
+      '[EmptyState] baseline-ui: empty states should have at least one clear next action. ' +
+      `Empty state "${title}" has no action prop.`
+    );
+  }
+
   return (
     <motion.div 
       className={`empty-state ${compact ? 'compact' : ''}`}
+      role="status"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Illustration / Icon */}
+      {/* Illustration / Icon (decorative) */}
       {displayIcon && (
         <motion.div 
           className="empty-illustration"
+          aria-hidden="true"
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.3 }}
@@ -231,7 +244,7 @@ export const EmptyState: FC<Props> = ({
         )}
       </div>
 
-      {/* Actions */}
+      {/* Actions — baseline-ui: empty states MUST have one clear next action */}
       {(action || secondaryAction) && (
         <motion.div 
           className="empty-actions"

@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useEffect, type FC } from 'react';
+import { useCallback, type FC, type Key } from 'react';
+import { Tabs, Tab } from '@heroui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './TokenSelector.css';
 
@@ -26,7 +27,7 @@ export const SUPPORTED_TOKENS: Token[] = [
 ];
 
 /**
- * Venmo-style token selector with pill buttons.
+ * Token selector using HeroUI Tabs.
  * Shows balance underneath selected token.
  */
 export const TokenSelector: FC<Props> = ({
@@ -37,28 +38,13 @@ export const TokenSelector: FC<Props> = ({
   balance,
   disabled = false,
 }) => {
-  const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-
-    if (showDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+  // Handle tab selection change
+  const handleSelectionChange = useCallback((key: Key) => {
+    const token = tokens.find(t => t.symbol === String(key));
+    if (token) {
+      onChange(token);
     }
-  }, [showDropdown]);
-
-  // Handle token selection
-  const handleSelect = useCallback((token: Token) => {
-    onChange(token);
-    setShowDropdown(false);
-  }, [onChange]);
+  }, [tokens, onChange]);
 
   // Format balance display
   const formatBalance = (bal: number): string => {
@@ -70,38 +56,35 @@ export const TokenSelector: FC<Props> = ({
   };
 
   return (
-    <div className="token-selector" ref={dropdownRef}>
-      {/* Token pills */}
-      <div className="token-pills" role="radiogroup" aria-label="Select token">
-        {tokens.map((token) => {
-          const isSelected = token.symbol === selected.symbol;
-          
-          return (
-            <motion.button
-              key={token.symbol}
-              type="button"
-              className={`token-pill ${isSelected ? 'selected' : ''}`}
-              onClick={() => handleSelect(token)}
-              disabled={disabled}
-              role="radio"
-              aria-checked={isSelected}
-              whileTap={{ scale: 0.97 }}
-            >
-              <span className="token-icon" aria-hidden="true">{token.icon}</span>
-              <span className="token-symbol">{token.symbol}</span>
-              
-              {/* Selection indicator */}
-              {isSelected && (
-                <motion.div
-                  className="pill-indicator"
-                  layoutId="tokenIndicator"
-                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                />
-              )}
-            </motion.button>
-          );
-        })}
-      </div>
+    <div className="token-selector">
+      {/* HeroUI Tabs for token selection */}
+      <Tabs
+        selectedKey={selected.symbol}
+        onSelectionChange={handleSelectionChange}
+        variant="bordered"
+        size="md"
+        isDisabled={disabled}
+        aria-label="Select token"
+        classNames={{
+          base: 'token-tabs-base',
+          tabList: 'token-tabs-list',
+          tab: 'token-tab-item',
+          cursor: 'token-tab-cursor',
+          tabContent: 'token-tab-content',
+        }}
+      >
+        {tokens.map((token) => (
+          <Tab
+            key={token.symbol}
+            title={
+              <div className="token-tab-title">
+                <span className="token-icon" aria-hidden="true">{token.icon}</span>
+                <span className="token-symbol">{token.symbol}</span>
+              </div>
+            }
+          />
+        ))}
+      </Tabs>
 
       {/* Balance display with Max button */}
       <AnimatePresence mode="wait">
@@ -131,37 +114,6 @@ export const TokenSelector: FC<Props> = ({
                 Max
               </motion.button>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Dropdown for more tokens (if needed) */}
-      <AnimatePresence>
-        {showDropdown && tokens.length > 4 && (
-          <motion.div
-            className="token-dropdown"
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
-          >
-            {tokens.map((token) => (
-              <button
-                key={token.symbol}
-                type="button"
-                className={`dropdown-item ${token.symbol === selected.symbol ? 'selected' : ''}`}
-                onClick={() => handleSelect(token)}
-              >
-                <span className="dropdown-icon">{token.icon}</span>
-                <div className="dropdown-info">
-                  <span className="dropdown-symbol">{token.symbol}</span>
-                  <span className="dropdown-name">{token.name}</span>
-                </div>
-                {token.symbol === selected.symbol && (
-                  <span className="dropdown-check">✓</span>
-                )}
-              </button>
-            ))}
           </motion.div>
         )}
       </AnimatePresence>

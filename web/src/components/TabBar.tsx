@@ -211,6 +211,7 @@ export const TabBar: FC<Props> = ({ tabs, activeTab, onChange }) => {
             className={`tab-item ${isActive ? 'active' : ''}`}
             onClick={() => handleTabChange(tab.id)}
             role="tab"
+            id={`tab-${tab.id}`}
             aria-selected={isActive}
             aria-controls={`tabpanel-${tab.id}`}
             tabIndex={isActive ? 0 : -1}

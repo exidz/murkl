@@ -39,6 +39,7 @@ export const Header: FC<Props> = ({ wasmReady }) => {
           className="header-logo"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
+          aria-hidden="true"
         >
           🐈‍⬛
         </motion.span>
@@ -48,6 +49,7 @@ export const Header: FC<Props> = ({ wasmReady }) => {
         <span 
           className="network-badge"
           style={{ '--badge-color': network.color } as React.CSSProperties}
+          aria-label={`Network: ${network.label}`}
         >
           {network.label}
         </span>
@@ -65,8 +67,10 @@ export const Header: FC<Props> = ({ wasmReady }) => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               title="Loading STARK prover..."
+              role="status"
+              aria-label="Loading STARK prover"
             >
-              <span className="status-spinner" />
+              <span className="status-spinner" aria-hidden="true" />
               <span className="status-text">Prover</span>
             </motion.div>
           ) : connected && (
@@ -76,8 +80,10 @@ export const Header: FC<Props> = ({ wasmReady }) => {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               title="STARK prover ready"
+              role="status"
+              aria-label="STARK prover ready"
             >
-              <span className="status-dot" />
+              <span className="status-dot" aria-hidden="true" />
               <span className="status-text">Ready</span>
             </motion.div>
           )}

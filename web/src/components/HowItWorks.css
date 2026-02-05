@@ -33,12 +33,12 @@
   border-radius: 2px;
   margin: 0.75rem auto;
   cursor: pointer;
-  transition: background 0.2s, width 0.2s;
+  transition: background 0.2s, transform 0.2s;
 }
 
 .hiw-handle:hover {
   background: var(--text-secondary, #a1a1aa);
-  width: 50px;
+  transform: scaleX(1.25);
 }
 
 .hiw-content {
