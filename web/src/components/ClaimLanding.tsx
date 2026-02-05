@@ -20,7 +20,7 @@ interface Props {
   data: ClaimLinkData;
   wasmReady: boolean;
   connected: boolean;
-  onPasswordSubmit: (password: string) => void;
+  onPasswordSubmit: (password: string) => void | Promise<void>;
   onSwitchToOAuth: () => void;
 }
 
@@ -171,6 +171,7 @@ export const ClaimLanding: FC<Props> = ({
 }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const { setVisible: openWalletModal } = useWalletModal();
   const inputRef = useRef<HTMLInputElement>(null);
   const reducedMotion = useReducedMotion();
@@ -243,17 +244,24 @@ export const ClaimLanding: FC<Props> = ({
 
   const isReady = password.length >= 8;
 
-  const handleSubmit = () => {
-    if (!isReady || !connected) return;
-    onPasswordSubmit(password);
-  };
+  const handleSubmit = useCallback(async () => {
+    if (!isReady || !connected || submitting) return;
+    setSubmitting(true);
+    try {
+      await onPasswordSubmit(password);
+    } finally {
+      // Parent will usually transition immediately into the proving screen.
+      // If something fails and we stay here, re-enable the button.
+      setSubmitting(false);
+    }
+  }, [isReady, connected, submitting, onPasswordSubmit, password]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && isReady && connected) {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && isReady && connected && !submitting) {
       e.preventDefault();
       handleSubmit();
     }
-  };
+  }, [isReady, connected, submitting, handleSubmit]);
 
   // Format cooldown for display
   const formatCooldown = (s: number) => {
@@ -506,7 +514,9 @@ export const ClaimLanding: FC<Props> = ({
               size="lg"
               fullWidth
               onClick={handleSubmit}
-              disabled={!isReady || !wasmReady}
+              disabled={!isReady || !wasmReady || submitting}
+              loading={submitting}
+              loadingText="Claiming..."
             >
               Claim
             </Button>
