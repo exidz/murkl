@@ -105,6 +105,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
 
   // Handle OAuth login — just set identity; deposits load automatically via useDeposits
   const handleLogin = useCallback(async (provider: string, handle: string) => {
+    setWantsSwitch(false);
     setIdentity({ provider, handle });
   }, []);
 
@@ -195,8 +196,12 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     setClaimingDeposit(null);
   }, [reset]);
 
+  // Track if user explicitly wants to switch (prevents auto-login loop)
+  const [wantsSwitch, setWantsSwitch] = useState(false);
+
   // Switch identity — go back to picker without signing out
   const handleSwitchIdentity = useCallback(() => {
+    setWantsSwitch(true);
     setIdentity(null);
   }, []);
 
@@ -221,7 +226,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
   if (!identity) {
     return (
       <div className="claim-tab-new">
-        <OAuthLogin onLogin={handleLogin} loading={false} />
+        <OAuthLogin onLogin={handleLogin} loading={false} showSwitch={wantsSwitch} />
       </div>
     );
   }

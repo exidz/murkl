@@ -22,13 +22,15 @@ const TwitterIcon = () => (
 interface Props {
   onLogin: (provider: string, identity: string) => void;
   loading?: boolean;
+  /** When true, skip auto-login and show sign-out + login buttons */
+  showSwitch?: boolean;
 }
 
 /**
  * OAuth login using Better Auth.
  * Currently supports Discord - more providers can be added later.
  */
-export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
+export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
   const { data: session, isPending } = useSession();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,8 +51,9 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
   // When session exists, fetch linked identities.
   // If only one → auto-login. If multiple → show picker.
   // Skip if email OTP flow is active (it calls onLogin directly).
+  // Skip if showSwitch is true (user wants to change identity).
   useEffect(() => {
-    if (session?.user && !isPending && emailStep === 'idle' && !linkedIdentities) {
+    if (session?.user && !isPending && emailStep === 'idle' && !linkedIdentities && !showSwitch) {
       getMurklIdentifier().then((data) => {
         if (!data) return;
         
@@ -66,7 +69,7 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
         }
       });
     }
-  }, [session, isPending, onLogin, emailStep, linkedIdentities]);
+  }, [session, isPending, onLogin, emailStep, linkedIdentities, showSwitch]);
 
   // Handle social sign in
   const handleSocialLogin = useCallback(async (provider: 'discord' | 'twitter') => {
@@ -233,6 +236,50 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading }) => {
 
         <Button variant="ghost" onClick={handleSignOut}>
           Sign out
+        </Button>
+      </div>
+    );
+  }
+
+  // Signed in but wants to switch → show sign out + re-login options
+  if (session?.user && showSwitch) {
+    return (
+      <div className="oauth-login">
+        <div className="oauth-header">
+          <motion.div 
+            className="oauth-icon"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+          >
+            {session.user.image ? (
+              <img 
+                src={session.user.image} 
+                alt={session.user.name || 'User'} 
+                className="oauth-avatar"
+              />
+            ) : (
+              '👤'
+            )}
+          </motion.div>
+          <motion.h3
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            Switch account
+          </motion.h3>
+          <motion.p 
+            className="oauth-subtitle"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            Currently signed in as {session.user.name || session.user.email}. Sign out to use a different account.
+          </motion.p>
+        </div>
+        
+        <Button variant="primary" fullWidth onClick={handleSignOut}>
+          Sign out & switch
         </Button>
       </div>
     );
