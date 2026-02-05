@@ -236,6 +236,10 @@ function trackNullifier(nullifier: string): boolean {
 
 const app = express();
 
+// Trust proxy (Railway/Docker reverse proxy) — required for accurate req.ip in rate limiting
+// Must be set BEFORE any middleware that reads req.ip (rate limiting, logging).
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: {
@@ -307,9 +311,6 @@ const voucherRedeemLimiter = rateLimit({
   keyGenerator: (req) => req.ip || 'unknown',
   skipSuccessfulRequests: true, // Only count failed attempts
 });
-
-// Trust proxy (Railway/Docker reverse proxy) — required for accurate req.ip in rate limiting
-app.set('trust proxy', 1);
 
 app.use(generalLimiter);
 app.use(express.json({ limit: '50kb' })); // Reduced from 1mb
@@ -470,6 +471,13 @@ function readU64LE(buf: Buffer, offset: number): bigint {
   return buf.readBigUInt64LE(offset);
 }
 
+function u64ToSafeNumber(value: bigint, label: string): number {
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`${label} exceeds JS safe integer range`);
+  }
+  return Number(value);
+}
+
 /**
  * Verify that a user-submitted txSignature really performed a Murkl `deposit` into the
  * expected pool + leafIndex + commitment + amount.
@@ -556,7 +564,7 @@ async function verifyDepositTx(params: {
     if (!dataBuf.subarray(0, 8).equals(depositDisc)) continue;
 
     // Anchor args: amount: u64, commitment: [u8; 32]
-    const ixAmount = Number(readU64LE(dataBuf, 8));
+    const ixAmount = u64ToSafeNumber(readU64LE(dataBuf, 8), 'ixAmount');
     const ixCommitment = dataBuf.subarray(16, 48);
 
     if (ixAmount !== amount) continue;
@@ -590,8 +598,8 @@ async function verifyDepositTx(params: {
 
   const onchainPool = new PublicKey(data.subarray(8, 40));
   const onchainCommitment = data.subarray(40, 72);
-  const onchainAmount = Number(readU64LE(data, 72));
-  const onchainLeafIndex = Number(readU64LE(data, 80));
+  const onchainAmount = u64ToSafeNumber(readU64LE(data, 72), 'onchainAmount');
+  const onchainLeafIndex = u64ToSafeNumber(readU64LE(data, 80), 'onchainLeafIndex');
 
   if (!onchainPool.equals(pool)) throw new Error('On-chain deposit pool mismatch');
   if (!onchainCommitment.equals(commitmentBuf)) throw new Error('On-chain deposit commitment mismatch');
@@ -686,8 +694,16 @@ app.get('/pool-info', async (req: Request, res: Response) => {
     if (!poolInfo) {
       return res.status(404).json({ error: 'Pool not found' });
     }
-    
+
+    if (!poolInfo.owner.equals(config.programId)) {
+      return res.status(400).json({ error: 'Pool account owner mismatch' });
+    }
+
     // Pool layout: [8 discriminator][32 admin][32 token_mint][32 vault][32 merkle_root][8 leaf_count]...
+    if (poolInfo.data.length < 8 + 32 + 32 + 32 + 32 + 8) {
+      return res.status(400).json({ error: 'Pool account data too small' });
+    }
+
     const merkleRoot = poolInfo.data.slice(104, 136).toString('hex');
     const leafCount = poolInfo.data.readBigUInt64LE(136);
     
@@ -795,7 +811,15 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     if (!poolInfo) {
       return res.status(400).json({ error: 'Pool not found' });
     }
-    
+
+    if (!poolInfo.owner.equals(config.programId)) {
+      return res.status(400).json({ error: 'Pool account owner mismatch' });
+    }
+
+    if (poolInfo.data.length < 8 + 32 + 32 + 32 + 32) {
+      return res.status(400).json({ error: 'Pool account data too small' });
+    }
+
     // Pool layout: [8 discriminator][32 admin][32 token_mint][32 vault][32 merkle_root]...
     // merkle_root is at offset 104
     const merkleRoot32 = Buffer.alloc(32);
@@ -1028,7 +1052,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     if (depData.length < 8 + 32 + 32 + 8) {
       return res.status(400).json({ error: 'Invalid deposit account' });
     }
-    const depositAmount = Number(readU64LE(depData, 8 + 32 + 32));
+    const depositAmount = u64ToSafeNumber(readU64LE(depData, 8 + 32 + 32), 'depositAmount');
 
     // floor(amount * bps / 10_000)
     const relayerFeeAmount = Math.floor((depositAmount * feeBps) / 10_000);

@@ -67,14 +67,26 @@ export const auth = betterAuth({
     ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : []),
   ],
   
-  // Secret for signing sessions — MUST be set via env var in production
+  // Secret for signing sessions.
+  // Hard requirement outside of explicit dev/test to prevent deploying with a known default.
   secret: (() => {
     const secret = process.env.BETTER_AUTH_SECRET;
-    if (!secret && process.env.NODE_ENV === 'production') {
-      console.error('❌ FATAL: BETTER_AUTH_SECRET must be set in production');
+    const env = process.env.NODE_ENV || 'development';
+
+    if (!secret) {
+      if (env !== 'development' && env !== 'test') {
+        console.error('❌ FATAL: BETTER_AUTH_SECRET must be set (refusing to start without it)');
+        process.exit(1);
+      }
+      return 'murkl-dev-secret-change-in-production-32chars!';
+    }
+
+    if (secret.length < 32) {
+      console.error('❌ FATAL: BETTER_AUTH_SECRET must be at least 32 characters');
       process.exit(1);
     }
-    return secret || 'murkl-dev-secret-change-in-production-32chars!';
+
+    return secret;
   })(),
   
   // Social providers
