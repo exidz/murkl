@@ -346,14 +346,19 @@ pub struct Deposit<'info> {
     #[account(
         mut,
         seeds = [b"vault", pool.key().as_ref()],
-        bump
+        bump,
+        constraint = vault.key() == pool.vault @ MurklError::InvalidVault,
+        constraint = vault.mint == pool.token_mint @ MurklError::InvalidTokenMint
     )]
     pub vault: Account<'info, TokenAccount>,
     
     #[account(mut)]
     pub depositor: Signer<'info>,
     
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = depositor_token.mint == pool.token_mint @ MurklError::InvalidTokenMint
+    )]
     pub depositor_token: Account<'info, TokenAccount>,
     
     pub token_program: Program<'info, Token>,
@@ -395,17 +400,25 @@ pub struct Claim<'info> {
     #[account(
         mut,
         seeds = [b"vault", pool.key().as_ref()],
-        bump
+        bump,
+        constraint = vault.key() == pool.vault @ MurklError::InvalidVault,
+        constraint = vault.mint == pool.token_mint @ MurklError::InvalidTokenMint
     )]
     pub vault: Account<'info, TokenAccount>,
     
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = recipient_token.mint == pool.token_mint @ MurklError::InvalidTokenMint
+    )]
     pub recipient_token: Account<'info, TokenAccount>,
     
     #[account(mut)]
     pub relayer: Signer<'info>,
     
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = relayer_token.mint == pool.token_mint @ MurklError::InvalidTokenMint
+    )]
     pub relayer_token: Account<'info, TokenAccount>,
     
     pub token_program: Program<'info, Token>,
@@ -534,6 +547,12 @@ pub enum MurklError {
     
     #[msg("Invalid verifier buffer")]
     InvalidVerifierBuffer,
+
+    #[msg("Invalid vault account")]
+    InvalidVault,
+
+    #[msg("Invalid token mint")]
+    InvalidTokenMint,
     
     #[msg("Nullifier mismatch - argument doesn't match proof")]
     NullifierMismatch,
