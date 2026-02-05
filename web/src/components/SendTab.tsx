@@ -455,7 +455,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         <EmptyState
           illustration="wallet"
           title="Connect to send"
-          description="Send a private payment. Only the right account (and the password) can claim it."
+          description="Send money privately. Only the person you pick can claim it (with the secret code)."
           action={{
             label: 'Connect wallet',
             onClick: () => openWalletModal(true),
@@ -471,7 +471,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           <div className="feature-chips">
             <span className="feature-chip">🔒 Private</span>
             <span className="feature-chip">⚡ Instant</span>
-            <span className="feature-chip">🛡️ Post-quantum</span>
+            <span className="feature-chip">🛡️ Safer</span>
           </div>
         </motion.div>
       </div>
@@ -806,7 +806,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
 
             <div className="step-header">
               <p className="step-amount">Sending {amount} {selectedToken.symbol} to {SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.prefix}{identifier}</p>
-              <h2>Create a password</h2>
+              <h2>Set a secret code</h2>
             </div>
 
             <div className="input-container">
@@ -815,7 +815,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                   ref={passwordInputRef}
                   type="text"
                   className="text-input"
-                  placeholder="Enter password..."
+                  placeholder="Secret code…"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -869,7 +869,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 </motion.div>
               )}
               
-              <p className="input-hint">Share this with the recipient secretly</p>
+              <p className="input-hint">Share this with the recipient (separately from the link)</p>
             </div>
 
             <Button 
@@ -926,7 +926,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               </Button>
 
               {!wasmReady && (
-                <p className="wasm-loading">Loading prover...</p>
+                <p className="wasm-loading">Getting things ready…</p>
               )}
             </ConfirmationSummary>
           </motion.div>
