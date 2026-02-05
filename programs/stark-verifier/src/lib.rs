@@ -160,10 +160,18 @@ pub mod stark_verifier {
 
     pub fn close_proof_buffer(ctx: Context<CloseProofBuffer>) -> Result<()> {
         let buffer = &ctx.accounts.proof_buffer;
-        let buf_data = buffer.try_borrow_data()?;
         
-        let owner = Pubkey::try_from(&buf_data[OFFSET_OWNER..OFFSET_OWNER + 32]).unwrap();
-        require!(owner == ctx.accounts.owner.key(), VerifierError::Unauthorized);
+        {
+            let buf_data = buffer.try_borrow_data()?;
+            let owner = Pubkey::try_from(&buf_data[OFFSET_OWNER..OFFSET_OWNER + 32]).unwrap();
+            require!(owner == ctx.accounts.owner.key(), VerifierError::Unauthorized);
+        }
+        
+        // Zero out all buffer data before closing to prevent stale finalized=1 reads
+        {
+            let mut buf_data = buffer.try_borrow_mut_data()?;
+            buf_data.fill(0);
+        }
         
         let dest_starting_lamports = ctx.accounts.owner.lamports();
         **ctx.accounts.owner.lamports.borrow_mut() = dest_starting_lamports
@@ -171,7 +179,7 @@ pub mod stark_verifier {
             .unwrap();
         **buffer.lamports.borrow_mut() = 0;
         
-        msg!("Proof buffer closed");
+        msg!("Proof buffer closed and zeroed");
         Ok(())
     }
 }

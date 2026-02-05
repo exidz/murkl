@@ -282,6 +282,9 @@ const claimLimiter = rateLimit({
   keyGenerator: (req) => req.ip || 'unknown',
 });
 
+// Trust proxy (Railway/Docker reverse proxy) — required for accurate req.ip in rate limiting
+app.set('trust proxy', 1);
+
 app.use(generalLimiter);
 app.use(express.json({ limit: '50kb' })); // Reduced from 1mb
 
@@ -447,50 +450,48 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-// Debug: Verify commitment computation (REMOVE IN PRODUCTION)
-app.post('/debug/commitment', (req: Request, res: Response) => {
-  // @ts-ignore - js-sha3 doesn't have types
-  const { keccak256 } = require('js-sha3');
-  try {
-    const { identifier, password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ error: 'identifier and password required' });
+// Debug: Verify commitment computation — DEVELOPMENT ONLY
+if (process.env.NODE_ENV !== 'production') {
+  app.post('/debug/commitment', (req: Request, res: Response) => {
+    // @ts-ignore - js-sha3 doesn't have types
+    const { keccak256 } = require('js-sha3');
+    try {
+      const { identifier, password } = req.body;
+      if (!identifier || !password) {
+        return res.status(400).json({ error: 'identifier and password required' });
+      }
+      
+      const M31_PRIME = 0x7FFFFFFF;
+      
+      const normalizedId = identifier.toLowerCase();
+      const idData = Buffer.concat([Buffer.from('murkl_identifier_v1'), Buffer.from(normalizedId)]);
+      const idHash = Buffer.from(keccak256(idData), 'hex');
+      const idM31 = idHash.readUInt32LE(0) % M31_PRIME;
+      
+      const pwData = Buffer.concat([Buffer.from('murkl_password_v1'), Buffer.from(password)]);
+      const pwHash = Buffer.from(keccak256(pwData), 'hex');
+      const secretM31 = pwHash.readUInt32LE(0) % M31_PRIME;
+      
+      const idBuf = Buffer.alloc(4);
+      const secretBuf = Buffer.alloc(4);
+      idBuf.writeUInt32LE(idM31, 0);
+      secretBuf.writeUInt32LE(secretM31, 0);
+      
+      const commitData = Buffer.concat([Buffer.from('murkl_m31_hash_v1'), idBuf, secretBuf]);
+      const commitment = keccak256(commitData);
+      
+      res.json({
+        identifier,
+        normalizedId,
+        idM31,
+        secretM31,
+        commitment,
+      });
+    } catch (e: unknown) {
+      res.status(500).json({ error: String(e) });
     }
-    
-    const M31_PRIME = 0x7FFFFFFF;
-    
-    // Hash identifier (lowercased, with domain prefix) - using keccak256 like Rust SDK
-    const normalizedId = identifier.toLowerCase();
-    const idData = Buffer.concat([Buffer.from('murkl_identifier_v1'), Buffer.from(normalizedId)]);
-    const idHash = Buffer.from(keccak256(idData), 'hex');
-    const idM31 = idHash.readUInt32LE(0) % M31_PRIME;
-    
-    // Hash password (with domain prefix)
-    const pwData = Buffer.concat([Buffer.from('murkl_password_v1'), Buffer.from(password)]);
-    const pwHash = Buffer.from(keccak256(pwData), 'hex');
-    const secretM31 = pwHash.readUInt32LE(0) % M31_PRIME;
-    
-    // Compute commitment (with domain prefix)
-    const idBuf = Buffer.alloc(4);
-    const secretBuf = Buffer.alloc(4);
-    idBuf.writeUInt32LE(idM31, 0);
-    secretBuf.writeUInt32LE(secretM31, 0);
-    
-    const commitData = Buffer.concat([Buffer.from('murkl_m31_hash_v1'), idBuf, secretBuf]);
-    const commitment = keccak256(commitData);
-    
-    res.json({
-      identifier,
-      normalizedId,
-      idM31,
-      secretM31,
-      commitment,
-      expected: '433eb88de690969948462fea8e41877fb203913bebebf1a5a47025d48734bb0d', // E2E test deposit
-    });
-  } catch (e: unknown) {
-    res.status(500).json({ error: String(e) });
-  }
-});
+  });
+}
 
 app.get('/info', async (_req: Request, res: Response) => {
   try {
@@ -1034,13 +1035,26 @@ app.get('/deposits', async (req: Request, res: Response) => {
   }
 });
 
-// Register deposit (called after successful deposit tx)
+// Register deposit (called after successful deposit tx) — requires auth
 app.post('/deposits/register', async (req: Request, res: Response) => {
   try {
+    // Require authenticated session to prevent fake deposit injection
+    const session = await auth.api.getSession({
+      headers: req.headers as Record<string, string>,
+    });
+    if (!session?.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     const { identifier, amount, token, leafIndex, pool, commitment, txSignature } = req.body;
     
     if (!identifier || !amount || leafIndex === undefined || leafIndex === null || !pool || !commitment || !txSignature) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Validate txSignature format (base58, 64-88 chars)
+    if (typeof txSignature !== 'string' || txSignature.length < 64 || txSignature.length > 128 || !BASE58_REGEX.test(txSignature)) {
+      return res.status(400).json({ error: 'Invalid transaction signature' });
     }
     
     const deposit: IndexedDeposit = {
@@ -1118,21 +1132,48 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
   }
 });
 
-// Mark deposit as claimed
+// Mark deposit as claimed — requires auth
 app.post('/deposits/mark-claimed', async (req: Request, res: Response) => {
   try {
+    // Require authenticated session to prevent unauthorized state manipulation
+    const session = await auth.api.getSession({
+      headers: req.headers as Record<string, string>,
+    });
+    if (!session?.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     const { depositId, nullifier } = req.body;
     
     if (!depositId) {
       return res.status(400).json({ error: 'Missing depositId' });
     }
     
-    // Find and mark as claimed
+    // Find and mark as claimed — only if the deposit belongs to one of the user's identities
+    const accounts = await auth.api.listUserAccounts({
+      headers: req.headers as Record<string, string>,
+    });
+    const userIdentifierHashes = new Set<string>();
+    if (accounts && Array.isArray(accounts)) {
+      for (const account of accounts) {
+        const providerId = (account as any).providerId || 'unknown';
+        const identifier = getMurklIdentifier(session.user, providerId);
+        userIdentifierHashes.add(hashIdentifier(identifier));
+      }
+    }
+    if (session.user.email) {
+      userIdentifierHashes.add(hashIdentifier(`email:${session.user.email}`));
+    }
+    
     for (const [hash, deposits] of depositIndex.entries()) {
       const deposit = deposits.find(d => d.id === depositId);
       if (deposit) {
+        // Verify the deposit belongs to this user
+        if (!userIdentifierHashes.has(deposit.identifierHash)) {
+          return res.status(403).json({ error: 'Not your deposit' });
+        }
         deposit.claimed = true;
-        log('info', 'Deposit marked claimed', { depositId });
+        log('info', 'Deposit marked claimed', { depositId, userId: session.user.id });
         return res.json({ success: true });
       }
     }
