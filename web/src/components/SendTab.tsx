@@ -56,6 +56,13 @@ interface DepositSuccess {
 
 type Step = 'amount' | 'recipient' | 'password' | 'confirm' | 'success';
 
+function formatRecipient(identifier: string): string {
+  if (identifier.startsWith('twitter:@')) return `@${identifier.slice('twitter:@'.length)}`;
+  if (identifier.startsWith('discord:')) return identifier.slice('discord:'.length);
+  if (identifier.startsWith('email:')) return identifier.slice('email:'.length);
+  return identifier;
+}
+
 // Step definitions for progress indicator (excludes 'success' — that's a result, not a step)
 const SEND_STEPS = [
   { id: 'amount', label: 'Amount' },
@@ -118,23 +125,24 @@ function getPasswordStrength(pw: string): { score: number; label: string; color:
   return { score, ...levels[score] };
 }
 
+const SOCIAL_PROVIDERS = [
+  { id: 'twitter', label: '𝕏', prefix: 'twitter:@', placeholder: 'username' },
+  { id: 'discord', label: '💬', prefix: 'discord:', placeholder: 'username' },
+  { id: 'email', label: '✉️', prefix: 'email:', placeholder: 'you@example.com' },
+] as const;
+
+type SocialProvider = typeof SOCIAL_PROVIDERS[number]['id'];
+
 export const SendTab: FC<Props> = ({ wasmReady }) => {
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   const reducedMotion = useReducedMotion();
-  
-  // Social providers for recipient
-  const SOCIAL_PROVIDERS = [
-    { id: 'twitter', label: '𝕏', prefix: 'twitter:@', placeholder: 'username' },
-    { id: 'discord', label: '💬', prefix: 'discord:', placeholder: 'username' },
-    { id: 'email', label: '✉️', prefix: 'email:', placeholder: 'you@example.com' },
-  ] as const;
 
   // Form state
   const [amount, setAmount] = useState('');
   const [selectedToken, setSelectedToken] = useState<Token>(SUPPORTED_TOKENS[0]);
   const [identifier, setIdentifier] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState<string>('twitter');
+  const [selectedProvider, setSelectedProvider] = useState<SocialProvider>('twitter');
   const [password, setPassword] = useState('');
   const [step, setStep] = useState<Step>('amount');
   const [loading, setLoading] = useState(false);
@@ -412,7 +420,19 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     } finally {
       setLoading(false);
     }
-  }, [connected, publicKey, signTransaction, connection, identifier, password, amount]);
+  }, [
+    connected,
+    publicKey,
+    signTransaction,
+    connection,
+    selectedProvider,
+    selectedToken,
+    identifier,
+    password,
+    amount,
+    registerDeposit,
+    addRecentSend,
+  ]);
 
   // Reset form
   const handleNewSend = useCallback(() => {
@@ -433,10 +453,10 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       <div className="send-tab">
         <EmptyState
           illustration="wallet"
-          title="Connect to Send"
-          description="Send tokens privately with zero-knowledge proofs — no signature needed to claim"
+          title="Connect to send"
+          description="Send a private payment. Only the right account (and the password) can claim it."
           action={{
-            label: 'Connect Wallet',
+            label: 'Connect wallet',
             onClick: () => openWalletModal(true),
           }}
         />
@@ -510,7 +530,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
             >
-              to {success.identifier}
+              to {formatRecipient(success.identifier)}
             </motion.p>
           </div>
 
@@ -528,11 +548,11 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               icon={<span>📤</span>}
               onClick={() => setShowShareSheet(true)}
             >
-              Share with {success.identifier.split('@')[0] || success.identifier}
+              Share claim
             </Button>
             
             <p className="success-hint">
-              They'll need the password to claim
+              Send the link and password to {formatRecipient(success.identifier)}
             </p>
           </motion.div>
 
@@ -544,14 +564,14 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             transition={{ delay: 0.6 }}
           >
             <button 
-              className="quick-copy-btn"
+              className={`quick-copy-btn ${copiedField === 'password' ? 'copied' : ''}`}
               onClick={() => copyToClipboard(success.password, 'password')}
             >
               <span className="quick-copy-icon">{copiedField === 'password' ? '✓' : '🔑'}</span>
               <span>{copiedField === 'password' ? 'Copied!' : 'Copy password'}</span>
             </button>
             <button 
-              className="quick-copy-btn"
+              className={`quick-copy-btn ${copiedField === 'link' ? 'copied' : ''}`}
               onClick={() => copyToClipboard(success.shareLink, 'link')}
             >
               <span className="quick-copy-icon">{copiedField === 'link' ? '✓' : '🔗'}</span>

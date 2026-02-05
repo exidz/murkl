@@ -715,8 +715,8 @@
   transform: scale(1.1);
 }
 
-/* Copied state animation */
-.quick-copy-btn:has(.quick-copy-icon:first-child:contains('✓')) {
+/* Copied state */
+.quick-copy-btn.copied {
   border-color: var(--accent-success, #22c55e);
   color: var(--accent-success, #22c55e);
 }
