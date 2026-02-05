@@ -1372,7 +1372,8 @@ app.post('/vouchers/redeem', voucherRedeemLimiter, async (req: Request, res: Res
       return res.status(400).json({ error: 'Code and password required' });
     }
     
-    if (typeof code !== 'string' || code.length < 8 || code.length > 20) {
+    // Strict validation: must match exact voucher code format
+    if (!isValidVoucherCode(code)) {
       return res.status(400).json({ error: 'Invalid voucher code format' });
     }
     
@@ -1383,8 +1384,10 @@ app.post('/vouchers/redeem', voucherRedeemLimiter, async (req: Request, res: Res
     const result = redeemVoucher(db, code, password);
     
     if ('error' in result) {
-      // Don't reveal whether code exists or password is wrong
-      return res.status(400).json({ error: result.error });
+      // Constant-time-ish response: don't reveal whether code exists or password is wrong
+      // Add small jitter to prevent timing attacks
+      await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+      return res.status(400).json({ error: 'Invalid code or password' });
     }
     
     // Return decrypted claim data
