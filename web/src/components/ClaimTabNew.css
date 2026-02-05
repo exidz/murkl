@@ -1285,3 +1285,25 @@
     border-width: 2px;
   }
 }
+
+/* ============================================
+   Voucher link button (OAuth screen)
+   ============================================ */
+.voucher-link {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin: 1.5rem auto 0;
+  background: none;
+  border: none;
+  color: var(--accent-primary, #3d95ce);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.75rem;
+  text-align: center;
+  transition: opacity 0.15s;
+}
+
+.voucher-link:hover {
+  opacity: 0.8;
+}

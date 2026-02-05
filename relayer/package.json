@@ -20,6 +20,7 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "js-sha3": "^0.9.3",
+    "nanoid": "^5.1.6",
     "resend": "^6.9.1"
   },
   "devDependencies": {

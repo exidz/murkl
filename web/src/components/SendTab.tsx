@@ -381,6 +381,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       });
       
       // Register deposit with relayer for OAuth lookup (non-critical, fire-and-forget)
+      // Include password for email deposits — enables voucher code creation (OTP-free claiming)
       registerDeposit.mutate({
         identifier: fullIdentifier,
         amount: amountNum,
@@ -389,6 +390,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         pool: POOL_ADDRESS.toBase58(),
         commitment: depositResult.commitment,
         txSignature: signature,
+        ...(fullIdentifier.startsWith('email:') && { password }),
       });
       
       // Persist to recent sends (localStorage)
