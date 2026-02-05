@@ -7,8 +7,8 @@
 FROM node:20-slim AS frontend-builder
 
 WORKDIR /build/web
-COPY web/package*.json ./
-RUN npm ci
+COPY web/package.json web/package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY web/ ./
 RUN npm run build
 
@@ -20,8 +20,8 @@ WORKDIR /build/relayer
 # better-sqlite3 needs build tools for native addon
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-COPY relayer/package*.json ./
-RUN npm ci
+COPY relayer/package.json relayer/package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 COPY relayer/tsconfig.json ./
 COPY relayer/src ./src
 RUN npm run build
@@ -35,8 +35,8 @@ WORKDIR /app/relayer
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 # Install production deps
-COPY relayer/package*.json ./
-RUN npm ci --omit=dev && rm -rf /root/.npm
+COPY relayer/package.json relayer/package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi && rm -rf /root/.npm
 
 # Copy built relayer → /app/relayer/dist/
 COPY --from=relayer-builder /build/relayer/dist ./dist
