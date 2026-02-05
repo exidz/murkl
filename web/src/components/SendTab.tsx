@@ -732,8 +732,6 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 tokens={SUPPORTED_TOKENS}
                 selected={selectedToken}
                 onChange={handleTokenChange}
-                onMaxClick={handleMaxClick}
-                balance={tokenBalance}
               />
 
 
@@ -747,7 +745,6 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               )}
 
 
-              {/* Keep the amount step focused: recent activity lives in a bottom sheet */}
               {/* Keep the amount step focused: recent activity lives in a bottom sheet */}
 
               {showRecentSheet && (
