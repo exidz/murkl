@@ -55,12 +55,12 @@ function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const [tab, setTab] = useState<Tab>('send');
   const [unclaimedCount, setUnclaimedCount] = useState(0);
-  const prevTabRef = useRef<Tab>('send');
   const splashStartRef = useRef(Date.now());
-  
-  // Track direction for slide animation (1 = right, -1 = left)
-  const direction = tab === 'claim' ? 1 : -1;
-  
+
+  // Track direction for slide animation (1 = forward/right, -1 = back/left)
+  // This makes the transition feel natural in both directions (send → claim, claim → send).
+  const [direction, setDirection] = useState(1);
+
   // Memoize tabs with badge counts — recalculate when unclaimed count changes
   const tabs = useMemo(() => TABS.map(t => ({
     ...t,
@@ -101,10 +101,8 @@ function AppContent() {
     }
   }, []);
 
-  // Track previous tab for animation direction + sync URL
+  // Sync URL with active tab
   useEffect(() => {
-    prevTabRef.current = tab;
-    
     // Update URL without reload — preserve existing claim params (id, leaf, pool)
     const url = new URL(window.location.href);
     if (tab === 'claim') {
@@ -135,7 +133,14 @@ function AppContent() {
         <TabBar 
           tabs={tabs}
           activeTab={tab}
-          onChange={(id) => setTab(id as Tab)}
+          onChange={(id) => {
+            const next = id as Tab;
+            // Direction is based on the relative position of the tabs.
+            // Keeps the slide animation consistent regardless of how the user navigates (tap/swipe).
+            const nextDirection = tab === next ? direction : (tab === 'send' && next === 'claim' ? 1 : -1);
+            setDirection(nextDirection);
+            setTab(next);
+          }}
         />
 
         <main className="content">
