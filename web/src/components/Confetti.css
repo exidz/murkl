@@ -1,4 +1,8 @@
-/* Confetti - Celebration animation */
+/* Confetti - Venmo-style celebration animation
+ *
+ * Premium celebration effect with multiple particle shapes,
+ * natural physics, and subtle glow effects.
+ */
 
 .confetti-container {
   position: fixed;
@@ -15,9 +19,14 @@
   position: absolute;
   top: 0;
   will-change: transform, opacity;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
 }
 
-/* Shape variants */
+/* ============================================
+   Shape variants
+   ============================================ */
+
 .confetti-square {
   border-radius: 2px;
 }
@@ -27,13 +36,75 @@
 }
 
 .confetti-strip {
-  border-radius: 1px;
+  border-radius: 2px;
 }
 
-/* Reduced motion: instant fade instead of animation */
+/* Star shape using CSS triangles */
+.confetti-star {
+  background: transparent !important;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 8px solid;
+  position: relative;
+  box-shadow: none !important;
+}
+
+.confetti-star::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: -4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 8px solid;
+  border-top-color: inherit;
+}
+
+/* ============================================
+   Mobile optimizations
+   ============================================ */
+
+@media (max-width: 480px) {
+  .confetti-piece {
+    /* Slightly smaller particles on mobile for performance */
+    transform: scale(0.9);
+  }
+}
+
+/* ============================================
+   Reduced motion
+   ============================================ */
+
 @media (prefers-reduced-motion: reduce) {
   .confetti-piece {
-    animation: none !important;
+    /* Show static confetti briefly then fade */
+    animation: confetti-fade-reduced 1.5s ease-out forwards !important;
+  }
+
+  .confetti-container {
+    /* Ensure particles are visible initially */
+    opacity: 1;
+  }
+}
+
+@keyframes confetti-fade-reduced {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
     opacity: 0;
+    transform: translateY(100px);
+  }
+}
+
+/* ============================================
+   High contrast mode
+   ============================================ */
+
+@media (prefers-contrast: high) {
+  .confetti-piece {
+    /* Remove glow shadows in high contrast */
+    box-shadow: none !important;
   }
 }
