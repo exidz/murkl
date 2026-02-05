@@ -135,7 +135,9 @@ const SOCIAL_PROVIDERS = [
     prefix: 'twitter:@',
     displayPrefix: '@',
     placeholder: 'username',
-    example: '@yourname',
+    // Prefix is already shown in the UI, so the example should NOT include '@'
+    // (prevents the "@@user" visual when someone copy/pastes their handle).
+    example: 'yourname',
   },
   {
     id: 'discord',
@@ -842,7 +844,17 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                   className="text-input namespaced"
                   placeholder={getProvider(selectedProvider).placeholder}
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  onChange={(e) => {
+                    // Keep the input friendly:
+                    // - For X, we render a visual '@' prefix, so strip leading '@' from the value
+                    //   to avoid the common "@@user" look when users paste their handle.
+                    const raw = e.target.value;
+                    const next =
+                      selectedProvider === 'twitter'
+                        ? raw.replace(/^\s*@+/, '')
+                        : raw;
+                    setIdentifier(next);
+                  }}
                   onKeyDown={handleKeyDown}
                   maxLength={256}
                   autoComplete={selectedProvider === 'email' ? 'email' : 'off'}
@@ -851,7 +863,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 />
               </div>
               <p className="input-hint">
-                They’ll need to sign in with this {getProvider(selectedProvider).name} account to claim.
+                They’ll claim using their {getProvider(selectedProvider).name} login.
                 {getProvider(selectedProvider).example ? (
                   <> Example: <span className="input-example">{getProvider(selectedProvider).example}</span></>
                 ) : null}
