@@ -234,23 +234,38 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         maxRetries: 5,
       });
       
-      // Confirm — use longer timeout for devnet
+      // Confirm with block-height-exceeded fallback (devnet can be slow)
       toast.update(txToastId, { message: 'Confirming...', type: 'loading' });
+      let confirmed = false;
       try {
         await connection.confirmTransaction({
           blockhash,
           lastValidBlockHeight,
           signature,
         }, 'confirmed');
+        confirmed = true;
       } catch (confirmErr: any) {
-        // If block height exceeded, check if tx actually landed
-        if (confirmErr?.message?.includes('block height')) {
-          const status = await connection.getSignatureStatus(signature);
-          if (status?.value?.confirmationStatus === 'confirmed' || status?.value?.confirmationStatus === 'finalized') {
-            // TX actually confirmed despite the timeout
-            console.log('TX confirmed despite block height error:', signature);
-          } else {
-            throw confirmErr;
+        // Block height exceeded — TX was sent, poll to see if it landed
+        if (confirmErr?.message?.includes('block height') || confirmErr?.message?.includes('expired')) {
+          toast.update(txToastId, { message: 'Verifying transaction...', type: 'loading' });
+          // Poll up to 10 times over ~15 seconds
+          for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 1500));
+            try {
+              const status = await connection.getSignatureStatus(signature);
+              const cs = status?.value?.confirmationStatus;
+              if (cs === 'confirmed' || cs === 'finalized') {
+                confirmed = true;
+                console.log(`TX confirmed on poll attempt ${i + 1}:`, signature);
+                break;
+              }
+            } catch { /* retry */ }
+          }
+          if (!confirmed) {
+            throw new Error(
+              `Transaction sent but confirmation timed out. ` +
+              `Check explorer: https://explorer.solana.com/tx/${signature}?cluster=devnet`
+            );
           }
         } else {
           throw confirmErr;
