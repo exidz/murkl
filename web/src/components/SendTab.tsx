@@ -218,8 +218,8 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         { wrapSol },
       );
       
-      // Set recent blockhash and fee payer
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      // Get blockhash right before signing
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       depositResult.transaction.recentBlockhash = blockhash;
       depositResult.transaction.feePayer = publicKey;
       
@@ -228,16 +228,34 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       const signed = await signTransaction(depositResult.transaction);
       toast.update(txToastId, { message: 'Sending...', type: 'loading' });
       
-      // Send transaction
-      const signature = await connection.sendRawTransaction(signed.serialize());
+      // Send with retries for devnet reliability
+      const signature = await connection.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+        maxRetries: 5,
+      });
       
-      // Confirm transaction
+      // Confirm — use longer timeout for devnet
       toast.update(txToastId, { message: 'Confirming...', type: 'loading' });
-      await connection.confirmTransaction({
-        blockhash,
-        lastValidBlockHeight,
-        signature,
-      }, 'confirmed');
+      try {
+        await connection.confirmTransaction({
+          blockhash,
+          lastValidBlockHeight,
+          signature,
+        }, 'confirmed');
+      } catch (confirmErr: any) {
+        // If block height exceeded, check if tx actually landed
+        if (confirmErr?.message?.includes('block height')) {
+          const status = await connection.getSignatureStatus(signature);
+          if (status?.value?.confirmationStatus === 'confirmed' || status?.value?.confirmationStatus === 'finalized') {
+            // TX actually confirmed despite the timeout
+            console.log('TX confirmed despite block height error:', signature);
+          } else {
+            throw confirmErr;
+          }
+        } else {
+          throw confirmErr;
+        }
+      }
       toast.dismiss(txToastId);
       
       // Generate share link
