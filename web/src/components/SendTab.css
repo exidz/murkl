@@ -127,56 +127,13 @@
   color: var(--text-primary, #fff);
 }
 
-/* Amount Input - The Hero */
-.amount-input-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 0;
-}
+/* Amount input styles live in AmountInput.css
+   Keep SendTab free of global `.amount-input` rules to avoid collisions.
+*/
 
-.amount-display {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-}
-
-.currency {
-  font-size: 3rem;
-  font-weight: 300;
-  color: var(--text-secondary, #a1a1aa);
-  margin-right: 0.25rem;
-}
-
-.amount-input {
-  font-size: 4rem;
-  font-weight: 700;
-  color: var(--text-primary, #fff);
-  background: transparent;
-  border: none;
-  outline: none;
-  text-align: center;
-  width: 100%;
-  max-width: 280px;
-  caret-color: var(--accent-primary, #3d95ce);
-}
-
-.amount-input::placeholder {
-  color: var(--text-muted, #52525b);
-}
-
-.amount-input,
 .confirm-amount,
 .success-amount {
   font-variant-numeric: tabular-nums;
-}
-
-.amount-label {
-  color: var(--text-secondary, #a1a1aa);
-  font-size: 1.125rem;
-  margin-top: 0.5rem;
 }
 
 /* Text Inputs */
@@ -313,6 +270,11 @@
   font-size: 0.85rem;
   margin-top: 0.75rem;
   padding-left: 0.25rem;
+}
+
+.input-example {
+  color: var(--text-secondary, #a1a1aa);
+  font-weight: 600;
 }
 
 /* Password Input Row */
@@ -776,15 +738,6 @@
     padding: 0.75rem;
   }
   
-  .amount-input {
-    font-size: 3rem;
-    max-width: 200px;
-  }
-  
-  .currency {
-    font-size: 2.25rem;
-  }
-  
   .confirm-amount {
     font-size: 2rem;
   }
@@ -805,14 +758,6 @@
 
 /* Small devices */
 @media (max-width: 360px) {
-  .amount-input {
-    font-size: 2.5rem;
-  }
-  
-  .currency {
-    font-size: 1.75rem;
-  }
-  
   .quick-copy-row {
     flex-direction: column;
     gap: 0.5rem;

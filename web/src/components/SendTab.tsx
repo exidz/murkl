@@ -126,12 +126,48 @@ function getPasswordStrength(pw: string): { score: number; label: string; color:
 }
 
 const SOCIAL_PROVIDERS = [
-  { id: 'twitter', label: '𝕏', prefix: 'twitter:@', placeholder: 'username' },
-  { id: 'discord', label: '💬', prefix: 'discord:', placeholder: 'username' },
-  { id: 'email', label: '✉️', prefix: 'email:', placeholder: 'you@example.com' },
+  {
+    id: 'twitter',
+    label: '𝕏',
+    name: 'X',
+    prefix: 'twitter:@',
+    displayPrefix: '@',
+    placeholder: 'username',
+    example: '@yourname',
+  },
+  {
+    id: 'discord',
+    label: '💬',
+    name: 'Discord',
+    prefix: 'discord:',
+    displayPrefix: '',
+    placeholder: 'username',
+    example: 'sable',
+  },
+  {
+    id: 'email',
+    label: '✉️',
+    name: 'Email',
+    prefix: 'email:',
+    displayPrefix: '',
+    placeholder: 'you@example.com',
+    example: 'you@example.com',
+  },
 ] as const;
 
 type SocialProvider = typeof SOCIAL_PROVIDERS[number]['id'];
+
+function getProvider(providerId: SocialProvider) {
+  return SOCIAL_PROVIDERS.find((p) => p.id === providerId)!;
+}
+
+function formatDraftRecipient(providerId: SocialProvider, raw: string): string {
+  const clean = sanitizeInput(raw);
+  if (!clean) return '';
+  // Friendly display in the UI (don’t show internal namespacing like `twitter:@`)
+  if (providerId === 'twitter') return `@${clean.replace(/^@+/, '')}`;
+  return clean;
+}
 
 export const SendTab: FC<Props> = ({ wasmReady }) => {
   const { connected, publicKey, signTransaction } = useWallet();
@@ -288,7 +324,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     
     try {
       // Build namespaced identifier: <provider>:<handle>
-      const provider = SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)!;
+      const provider = getProvider(selectedProvider);
       const fullIdentifier = `${provider.prefix}${sanitizeInput(identifier)}`;
       const amountNum = parseFloat(amount);
       
@@ -525,7 +561,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             >
               {success.amount} {success.token}
             </motion.p>
-            <motion.p 
+            <motion.p
               className="success-to"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -735,11 +771,11 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
 
             <div className="step-header">
               <p className="step-amount">Sending {amount} {selectedToken.symbol}</p>
-              <h2>Who's it for?</h2>
+              <h2>Who are you sending to?</h2>
             </div>
 
             {/* Provider pills */}
-            <div className="provider-pills" role="radiogroup" aria-label="Select platform">
+            <div className="provider-pills" role="radiogroup" aria-label="Choose where they’ll claim">
               {SOCIAL_PROVIDERS.map((p) => (
                 <motion.button
                   key={p.id}
@@ -754,31 +790,37 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                   aria-checked={selectedProvider === p.id}
                   whileTap={{ scale: 0.97 }}
                 >
-                  <span className="provider-pill-icon">{p.label}</span>
-                  <span className="provider-pill-name">{p.id}</span>
+                  <span className="provider-pill-icon" aria-hidden="true">{p.label}</span>
+                  <span className="provider-pill-name">{p.name}</span>
                 </motion.button>
               ))}
             </div>
 
             <div className="input-container">
               <div className="namespaced-input">
-                <span className="namespace-prefix">
-                  {SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.prefix}
+                <span className="namespace-prefix" aria-hidden="true">
+                  {getProvider(selectedProvider).displayPrefix}
                 </span>
                 <input
                   ref={identifierInputRef}
-                  type="text"
+                  type={selectedProvider === 'email' ? 'email' : 'text'}
                   className="text-input namespaced"
-                  placeholder={SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.placeholder}
+                  placeholder={getProvider(selectedProvider).placeholder}
                   value={identifier}
-                  onChange={e => setIdentifier(e.target.value)}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   onKeyDown={handleKeyDown}
                   maxLength={256}
-                  autoComplete="off"
+                  autoComplete={selectedProvider === 'email' ? 'email' : 'off'}
                   spellCheck={false}
+                  aria-label={`${getProvider(selectedProvider).name} account`}
                 />
               </div>
-              <p className="input-hint">Only someone logged in with this {selectedProvider} account can claim</p>
+              <p className="input-hint">
+                They’ll need to sign in with this {getProvider(selectedProvider).name} account to claim.
+                {getProvider(selectedProvider).example ? (
+                  <> Example: <span className="input-example">{getProvider(selectedProvider).example}</span></>
+                ) : null}
+              </p>
             </div>
 
             <Button 
@@ -809,7 +851,10 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             </button>
 
             <div className="step-header">
-              <p className="step-amount">Sending {amount} {selectedToken.symbol} to {SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.prefix}{identifier}</p>
+              <p className="step-amount">
+                Sending {amount} {selectedToken.symbol}
+                {identifier ? <> to {formatDraftRecipient(selectedProvider, identifier)}</> : null}
+              </p>
               <h2>Set a secret code</h2>
             </div>
 
@@ -873,7 +918,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 </motion.div>
               )}
               
-              <p className="input-hint">Share this with the recipient (separately from the link)</p>
+              <p className="input-hint">Send this code separately from the link.</p>
             </div>
 
             <Button 
@@ -907,7 +952,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               amount={amount}
               token={selectedToken.symbol}
               tokenIcon={selectedToken.icon}
-              recipient={`${SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.prefix}${identifier}`}
+              recipient={`${getProvider(selectedProvider).prefix}${sanitizeInput(identifier)}`}
               fees={[
                 { 
                   label: 'Network fee', 
