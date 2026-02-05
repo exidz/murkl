@@ -14,7 +14,7 @@ import { Confetti } from './Confetti';
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
-import { BalanceDisplay } from './BalanceDisplay';
+import { InlineBalancePill } from './InlineBalancePill';
 import { StepProgress } from './StepProgress';
 import { useTokenBalance } from '../hooks/useTokenBalance';
 import { useRegisterDeposit } from '../hooks/useRegisterDeposit';
@@ -701,9 +701,11 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           >
             <div className="step-body">
               {/* Balance context - Venmo-style */}
-              <BalanceDisplay
-                variant="inline"
-                onClick={(balance) => setAmount(String(Math.floor(balance * 10000) / 10000))}
+              <InlineBalancePill
+                tokenSymbol={selectedToken.symbol}
+                tokenIcon={selectedToken.icon}
+                balance={tokenBalance}
+                onUseMax={handleMaxClick}
                 className="send-balance"
               />
 

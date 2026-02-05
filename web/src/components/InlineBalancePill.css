@@ -1,0 +1,94 @@
+/* InlineBalancePill — calm Venmo-style context row */
+
+.inline-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.85rem;
+  background: rgba(20, 20, 31, 0.55);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 999px;
+  align-self: center;
+  max-width: 100%;
+}
+
+.inline-balance-left {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.inline-balance-label {
+  color: var(--text-muted, #52525b);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.inline-balance-value {
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.inline-balance-icon {
+  margin-right: 0.25rem;
+  opacity: 0.8;
+}
+
+.inline-balance-symbol {
+  opacity: 0.8;
+}
+
+.inline-balance-max {
+  border: none;
+  background: rgba(61, 149, 206, 0.15);
+  color: var(--accent-primary, #3d95ce);
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.inline-balance-max:hover {
+  background: rgba(61, 149, 206, 0.2);
+}
+
+.inline-balance-skeleton {
+  display: inline-block;
+  width: 120px;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: inline-balance-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes inline-balance-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inline-balance-skeleton {
+    animation: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .inline-balance-label {
+    display: none;
+  }
+}
