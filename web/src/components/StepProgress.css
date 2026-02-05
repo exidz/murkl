@@ -1,0 +1,223 @@
+/* StepProgress — Venmo-style multi-step progress indicator
+ *
+ * Minimal dots connected by an animated fill line.
+ * Designed to orient users without stealing focus from the main content.
+ *
+ *   ● ─────── ● ─────── ○ ─────── ○
+ *  Amount     To     Password   Review
+ */
+
+.step-progress {
+  position: relative;
+  padding: 0 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ========================================
+   Track (connecting line behind the dots)
+   ======================================== */
+
+.step-track {
+  position: absolute;
+  /* Align vertically with center of dots */
+  top: 8px; /* half of dot height (16px / 2) */
+  left: calc(0.5rem + 8px); /* padding + half dot width */
+  right: calc(0.5rem + 8px);
+  height: 2px;
+  background: var(--border, #27272a);
+  border-radius: 1px;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.step-track-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent-primary, #3d95ce);
+  border-radius: 1px;
+  /* Transform is controlled via inline animate */
+}
+
+/* ========================================
+   Dots list
+   ======================================== */
+
+.step-dots {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* ========================================
+   Individual dot group (dot + label)
+   ======================================== */
+
+.step-dot-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+/* The dot itself */
+.step-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border, #27272a);
+  background: var(--bg-primary, #0a0a0f);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.25s ease, border-color 0.25s ease;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Completed: solid accent fill */
+.step-dot-group.complete .step-dot {
+  background: var(--accent-primary, #3d95ce);
+  border-color: var(--accent-primary, #3d95ce);
+}
+
+/* Active: accent border, subtle fill */
+.step-dot-group.active .step-dot {
+  background: var(--accent-primary, #3d95ce);
+  border-color: var(--accent-primary, #3d95ce);
+}
+
+/* Pending: stays default (empty) */
+
+/* Check icon inside completed dots */
+.step-check-icon {
+  width: 10px;
+  height: 10px;
+  color: white;
+}
+
+/* ========================================
+   Labels
+   ======================================== */
+
+.step-dot-label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--text-muted, #52525b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transition: color 0.25s ease;
+  user-select: none;
+}
+
+.step-dot-group.active .step-dot-label {
+  color: var(--accent-primary, #3d95ce);
+  font-weight: 600;
+}
+
+.step-dot-group.complete .step-dot-label {
+  color: var(--text-secondary, #a1a1aa);
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 480px) {
+  .step-progress {
+    margin-bottom: 1rem;
+    padding: 0 0.25rem;
+  }
+
+  .step-track {
+    top: 7px;
+    left: calc(0.25rem + 7px);
+    right: calc(0.25rem + 7px);
+  }
+
+  .step-dot {
+    width: 14px;
+    height: 14px;
+  }
+
+  .step-check-icon {
+    width: 8px;
+    height: 8px;
+  }
+
+  .step-dot-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.02em;
+  }
+}
+
+@media (max-width: 360px) {
+  .step-dot-label {
+    font-size: 0.55rem;
+  }
+
+  .step-dot {
+    width: 12px;
+    height: 12px;
+  }
+
+  .step-track {
+    top: 6px;
+    left: calc(0.25rem + 6px);
+    right: calc(0.25rem + 6px);
+  }
+
+  .step-check-icon {
+    width: 7px;
+    height: 7px;
+  }
+}
+
+/* ========================================
+   ACCESSIBILITY
+   ======================================== */
+
+/* Reduced motion: disable pulse animation */
+@media (prefers-reduced-motion: reduce) {
+  .step-dot {
+    transition: none;
+  }
+
+  .step-dot-label {
+    transition: none;
+  }
+
+  .step-track-fill {
+    transition: transform 0.15s ease;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .step-dot {
+    border-width: 3px;
+  }
+
+  .step-track {
+    height: 3px;
+    background: var(--text-muted, #52525b);
+  }
+
+  .step-dot-group.active .step-dot-label,
+  .step-dot-group.complete .step-dot-label {
+    font-weight: 700;
+  }
+}
+
+/* Focus visible (for keyboard nav, not currently interactive but future-proof) */
+.step-dot-group:focus-visible .step-dot {
+  outline: 2px solid var(--accent-primary, #3d95ce);
+  outline-offset: 3px;
+}

@@ -17,6 +17,7 @@ import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
 import { ShareSheet } from './ShareSheet';
 import { BalanceDisplay } from './BalanceDisplay';
+import { StepProgress } from './StepProgress';
 import './SendTab.css';
 
 // Token-specific preset amounts
@@ -51,14 +52,30 @@ interface DepositSuccess {
 
 type Step = 'amount' | 'recipient' | 'password' | 'confirm' | 'success';
 
+// Step definitions for progress indicator (excludes 'success' — that's a result, not a step)
+const SEND_STEPS = [
+  { id: 'amount', label: 'Amount' },
+  { id: 'recipient', label: 'To' },
+  { id: 'password', label: 'Password' },
+  { id: 'confirm', label: 'Review' },
+] as const;
+
 export const SendTab: FC<Props> = ({ wasmReady }) => {
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   
+  // Social providers for recipient
+  const SOCIAL_PROVIDERS = [
+    { id: 'twitter', label: '𝕏', prefix: 'twitter:@', placeholder: 'username' },
+    { id: 'discord', label: '💬', prefix: 'discord:', placeholder: 'username' },
+    { id: 'google', label: '📧', prefix: 'google:', placeholder: 'email@gmail.com' },
+  ] as const;
+
   // Form state
   const [amount, setAmount] = useState('');
   const [selectedToken, setSelectedToken] = useState<Token>(SUPPORTED_TOKENS[0]);
   const [identifier, setIdentifier] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState<string>('twitter');
   const [password, setPassword] = useState('');
   const [step, setStep] = useState<Step>('amount');
   const [loading, setLoading] = useState(false);
@@ -215,7 +232,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     setLoading(true);
     
     try {
-      const cleanIdentifier = sanitizeInput(identifier);
+      // Build namespaced identifier: <provider>:<handle>
+      const provider = SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)!;
+      const fullIdentifier = `${provider.prefix}${sanitizeInput(identifier)}`;
       const amountNum = parseFloat(amount);
       
       // Build transaction
@@ -226,7 +245,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         connection,
         POOL_ADDRESS,
         publicKey,
-        cleanIdentifier,
+        fullIdentifier,
         password,
         amountNum,
         { wrapSol },
@@ -256,7 +275,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       
       // Generate share link
       const shareLink = createShareLink(
-        cleanIdentifier,
+        fullIdentifier,
         depositResult.leafIndex,
         POOL_ADDRESS.toBase58(),
       );
@@ -266,7 +285,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         leafIndex: depositResult.leafIndex,
         shareLink,
         password,
-        identifier: cleanIdentifier,
+        identifier: fullIdentifier,
         amount: amountNum,
         token: selectedToken.symbol,
       });
@@ -277,7 +296,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            identifier: cleanIdentifier,
+            identifier: fullIdentifier,
             amount: amountNum,
             token: selectedToken.symbol,
             leafIndex: depositResult.leafIndex,
@@ -493,6 +512,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   // Main send flow
   return (
     <div className="send-tab">
+      {/* Step progress indicator — hidden on success */}
+      <StepProgress steps={[...SEND_STEPS]} activeStep={step} />
+
       <AnimatePresence mode="wait">
         {/* Step 1: Amount */}
         {step === 'amount' && (
@@ -573,20 +595,47 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               <h2>Who's it for?</h2>
             </div>
 
+            {/* Provider pills */}
+            <div className="provider-pills" role="radiogroup" aria-label="Select platform">
+              {SOCIAL_PROVIDERS.map((p) => (
+                <motion.button
+                  key={p.id}
+                  type="button"
+                  className={`provider-pill ${selectedProvider === p.id ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelectedProvider(p.id);
+                    setIdentifier('');
+                    identifierInputRef.current?.focus();
+                  }}
+                  role="radio"
+                  aria-checked={selectedProvider === p.id}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  <span className="provider-pill-icon">{p.label}</span>
+                  <span className="provider-pill-name">{p.id}</span>
+                </motion.button>
+              ))}
+            </div>
+
             <div className="input-container">
-              <input
-                ref={identifierInputRef}
-                type="text"
-                className="text-input"
-                placeholder="@twitter, email, discord..."
-                value={identifier}
-                onChange={e => setIdentifier(e.target.value)}
-                onKeyDown={handleKeyDown}
-                maxLength={256}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <p className="input-hint">Their handle — only they can claim</p>
+              <div className="namespaced-input">
+                <span className="namespace-prefix">
+                  {SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.prefix}
+                </span>
+                <input
+                  ref={identifierInputRef}
+                  type="text"
+                  className="text-input namespaced"
+                  placeholder={SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.placeholder}
+                  value={identifier}
+                  onChange={e => setIdentifier(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  maxLength={256}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+              <p className="input-hint">Only someone logged in with this {selectedProvider} account can claim</p>
             </div>
 
             <Button 
@@ -615,7 +664,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             </button>
 
             <div className="step-header">
-              <p className="step-amount">Sending {amount} {selectedToken.symbol} to {identifier}</p>
+              <p className="step-amount">Sending {amount} {selectedToken.symbol} to {SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.prefix}{identifier}</p>
               <h2>Create a password</h2>
             </div>
 
@@ -672,7 +721,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               amount={amount}
               token={selectedToken.symbol}
               tokenIcon={selectedToken.icon}
-              recipient={identifier}
+              recipient={`${SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)?.prefix}${identifier}`}
               fees={[
                 { 
                   label: 'Network fee', 

@@ -22,3 +22,4 @@ export { PasswordSheet } from './PasswordSheet';
 export { ManualClaimSection } from './ManualClaimSection';
 export { ClaimLanding } from './ClaimLanding';
 export type { ClaimLinkData } from './ClaimLanding';
+export { StepProgress } from './StepProgress';
