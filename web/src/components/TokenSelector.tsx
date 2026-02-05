@@ -1,5 +1,5 @@
 import { useCallback, type FC, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import './TokenSelector.css';
 
 export interface Token {
@@ -20,7 +20,8 @@ interface Props {
 }
 
 export const SUPPORTED_TOKENS: Token[] = [
-  { symbol: 'SOL', name: 'Solana (auto-wrap)', icon: '◎', decimals: 9 },
+  // Keep UI copy friendly: explain any technical details via helper text, not token names.
+  { symbol: 'SOL', name: 'Solana', icon: '◎', decimals: 9 },
   { symbol: 'WSOL', name: 'Wrapped SOL', icon: '◎', decimals: 9, mint: 'So11111111111111111111111111111111111111112' },
 ];
 
@@ -61,6 +62,12 @@ export const TokenSelector: FC<Props> = ({
 
   const selectedLabel = useMemo(() => formatTokenName(selected), [selected]);
 
+  const helperText = useMemo(() => {
+    if (selected.symbol === 'SOL') return `We'll handle wrapping for you.`;
+    if (selected.symbol === 'WSOL') return `Uses the wrapped SOL in your wallet.`;
+    return '';
+  }, [selected.symbol]);
+
   return (
     <div className="token-selector">
       <div className="token-tabs" role="radiogroup" aria-label="Select token">
@@ -99,10 +106,23 @@ export const TokenSelector: FC<Props> = ({
         })}
       </div>
 
-      <div className="token-meta" aria-live="polite">
-        <span className="token-meta-label">Using</span>
-        <span className="token-meta-value">{selectedLabel}</span>
-      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        {helperText && (
+          <motion.p
+            key={selected.symbol}
+            className="token-help"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.15 }}
+          >
+            <span className="token-help-label">Using</span>{' '}
+            <span className="token-help-value">{selectedLabel}</span>
+            <span className="token-help-sep">·</span>
+            <span className="token-help-text">{helperText}</span>
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       {showBalanceRow && (
         <motion.div

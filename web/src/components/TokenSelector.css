@@ -93,22 +93,31 @@
   letter-spacing: 0.02em;
 }
 
-/* Selected token meta */
-.token-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
+/* Helper line — friendly, non-technical copy */
+.token-help {
+  margin: 0;
+  text-align: center;
   font-size: 0.85rem;
   color: var(--text-muted, #52525b);
+  line-height: 1.25;
 }
 
-.token-meta-label {
+.token-help-label {
   color: var(--text-muted, #52525b);
 }
 
-.token-meta-value {
+.token-help-value {
   color: var(--text-secondary, #a1a1aa);
   font-weight: 600;
+}
+
+.token-help-sep {
+  margin: 0 0.35rem;
+  opacity: 0.7;
+}
+
+.token-help-text {
+  color: var(--text-muted, #52525b);
 }
 
 /* Balance display */
@@ -198,7 +207,7 @@
   }
 
   .token-balance,
-  .token-meta {
+  .token-help {
     font-size: 0.8rem;
   }
 }
