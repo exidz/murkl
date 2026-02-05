@@ -1349,30 +1349,12 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
 
     const tokenStr = typeof token === 'string' && token.length > 0 ? token : 'SOL';
 
-    // Verify the submitted identifier belongs to the authenticated user.
-    // This prevents phishing/DoS by registering deposits for arbitrary email addresses.
-    const accounts = await auth.api.listUserAccounts({
-      headers: req.headers as Record<string, string>,
-    });
-    const allowedIdentifiers = new Set<string>();
-    if (accounts && Array.isArray(accounts)) {
-      for (const account of accounts) {
-        const providerId = (account as any).providerId || 'unknown';
-        const id = getMurklIdentifier(session.user, providerId);
-        allowedIdentifiers.add(id.toLowerCase());
-      }
-    }
-    if (session.user.email) {
-      allowedIdentifiers.add(`email:${session.user.email}`.toLowerCase());
-    }
-
-    if (!allowedIdentifiers.has(identifier.toLowerCase())) {
-      log('warn', 'Deposit register denied — not user identity', {
-        userId: session.user.id,
-        identifier: identifier.slice(0, 32),
-      });
-      return res.status(403).json({ error: 'Not your identity' });
-    }
+    // NOTE: identifier is the RECIPIENT. Users must be able to send to identities
+    // that are not yet in our DB (e.g., a friend who hasn't used Murkl).
+    //
+    // Security is enforced by verifying the on-chain tx + deposit account data,
+    // so clients can't register fake deposits or trigger emails without paying
+    // for a real on-chain deposit.
 
     // Verify on-chain tx to prevent fake registrations / DB poisoning
     const poolPk = new PublicKey(pool);
