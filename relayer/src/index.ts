@@ -134,7 +134,9 @@ const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]+$/;
 function isValidHex(value: unknown, minBytes = 1, maxBytes = 8192): boolean {
   if (typeof value !== 'string') return false;
   if (!HEX_REGEX.test(value)) return false;
-  const hex = value.replace('0x', '');
+  const hex = value.startsWith('0x') ? value.slice(2) : value;
+  // Must be whole bytes. Node's Buffer.from(hex, 'hex') silently truncates odd-length strings.
+  if (hex.length % 2 !== 0) return false;
   const bytes = hex.length / 2;
   return bytes >= minBytes && bytes <= maxBytes;
 }
@@ -161,7 +163,9 @@ function isValidLeafIndex(value: unknown): boolean {
 }
 
 function sanitizeHex(hex: string): Buffer {
-  return Buffer.from(hex.replace('0x', ''), 'hex');
+  const h = hex.startsWith('0x') ? hex.slice(2) : hex;
+  if (h.length % 2 !== 0) throw new Error('Invalid hex (odd length)');
+  return Buffer.from(h, 'hex');
 }
 
 // ============================================================================

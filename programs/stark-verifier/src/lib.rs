@@ -102,12 +102,14 @@ pub mod stark_verifier {
     ) -> Result<()> {
         let buffer = &ctx.accounts.proof_buffer;
         let mut buf_data = buffer.try_borrow_mut_data()?;
+        require!(buf_data.len() >= HEADER_SIZE, VerifierError::BufferCorrupt);
         
-        let owner = Pubkey::try_from(&buf_data[OFFSET_OWNER..OFFSET_OWNER + 32]).unwrap();
+        let owner = Pubkey::try_from(&buf_data[OFFSET_OWNER..OFFSET_OWNER + 32])
+            .map_err(|_| VerifierError::BufferCorrupt)?;
         require!(owner == ctx.accounts.owner.key(), VerifierError::Unauthorized);
         require!(buf_data[OFFSET_FINALIZED] == 0, VerifierError::BufferAlreadyFinalized);
         
-        let expected_size = u32::from_le_bytes(buf_data[OFFSET_EXPECTED_SIZE..OFFSET_EXPECTED_SIZE + 4].try_into().unwrap());
+        let expected_size = u32::from_le_bytes(buf_data[OFFSET_EXPECTED_SIZE..OFFSET_EXPECTED_SIZE + 4].try_into().map_err(|_| VerifierError::BufferCorrupt)?);
         
         let start = OFFSET_PROOF_DATA + offset as usize;
         let end = start + chunk_data.len();
@@ -117,7 +119,7 @@ pub mod stark_verifier {
         buf_data[start..end].copy_from_slice(&chunk_data);
         
         let new_size = (offset as usize + chunk_data.len()) as u32;
-        let current_size = u32::from_le_bytes(buf_data[OFFSET_SIZE..OFFSET_SIZE + 4].try_into().unwrap());
+        let current_size = u32::from_le_bytes(buf_data[OFFSET_SIZE..OFFSET_SIZE + 4].try_into().map_err(|_| VerifierError::BufferCorrupt)?);
         if new_size > current_size {
             buf_data[OFFSET_SIZE..OFFSET_SIZE + 4].copy_from_slice(&new_size.to_le_bytes());
         }
@@ -134,13 +136,15 @@ pub mod stark_verifier {
     ) -> Result<()> {
         let buffer = &ctx.accounts.proof_buffer;
         let mut buf_data = buffer.try_borrow_mut_data()?;
+        require!(buf_data.len() >= HEADER_SIZE, VerifierError::BufferCorrupt);
         
-        let owner = Pubkey::try_from(&buf_data[OFFSET_OWNER..OFFSET_OWNER + 32]).unwrap();
+        let owner = Pubkey::try_from(&buf_data[OFFSET_OWNER..OFFSET_OWNER + 32])
+            .map_err(|_| VerifierError::BufferCorrupt)?;
         require!(owner == ctx.accounts.owner.key(), VerifierError::Unauthorized);
         require!(buf_data[OFFSET_FINALIZED] == 0, VerifierError::BufferAlreadyFinalized);
         
-        let size = u32::from_le_bytes(buf_data[OFFSET_SIZE..OFFSET_SIZE + 4].try_into().unwrap());
-        let expected_size = u32::from_le_bytes(buf_data[OFFSET_EXPECTED_SIZE..OFFSET_EXPECTED_SIZE + 4].try_into().unwrap());
+        let size = u32::from_le_bytes(buf_data[OFFSET_SIZE..OFFSET_SIZE + 4].try_into().map_err(|_| VerifierError::BufferCorrupt)?);
+        let expected_size = u32::from_le_bytes(buf_data[OFFSET_EXPECTED_SIZE..OFFSET_EXPECTED_SIZE + 4].try_into().map_err(|_| VerifierError::BufferCorrupt)?);
         require!(size == expected_size, VerifierError::IncompleteProof);
         
         let proof_data = &buf_data[OFFSET_PROOF_DATA..OFFSET_PROOF_DATA + size as usize].to_vec();
@@ -163,7 +167,9 @@ pub mod stark_verifier {
         
         {
             let buf_data = buffer.try_borrow_data()?;
-            let owner = Pubkey::try_from(&buf_data[OFFSET_OWNER..OFFSET_OWNER + 32]).unwrap();
+            require!(buf_data.len() >= HEADER_SIZE, VerifierError::BufferCorrupt);
+            let owner = Pubkey::try_from(&buf_data[OFFSET_OWNER..OFFSET_OWNER + 32])
+                .map_err(|_| VerifierError::BufferCorrupt)?;
             require!(owner == ctx.accounts.owner.key(), VerifierError::Unauthorized);
         }
         
@@ -176,7 +182,7 @@ pub mod stark_verifier {
         let dest_starting_lamports = ctx.accounts.owner.lamports();
         **ctx.accounts.owner.lamports.borrow_mut() = dest_starting_lamports
             .checked_add(buffer.lamports())
-            .unwrap();
+            .ok_or(VerifierError::LamportOverflow)?;
         **buffer.lamports.borrow_mut() = 0;
         
         msg!("Proof buffer closed and zeroed");
@@ -273,7 +279,8 @@ fn parse_proof(data: &[u8]) -> Result<StarkProof> {
     let mut fri_layer_commitments = Vec::with_capacity(num_fri_layers);
     for _ in 0..num_fri_layers {
         require!(offset + 32 <= data.len(), VerifierError::InvalidProofFormat);
-        let commitment: [u8; 32] = data[offset..offset+32].try_into().unwrap();
+        let commitment: [u8; 32] = data[offset..offset+32].try_into()
+            .map_err(|_| VerifierError::InvalidProofFormat)?;
         fri_layer_commitments.push(commitment);
         offset += 32;
     }
@@ -333,12 +340,12 @@ fn parse_query_proof<'a>(data: &'a [u8], num_fri_layers: usize) -> Result<QueryP
     
     // Index (4 bytes)
     require!(offset + 4 <= data.len(), VerifierError::InvalidProofFormat);
-    let index = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap());
+    let index = u32::from_le_bytes(data[offset..offset+4].try_into().map_err(|_| VerifierError::InvalidProofFormat)?);
     offset += 4;
     
     // Trace value (32 bytes)
     require!(offset + 32 <= data.len(), VerifierError::InvalidProofFormat);
-    let trace_value: [u8; 32] = data[offset..offset+32].try_into().unwrap();
+    let trace_value: [u8; 32] = data[offset..offset+32].try_into().map_err(|_| VerifierError::InvalidProofFormat)?;
     offset += 32;
     
     // Trace path
@@ -349,13 +356,13 @@ fn parse_query_proof<'a>(data: &'a [u8], num_fri_layers: usize) -> Result<QueryP
     let mut trace_path = Vec::with_capacity(trace_path_len);
     for _ in 0..trace_path_len {
         require!(offset + 32 <= data.len(), VerifierError::InvalidProofFormat);
-        trace_path.push(data[offset..offset+32].try_into().unwrap());
+        trace_path.push(data[offset..offset+32].try_into().map_err(|_| VerifierError::InvalidProofFormat)?);
         offset += 32;
     }
     
     // Composition value (32 bytes)
     require!(offset + 32 <= data.len(), VerifierError::InvalidProofFormat);
-    let composition_value: [u8; 32] = data[offset..offset+32].try_into().unwrap();
+    let composition_value: [u8; 32] = data[offset..offset+32].try_into().map_err(|_| VerifierError::InvalidProofFormat)?;
     offset += 32;
     
     // Composition path
@@ -366,7 +373,7 @@ fn parse_query_proof<'a>(data: &'a [u8], num_fri_layers: usize) -> Result<QueryP
     let mut composition_path = Vec::with_capacity(comp_path_len);
     for _ in 0..comp_path_len {
         require!(offset + 32 <= data.len(), VerifierError::InvalidProofFormat);
-        composition_path.push(data[offset..offset+32].try_into().unwrap());
+        composition_path.push(data[offset..offset+32].try_into().map_err(|_| VerifierError::InvalidProofFormat)?);
         offset += 32;
     }
     
@@ -391,7 +398,7 @@ fn parse_query_proof<'a>(data: &'a [u8], num_fri_layers: usize) -> Result<QueryP
         let mut path = Vec::with_capacity(path_len);
         for _ in 0..path_len {
             require!(offset + 32 <= data.len(), VerifierError::InvalidProofFormat);
-            path.push(data[offset..offset+32].try_into().unwrap());
+            path.push(data[offset..offset+32].try_into().map_err(|_| VerifierError::InvalidProofFormat)?);
             offset += 32;
         }
         
@@ -700,8 +707,7 @@ pub fn verify_stark_proof(
         
         // Verify FRI folding at each layer
         let mut current_index = query.index as usize;
-        let mut current_value = parse_qm31(&query.composition_value[..16])
-            .unwrap_or(QM31::ZERO);
+        let mut current_value = parse_qm31(&query.composition_value[..16])?;
         
         for (layer_idx, (layer_query, layer_alpha)) in 
             query.fri_layer_values.iter().zip(fri_alphas.iter()).enumerate()
@@ -890,9 +896,15 @@ pub enum VerifierError {
     
     #[msg("Buffer too small")]
     BufferTooSmall,
+
+    #[msg("Proof buffer data is corrupt")]
+    BufferCorrupt,
     
     #[msg("Unauthorized")]
     Unauthorized,
+
+    #[msg("Lamport arithmetic overflow")]
+    LamportOverflow,
     
     #[msg("Buffer already finalized")]
     BufferAlreadyFinalized,
