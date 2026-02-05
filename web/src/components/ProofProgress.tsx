@@ -1,5 +1,5 @@
 import { useState, useEffect, type FC } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import './ProofProgress.css';
 
 interface Props {
@@ -162,41 +162,55 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
   const [showBurst, setShowBurst] = useState(false);
   const [tipIndex, setTipIndex] = useState(0);
   const [prevStage, setPrevStage] = useState(stage);
-  
+  const reducedMotion = useReducedMotion();
+
   const currentStageIndex = stages.findIndex(s => s.id === stage);
   const currentStage = stages[currentStageIndex] || stages[0];
   const isComplete = stage === 'complete';
-  
-  // Smooth progress animation for generating stage
-  useEffect(() => {
-    if (stage === 'generating') {
-      const timer = setInterval(() => {
-        setDisplayProgress(prev => {
-          const diff = progress - prev;
-          if (Math.abs(diff) < 0.5) return progress;
-          return prev + diff * 0.1;
-        });
-      }, 50);
-      return () => clearInterval(timer);
-    }
-  }, [stage, progress]);
 
-  // Rotate tips during proof generation (faster rotation when close to done)
+  // Smooth progress animation for generating stage (disable smoothing for reduced motion)
   useEffect(() => {
-    if (stage === 'generating') {
-      const rotationSpeed = progress > 85 ? 2000 : 4000;
-      const timer = setInterval(() => {
-        setTipIndex(prev => (prev + 1) % (progress > 85 ? almostDoneTips.length : provingTips.length));
-      }, rotationSpeed);
-      return () => clearInterval(timer);
+    if (stage !== 'generating') return;
+
+    if (reducedMotion) {
+      setDisplayProgress(progress);
+      return;
     }
-  }, [stage, progress > 85]); // Only re-run when crossing 85% threshold
+
+    const timer = setInterval(() => {
+      setDisplayProgress(prev => {
+        const diff = progress - prev;
+        if (Math.abs(diff) < 0.5) return progress;
+        return prev + diff * 0.1;
+      });
+    }, 50);
+
+    return () => clearInterval(timer);
+  }, [stage, progress, reducedMotion]);
+
+  // Rotate tips during proof generation (skip for reduced motion)
+  useEffect(() => {
+    if (stage !== 'generating' || reducedMotion) return;
+
+    const nearDone = progress > 85;
+    const rotationSpeed = nearDone ? 2000 : 4000;
+    const tipsLength = nearDone ? almostDoneTips.length : provingTips.length;
+
+    const timer = setInterval(() => {
+      setTipIndex(prev => (prev + 1) % tipsLength);
+    }, rotationSpeed);
+
+    return () => clearInterval(timer);
+  }, [stage, progress, reducedMotion]);
 
   // Haptic feedback on stage change
   useEffect(() => {
     if (stage !== prevStage) {
       setPrevStage(stage);
-      
+
+      // On reduced motion, avoid extra sensory feedback.
+      if (reducedMotion) return;
+
       if (stage === 'complete') {
         // Celebration pattern!
         triggerHaptic([30, 50, 30, 50, 60]);
@@ -207,7 +221,7 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
         triggerHaptic(15);
       }
     }
-  }, [stage, prevStage]);
+  }, [stage, prevStage, reducedMotion]);
 
   // Fire complete callback
   useEffect(() => {
@@ -240,16 +254,26 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
         <div className="progress-icon-wrapper">
           {/* Circular progress ring */}
           <ProgressRing progress={ringProgress} isComplete={isComplete} />
-          
+
           {/* Center icon */}
-          <motion.div 
+          <motion.div
             className={`progress-icon-ring ${isComplete ? 'complete' : ''}`}
-            animate={!isComplete ? { scale: [1, 1.03, 1] } : { scale: [1, 1.1, 1] }}
-            transition={{ 
-              duration: isComplete ? 0.4 : 1.5, 
-              repeat: isComplete ? 0 : Infinity, 
-              ease: 'easeInOut' 
-            }}
+            animate={
+              reducedMotion
+                ? undefined
+                : !isComplete
+                  ? { scale: [1, 1.03, 1] }
+                  : { scale: [1, 1.1, 1] }
+            }
+            transition={
+              reducedMotion
+                ? undefined
+                : {
+                    duration: isComplete ? 0.4 : 1.5,
+                    repeat: isComplete ? 0 : Infinity,
+                    ease: 'easeInOut',
+                  }
+            }
           >
             <AnimatePresence mode="wait">
               <motion.span 
@@ -300,11 +324,13 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
           exit={{ opacity: 0, y: -5 }}
           transition={{ duration: 0.2 }}
         >
-          {stage === 'generating' && progress > 85 
-            ? almostDoneTips[tipIndex % almostDoneTips.length]
-            : stage === 'generating' && progress > 20 
-              ? provingTips[tipIndex % provingTips.length] 
-              : stageHints[stage]}
+          {reducedMotion
+            ? stageHints[stage]
+            : stage === 'generating' && progress > 85
+              ? almostDoneTips[tipIndex % almostDoneTips.length]
+              : stage === 'generating' && progress > 20
+                ? provingTips[tipIndex % provingTips.length]
+                : stageHints[stage]}
         </motion.p>
       </AnimatePresence>
 
@@ -361,17 +387,21 @@ export const ProofProgress: FC<Props> = ({ stage, progress = 0, onComplete }) =>
               )}
               
               {/* Step circle */}
-              <motion.div 
+              <motion.div
                 className="step-circle"
-                animate={isStepActive ? { 
-                  scale: [1, 1.15, 1],
-                  boxShadow: [
-                    '0 0 0 0 rgba(61, 149, 206, 0)',
-                    '0 0 0 4px rgba(61, 149, 206, 0.3)',
-                    '0 0 0 0 rgba(61, 149, 206, 0)',
-                  ],
-                } : {}}
-                transition={{ duration: 1, repeat: isStepActive ? Infinity : 0 }}
+                animate={
+                  reducedMotion || !isStepActive
+                    ? undefined
+                    : {
+                        scale: [1, 1.15, 1],
+                        boxShadow: [
+                          '0 0 0 0 rgba(61, 149, 206, 0)',
+                          '0 0 0 4px rgba(61, 149, 206, 0.3)',
+                          '0 0 0 0 rgba(61, 149, 206, 0)',
+                        ],
+                      }
+                }
+                transition={reducedMotion ? undefined : { duration: 1, repeat: Infinity }}
               >
                 <AnimatePresence mode="wait">
                   {isStepComplete ? (
