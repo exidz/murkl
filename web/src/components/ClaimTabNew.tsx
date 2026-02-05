@@ -10,6 +10,7 @@ import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { Confetti } from './Confetti';
 import { PasswordSheet } from './PasswordSheet';
+import { DepositCard } from './DepositCard';
 import { ClaimLanding, type ClaimLinkData } from './ClaimLanding';
 import { useClaimFlow } from '../hooks/useClaimFlow';
 import { useDeposits, depositKeys } from '../hooks/useDeposits';
@@ -382,39 +383,21 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
           />
         ) : (
           <div className="deposits-list">
-            {deposits.map(deposit => (
-              <motion.div
-                key={deposit.id}
-                className={`deposit-card ${deposit.claimed ? 'claimed' : ''}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <div className="deposit-content">
-                  <div className="deposit-icon">💰</div>
-                  <div className="deposit-details">
-                    <span className="deposit-amount">
-                      {deposit.amount} {deposit.token}
-                    </span>
-                    <span className="deposit-date">
-                      {new Date(deposit.timestamp).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-
-                {deposit.claimed ? (
-                  <span className="claimed-badge">✓ Claimed</span>
-                ) : (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => initiateClaim(deposit)}
-                    disabled={!connected}
-                  >
-                    Claim
-                  </Button>
-                )}
-              </motion.div>
-            ))}
+            {/* Unclaimed first, then claimed — Venmo sorts by actionability */}
+            {[...deposits]
+              .sort((a, b) => {
+                if (a.claimed !== b.claimed) return a.claimed ? 1 : -1;
+                return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+              })
+              .map((deposit, index) => (
+                <DepositCard
+                  key={deposit.id}
+                  deposit={deposit}
+                  index={index}
+                  onClaim={initiateClaim}
+                  disabled={!connected}
+                />
+              ))}
           </div>
         )}
       </div>
