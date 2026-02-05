@@ -36,7 +36,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { auth, getMurklIdentifier, resend } from './auth';
+import { auth, getMurklIdentifier, resend, runAuthMigrations } from './auth';
 import { toNodeHandler } from 'better-auth/node';
 
 // ============================================================================
@@ -1206,45 +1206,51 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // Server & Graceful Shutdown
 // ============================================================================
 
-const server = app.listen(config.port, () => {
-  log('info', 'Murkl Relayer started', {
-    port: config.port,
-    program: config.programId.toBase58(),
-    rpc: config.rpcUrl,
-    nodeEnv: process.env.NODE_ENV || 'development',
+// Run auth migrations then start server
+runAuthMigrations().then(() => {
+  const server = app.listen(config.port, () => {
+    log('info', 'Murkl Relayer started', {
+      port: config.port,
+      program: config.programId.toBase58(),
+      rpc: config.rpcUrl,
+      nodeEnv: process.env.NODE_ENV || 'development',
+    });
   });
-});
 
-// Graceful shutdown
-let shuttingDown = false;
+  // Graceful shutdown
+  let shuttingDown = false;
 
-async function shutdown(signal: string): Promise<void> {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  
-  log('info', `Received ${signal}, shutting down gracefully...`);
-  
-  server.close(() => {
-    log('info', 'HTTP server closed');
-    process.exit(0);
+  async function shutdown(signal: string): Promise<void> {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    
+    log('info', `Received ${signal}, shutting down gracefully...`);
+    
+    server.close(() => {
+      log('info', 'HTTP server closed');
+      process.exit(0);
+    });
+    
+    // Force exit after 10s
+    setTimeout(() => {
+      log('warn', 'Forcing shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (err) => {
+    log('error', 'Uncaught exception', { error: err.message, stack: err.stack });
+    shutdown('uncaughtException');
   });
-  
-  // Force exit after 10s
-  setTimeout(() => {
-    log('warn', 'Forcing shutdown after timeout');
-    process.exit(1);
-  }, 10000);
-}
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-  log('error', 'Uncaught exception', { error: err.message, stack: err.stack });
-  shutdown('uncaughtException');
-});
-
-process.on('unhandledRejection', (reason) => {
-  log('error', 'Unhandled rejection', { reason: String(reason) });
+  process.on('unhandledRejection', (reason) => {
+    log('error', 'Unhandled rejection', { reason: String(reason) });
+  });
+}).catch((err) => {
+  log('error', 'Failed to start server', { error: String(err) });
+  process.exit(1);
 });

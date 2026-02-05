@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth';
+import { getMigrations } from 'better-auth/db';
 import { emailOTP } from 'better-auth/plugins';
 import Database from 'better-sqlite3';
 import { Resend } from 'resend';
@@ -61,7 +62,8 @@ export const auth = betterAuth({
     'http://127.0.0.1:5173',
     'https://murkl.app',
     'https://murkl.dev',
-    'https://aimed-beauty-faces-ours.trycloudflare.com',
+    'https://murkl-relayer-production.up.railway.app',
+    ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : []),
   ],
   
   // Secret for signing sessions
@@ -185,3 +187,23 @@ export function getMurklIdentifier(user: {
 }
 
 export type Auth = typeof auth;
+
+/**
+ * Run Better Auth migrations on startup (creates tables if missing).
+ * Safe to call repeatedly — only creates/alters what's needed.
+ */
+export async function runAuthMigrations(): Promise<void> {
+  try {
+    const { runMigrations, toBeCreated, toBeAdded } = await getMigrations(auth.options);
+    if (toBeCreated.length > 0 || toBeAdded.length > 0) {
+      console.log(`🔄 Running auth migrations: ${toBeCreated.length} tables to create, ${toBeAdded.length} to alter`);
+      await runMigrations();
+      console.log('✅ Auth migrations complete');
+    } else {
+      console.log('✅ Auth database up to date');
+    }
+  } catch (err) {
+    console.error('❌ Auth migration failed:', err);
+    throw err;
+  }
+}
