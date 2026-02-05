@@ -20,9 +20,10 @@ interface Props {
 }
 
 export const SUPPORTED_TOKENS: Token[] = [
-  // Keep UI copy friendly: explain any technical details via helper text, not token names.
+  // Keep UI copy friendly: explain any technical details via helper text (not in the label).
   { symbol: 'SOL', name: 'Solana', icon: '◎', decimals: 9 },
-  { symbol: 'WSOL', name: 'Wrapped SOL', icon: '◎', decimals: 9, mint: 'So11111111111111111111111111111111111111112' },
+  // WSOL is a technical term; in the UI we’ll call this “Wallet SOL”.
+  { symbol: 'WSOL', name: 'Wallet SOL', icon: '◎', decimals: 9, mint: 'So11111111111111111111111111111111111111112' },
 ];
 
 const formatBalance = (bal: number): string => {
@@ -35,9 +36,16 @@ const formatBalance = (bal: number): string => {
 
 const formatTokenName = (token: Token): string => {
   // Keep names friendly and non-technical in the UI.
+  // “WSOL” is an implementation detail; users just care where the SOL comes from.
   if (token.symbol === 'SOL') return 'Solana';
-  if (token.symbol === 'WSOL') return 'Wrapped SOL';
+  if (token.symbol === 'WSOL') return 'Wallet SOL';
   return token.name;
+};
+
+const formatTokenShort = (token: Token): string => {
+  if (token.symbol === 'SOL') return 'SOL';
+  if (token.symbol === 'WSOL') return 'Wallet SOL';
+  return token.symbol;
 };
 
 export const TokenSelector: FC<Props> = ({
@@ -63,17 +71,19 @@ export const TokenSelector: FC<Props> = ({
   const selectedLabel = useMemo(() => formatTokenName(selected), [selected]);
 
   const helperText = useMemo(() => {
-    if (selected.symbol === 'SOL') return `We'll handle wrapping for you.`;
-    if (selected.symbol === 'WSOL') return `Uses the wrapped SOL in your wallet.`;
+    // Keep copy friendly: don’t mention wrapping/WSOL unless absolutely necessary.
+    if (selected.symbol === 'SOL') return `We’ll take care of the details.`;
+    if (selected.symbol === 'WSOL') return `Uses the SOL already in your wallet.`;
     return '';
   }, [selected.symbol]);
 
   return (
     <div className="token-selector">
-      <div className="token-tabs" role="radiogroup" aria-label="Select token">
+      <div className="token-tabs" role="radiogroup" aria-label="Choose token">
         {tokens.map((token) => {
           const isSelected = token.symbol === selected.symbol;
           const tokenLabel = formatTokenName(token);
+          const tokenShort = formatTokenShort(token);
 
           return (
             <button
@@ -84,6 +94,7 @@ export const TokenSelector: FC<Props> = ({
               className={`token-tab${isSelected ? ' selected' : ''}`}
               onClick={() => handleSelect(token)}
               disabled={disabled}
+              aria-label={tokenLabel}
             >
               {isSelected && (
                 <motion.div
@@ -96,7 +107,7 @@ export const TokenSelector: FC<Props> = ({
                 <span className="token-icon" aria-hidden="true">
                   {token.icon}
                 </span>
-                <span className="token-symbol">{token.symbol}</span>
+                <span className="token-symbol">{tokenShort}</span>
               </span>
               <span className="token-tab-sub" aria-hidden="true">
                 {tokenLabel}
@@ -139,7 +150,7 @@ export const TokenSelector: FC<Props> = ({
             <span className="balance-skeleton" aria-label="Checking balance" />
           ) : (
             <span className="balance-amount">
-              {formatBalance(balance as number)} {selected.symbol}
+              {formatBalance(balance as number)} {formatTokenShort(selected)}
             </span>
           )}
 
@@ -149,7 +160,7 @@ export const TokenSelector: FC<Props> = ({
               className="max-button"
               onClick={() => onMaxClick(balance as number)}
               disabled={disabled}
-              aria-label={`Use maximum balance of ${formatBalance(balance as number)} ${selected.symbol}`}
+              aria-label={`Use maximum balance of ${formatBalance(balance as number)} ${formatTokenShort(selected)}`}
             >
               Max
             </button>
