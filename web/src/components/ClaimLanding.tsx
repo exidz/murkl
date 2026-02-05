@@ -461,14 +461,14 @@ export const ClaimLanding: FC<Props> = ({
         ) : (
           /* Password entry (shown after email verified or for non-email identifiers) */
           <div className="landing-password">
-            <p className="landing-password-label">Enter the password to claim</p>
+            <p className="landing-password-label">Enter the secret code</p>
 
             <div className="landing-password-wrapper">
               <input
                 ref={inputRef}
                 type={showPassword ? 'text' : 'password'}
                 className={`landing-password-input ${password.length > 0 ? 'has-value' : ''} ${isReady ? 'ready' : ''}`}
-                placeholder="Password from sender..."
+                placeholder="Secret code from sender…"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -480,7 +480,7 @@ export const ClaimLanding: FC<Props> = ({
                 className="landing-password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
                 whileTap={{ scale: 0.9 }}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Hide code' : 'Show code'}
               >
                 {showPassword ? '🙈' : '👁️'}
               </motion.button>
@@ -494,7 +494,7 @@ export const ClaimLanding: FC<Props> = ({
               {password.length === 0 ? (
                 <span>The sender shared this with you</span>
               ) : isReady ? (
-                <span className="ready-text">✓ Ready to claim</span>
+                <span className="ready-text">✓ Ready</span>
               ) : (
                 <span>{password.length}/8 characters minimum</span>
               )}
@@ -507,7 +507,7 @@ export const ClaimLanding: FC<Props> = ({
               onClick={handleSubmit}
               disabled={!isReady || !wasmReady}
               loading={!wasmReady}
-              loadingText="Loading prover..."
+              loadingText="Getting things ready..."
             >
               Claim
             </Button>
@@ -529,7 +529,7 @@ export const ClaimLanding: FC<Props> = ({
         <span className="landing-trust-divider" aria-hidden="true">•</span>
         <div className="landing-trust-item">
           <span className="landing-trust-icon">🛡️</span>
-          <span className="landing-trust-label">Post-quantum</span>
+          <span className="landing-trust-label">Secure</span>
         </div>
         <span className="landing-trust-divider" aria-hidden="true">•</span>
         <div className="landing-trust-item">
@@ -548,8 +548,8 @@ export const ClaimLanding: FC<Props> = ({
         <span className="landing-privacy-icon">🔒</span>
         <span>
           {isEmailIdentifier
-            ? 'Email verification + password required to claim'
-            : 'Only someone with the password can claim'}
+            ? 'Email verification + secret code required to claim'
+            : 'Only someone with the secret code can claim'}
         </span>
       </motion.div>
 
