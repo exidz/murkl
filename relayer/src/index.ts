@@ -36,6 +36,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import bs58 from 'bs58';
 import { auth, db, getMurklIdentifier, resend, runAuthMigrations } from './auth';
 import { toNodeHandler } from 'better-auth/node';
 import { 
@@ -460,6 +461,142 @@ function getDiscriminator(name: string): Buffer {
   return hash.slice(0, 8);
 }
 
+function readU64LE(buf: Buffer, offset: number): bigint {
+  if (offset + 8 > buf.length) throw new Error('readU64LE out of bounds');
+  return buf.readBigUInt64LE(offset);
+}
+
+/**
+ * Verify that a user-submitted txSignature really performed a Murkl `deposit` into the
+ * expected pool + leafIndex + commitment + amount.
+ *
+ * Threat model:
+ * - Prevent authenticated attackers from registering fake deposits for other identities
+ *   (and triggering notification emails / voucher creation).
+ * - Prevent poisoning the local deposit index DB with arbitrary entries.
+ */
+async function verifyDepositTx(params: {
+  txSignature: string;
+  pool: PublicKey;
+  leafIndex: number;
+  amount: number;
+  commitmentHex: string;
+}): Promise<{ depositAccount: PublicKey }> {
+  const { txSignature, pool, leafIndex, amount, commitmentHex } = params;
+
+  const commitmentBuf = sanitizeHex(commitmentHex);
+  if (commitmentBuf.length !== 32) throw new Error('Invalid commitment length');
+
+  // Expected PDA for the deposit record, derived from leafIndex (u64 LE)
+  const leafIndexBuf = Buffer.alloc(8);
+  leafIndexBuf.writeBigUInt64LE(BigInt(leafIndex));
+  const [expectedDepositPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('deposit'), pool.toBuffer(), leafIndexBuf],
+    config.programId
+  );
+
+  const tx = await connection.getTransaction(txSignature, {
+    commitment: 'confirmed',
+    maxSupportedTransactionVersion: 0,
+  } as any);
+
+  if (!tx) throw new Error('Transaction not found');
+  if (tx.meta?.err) throw new Error('Transaction failed');
+
+  // Collect program instructions (both top-level and inner)
+  const message: any = tx.transaction.message;
+  const accountKeys: PublicKey[] = (message.getAccountKeys
+    ? message.getAccountKeys().staticAccountKeys
+    : message.accountKeys
+  ).map((k: any) => (k instanceof PublicKey ? k : new PublicKey(k)));
+
+  const ixList: Array<{ programIdIndex: number; accountKeyIndexes: number[]; data: string }> = [];
+  for (const ix of (message.compiledInstructions || message.instructions || [])) {
+    ixList.push({
+      programIdIndex: (ix as any).programIdIndex,
+      accountKeyIndexes: (ix as any).accountKeyIndexes || (ix as any).accounts,
+      data: (ix as any).data,
+    });
+  }
+
+  const inner = (tx.meta as any)?.innerInstructions as Array<any> | undefined;
+  if (inner) {
+    for (const innerIx of inner) {
+      for (const ix of innerIx.instructions || []) {
+        if ((ix as any).programIdIndex !== undefined) {
+          ixList.push({
+            programIdIndex: (ix as any).programIdIndex,
+            accountKeyIndexes: (ix as any).accountKeyIndexes || (ix as any).accounts,
+            data: (ix as any).data,
+          });
+        }
+      }
+    }
+  }
+
+  const depositDisc = getDiscriminator('deposit');
+  let matched = false;
+
+  for (const ix of ixList) {
+    const programId = accountKeys[ix.programIdIndex];
+    if (!programId || !programId.equals(config.programId)) continue;
+
+    let dataBuf: Buffer;
+    try {
+      dataBuf = Buffer.from(bs58.decode(ix.data));
+    } catch {
+      continue;
+    }
+
+    if (dataBuf.length < 8 + 8 + 32) continue;
+    if (!dataBuf.subarray(0, 8).equals(depositDisc)) continue;
+
+    // Anchor args: amount: u64, commitment: [u8; 32]
+    const ixAmount = Number(readU64LE(dataBuf, 8));
+    const ixCommitment = dataBuf.subarray(16, 48);
+
+    if (ixAmount !== amount) continue;
+    if (!ixCommitment.equals(commitmentBuf)) continue;
+
+    // Accounts: [pool, deposit, vault, depositor, depositor_token, token_program, system_program]
+    const acctIdxs = ix.accountKeyIndexes;
+    if (!acctIdxs || acctIdxs.length < 2) continue;
+
+    const ixPool = accountKeys[acctIdxs[0]];
+    const ixDeposit = accountKeys[acctIdxs[1]];
+    if (!ixPool?.equals(pool)) continue;
+    if (!ixDeposit?.equals(expectedDepositPda)) continue;
+
+    matched = true;
+    break;
+  }
+
+  if (!matched) {
+    throw new Error('txSignature does not match expected Murkl deposit');
+  }
+
+  // Verify deposit account exists and has the expected leafIndex & commitment.
+  const depInfo = await connection.getAccountInfo(expectedDepositPda, 'confirmed');
+  if (!depInfo) throw new Error('Deposit account not found');
+  if (!depInfo.owner.equals(config.programId)) throw new Error('Deposit account owner mismatch');
+
+  // Anchor account layout: 8 disc + pool(32) + commitment(32) + amount(8) + leaf_index(8) + claimed(1) + bump(1)
+  const data = Buffer.from(depInfo.data);
+  if (data.length < 8 + 32 + 32 + 8 + 8) throw new Error('Deposit account too small');
+
+  const onchainPool = new PublicKey(data.subarray(8, 40));
+  const onchainCommitment = data.subarray(40, 72);
+  const onchainAmount = Number(readU64LE(data, 72));
+  const onchainLeafIndex = Number(readU64LE(data, 80));
+
+  if (!onchainPool.equals(pool)) throw new Error('On-chain deposit pool mismatch');
+  if (!onchainCommitment.equals(commitmentBuf)) throw new Error('On-chain deposit commitment mismatch');
+  if (onchainAmount !== amount) throw new Error('On-chain deposit amount mismatch');
+  if (onchainLeafIndex !== leafIndex) throw new Error('On-chain deposit leafIndex mismatch');
+
+  return { depositAccount: expectedDepositPda };
+}
+
 // ============================================================================
 // API Routes
 // ============================================================================
@@ -877,9 +1014,23 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       );
     }
     
-    // Claim instruction: (relayer_fee: u64, nullifier: [u8; 32])
+    // Claim instruction expects `relayer_fee` in *token units*, not bps.
+    // Convert requested feeBps into an absolute fee using the on-chain deposit amount.
+    const depInfo = await connection.getAccountInfo(deposit, 'confirmed');
+    if (!depInfo) {
+      return res.status(400).json({ error: 'Deposit account not found' });
+    }
+    const depData = Buffer.from(depInfo.data);
+    if (depData.length < 8 + 32 + 32 + 8) {
+      return res.status(400).json({ error: 'Invalid deposit account' });
+    }
+    const depositAmount = Number(readU64LE(depData, 8 + 32 + 32));
+
+    // floor(amount * bps / 10_000)
+    const relayerFeeAmount = Math.floor((depositAmount * feeBps) / 10_000);
+
     const relayerFeeBuffer = Buffer.alloc(8);
-    relayerFeeBuffer.writeBigUInt64LE(BigInt(feeBps));
+    relayerFeeBuffer.writeBigUInt64LE(BigInt(relayerFeeAmount));
     
     const claimData = Buffer.concat([
       getDiscriminator('claim'),
@@ -1159,46 +1310,109 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
     
-    const { identifier, amount, token, leafIndex, pool, commitment, txSignature } = req.body;
-    
-    if (!identifier || !amount || leafIndex === undefined || leafIndex === null || !pool || !commitment || !txSignature) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    const { identifier, amount, token, leafIndex, pool, commitment, txSignature } = req.body as {
+      identifier?: unknown;
+      amount?: unknown;
+      token?: unknown;
+      leafIndex?: unknown;
+      pool?: unknown;
+      commitment?: unknown;
+      txSignature?: unknown;
+    };
+
+    if (typeof identifier !== 'string' || identifier.length < 1 || identifier.length > 256) {
+      return res.status(400).json({ error: 'Invalid identifier' });
     }
-    
-    // Validate txSignature format (base58, 64-88 chars)
+
+    if (typeof pool !== 'string' || !isValidBase58(pool)) {
+      return res.status(400).json({ error: 'Invalid pool' });
+    }
+
+    if (typeof commitment !== 'string' || !isValidHex(commitment, 32, 32)) {
+      return res.status(400).json({ error: 'Invalid commitment' });
+    }
+
+    const leafIndexNum = typeof leafIndex === 'number' ? leafIndex : Number(leafIndex);
+    if (!Number.isInteger(leafIndexNum) || leafIndexNum < 0 || leafIndexNum > 0xffffffff) {
+      return res.status(400).json({ error: 'Invalid leafIndex' });
+    }
+
+    const amountNum = typeof amount === 'number' ? amount : Number(amount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    // Validate txSignature format (base58)
     if (typeof txSignature !== 'string' || txSignature.length < 64 || txSignature.length > 128 || !BASE58_REGEX.test(txSignature)) {
       return res.status(400).json({ error: 'Invalid transaction signature' });
     }
-    
+
+    const tokenStr = typeof token === 'string' && token.length > 0 ? token : 'SOL';
+
+    // Verify the submitted identifier belongs to the authenticated user.
+    // This prevents phishing/DoS by registering deposits for arbitrary email addresses.
+    const accounts = await auth.api.listUserAccounts({
+      headers: req.headers as Record<string, string>,
+    });
+    const allowedIdentifiers = new Set<string>();
+    if (accounts && Array.isArray(accounts)) {
+      for (const account of accounts) {
+        const providerId = (account as any).providerId || 'unknown';
+        const id = getMurklIdentifier(session.user, providerId);
+        allowedIdentifiers.add(id.toLowerCase());
+      }
+    }
+    if (session.user.email) {
+      allowedIdentifiers.add(`email:${session.user.email}`.toLowerCase());
+    }
+
+    if (!allowedIdentifiers.has(identifier.toLowerCase())) {
+      log('warn', 'Deposit register denied — not user identity', {
+        userId: session.user.id,
+        identifier: identifier.slice(0, 32),
+      });
+      return res.status(403).json({ error: 'Not your identity' });
+    }
+
+    // Verify on-chain tx to prevent fake registrations / DB poisoning
+    const poolPk = new PublicKey(pool);
+    await verifyDepositTx({
+      txSignature,
+      pool: poolPk,
+      leafIndex: leafIndexNum,
+      amount: amountNum,
+      commitmentHex: commitment,
+    });
+
     const deposit: IndexedDeposit = {
-      id: `${pool}-${leafIndex}`,
+      id: `${pool}-${leafIndexNum}`,
       pool,
       commitment,
       identifierHash: hashIdentifier(identifier),
-      amount: parseFloat(amount),
-      token: token || 'SOL',
-      leafIndex: parseInt(leafIndex, 10),
+      amount: amountNum,
+      token: tokenStr,
+      leafIndex: leafIndexNum,
       timestamp: new Date().toISOString(),
       claimed: false,
       txSignature,
     };
-    
+
     indexDeposit(deposit);
     
     // For email deposits, create a voucher if password was provided
     // This enables OTP-free claiming via voucher code
     let voucherCode: string | undefined;
-    if (identifier.startsWith('email:') && req.body.password) {
+    if (identifier.startsWith('email:') && (req.body as any).password) {
       try {
         voucherCode = createVoucher(db, {
           identifier,
-          leafIndex: parseInt(leafIndex, 10),
+          leafIndex: leafIndexNum,
           pool,
-          password: req.body.password,
-          amount: parseFloat(amount),
-          token: token || 'SOL',
+          password: (req.body as any).password,
+          amount: amountNum,
+          token: tokenStr,
         });
-        log('info', 'Voucher created for email deposit', { voucherCode, leafIndex });
+        log('info', 'Voucher created for email deposit', { voucherCode, leafIndex: leafIndexNum });
       } catch (voucherErr) {
         log('warn', 'Failed to create voucher', { error: String(voucherErr) });
         // Non-critical — user can still claim via OTP
@@ -1221,7 +1435,7 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
         await resend.emails.send({
           from: process.env.EMAIL_FROM || 'Murkl <noreply@email.siklab.dev>',
           to: recipientEmail,
-          subject: `💰 You received ${amount} ${token || 'SOL'} on Murkl`,
+          subject: `💰 You received ${amountNum} ${tokenStr} on Murkl`,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem; background: #0a0a0f; color: #fff; border-radius: 16px;">
               <div style="text-align: center; margin-bottom: 1.5rem;">
@@ -1231,7 +1445,7 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
               
               <div style="background: #14141f; border: 1px solid #27272a; border-radius: 12px; padding: 1.5rem; text-align: center; margin: 1.5rem 0;">
                 <p style="color: #a1a1aa; font-size: 0.9rem; margin: 0 0 0.5rem;">Amount</p>
-                <p style="font-size: 2rem; font-weight: 700; margin: 0; color: #fff;">${amount} ${token || 'SOL'}</p>
+                <p style="font-size: 2rem; font-weight: 700; margin: 0; color: #fff;">${amountNum} ${tokenStr}</p>
               </div>
               
               <p style="color: #a1a1aa; font-size: 0.95rem; line-height: 1.5; text-align: center;">
@@ -1247,7 +1461,7 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
               
               <div style="text-align: center; margin: 1.5rem 0;">
                 <a href="${claimLink}" style="display: inline-block; padding: 0.875rem 2rem; background: #3d95ce; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 1rem;">
-                  Claim your ${token || 'SOL'}
+                  Claim your ${tokenStr}
                 </a>
               </div>
               
