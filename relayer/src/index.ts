@@ -36,7 +36,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { auth, getMurklIdentifier } from './auth';
+import { auth, getMurklIdentifier, resend } from './auth';
 import { toNodeHandler } from 'better-auth/node';
 
 // ============================================================================
@@ -72,7 +72,7 @@ function loadConfig(): Config {
   
   const corsOrigins = process.env.CORS_ORIGINS 
     ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
-    : ['http://localhost:3000', 'http://localhost:3001', 'https://murkl.app'];
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173', 'https://murkl.app', 'https://aimed-beauty-faces-ours.trycloudflare.com'];
   
   return {
     port: parseInt(process.env.PORT || '3001', 10),
@@ -320,10 +320,46 @@ if (fs.existsSync(distPath)) {
 // Better Auth Routes
 // ============================================================================
 
+// OTP rate limiting middleware — 1 per 5 minutes per email (server-enforced)
+const otpSendTimes = new Map<string, number>();
+const OTP_RATE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes
+
+// Cleanup stale entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, ts] of otpSendTimes) {
+    if (now - ts > OTP_RATE_LIMIT_MS) otpSendTimes.delete(key);
+  }
+}, 10 * 60 * 1000);
+
+app.post('/api/auth/email-otp/send-verification-otp', (req: Request, res: Response, next: NextFunction) => {
+  const email = req.body?.email;
+  if (!email) return next();
+  
+  const key = email.toLowerCase().trim();
+  const lastSent = otpSendTimes.get(key);
+  
+  if (lastSent) {
+    const elapsed = Date.now() - lastSent;
+    if (elapsed < OTP_RATE_LIMIT_MS) {
+      const remaining = Math.ceil((OTP_RATE_LIMIT_MS - elapsed) / 1000);
+      log('info', 'OTP rate limited', { email: key, remainingSeconds: remaining });
+      return res.status(429).json({
+        error: `Please wait ${Math.ceil(remaining / 60)} minute(s) before requesting a new code`,
+        retryAfter: remaining,
+      });
+    }
+  }
+  
+  otpSendTimes.set(key, Date.now());
+  next();
+});
+
 // Mount Better Auth handler
 app.all('/api/auth/*', toNodeHandler(auth));
 
-// Get current user's Murkl identifier
+// Get current user's linked identities
+// Returns ALL linked accounts so the frontend can offer a picker
 app.get('/api/me', async (req: Request, res: Response) => {
   try {
     const session = await auth.api.getSession({
@@ -334,13 +370,39 @@ app.get('/api/me', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
     
-    // Get the provider from accounts
+    // Get all linked accounts
     const accounts = await auth.api.listUserAccounts({
       headers: req.headers as Record<string, string>,
     });
     
-    const provider = accounts?.[0]?.providerId || 'unknown';
-    const identifier = getMurklIdentifier(session.user, provider);
+    // Build all identities from linked accounts
+    const identities: { provider: string; identifier: string; label: string }[] = [];
+    const seen = new Set<string>();
+    
+    if (accounts && Array.isArray(accounts)) {
+      for (const account of accounts) {
+        const providerId = (account as any).providerId || 'unknown';
+        const identifier = getMurklIdentifier(session.user, providerId);
+        
+        // Deduplicate
+        if (!seen.has(identifier)) {
+          seen.add(identifier);
+          
+          let label = identifier;
+          if (providerId === 'twitter') label = `𝕏 ${identifier}`;
+          else if (providerId === 'discord') label = `Discord ${identifier.replace('discord:', '')}`;
+          else if (providerId === 'email-otp' || providerId === 'email' || providerId === 'credential') label = `✉️ ${identifier.replace('email:', '')}`;
+          
+          identities.push({ provider: providerId, identifier, label });
+        }
+      }
+    }
+    
+    // If user has email and no email-based account was found, add it
+    if (session.user.email && !identities.some(i => i.identifier.startsWith('email:'))) {
+      const emailId = `email:${session.user.email}`;
+      identities.push({ provider: 'email', identifier: emailId, label: `✉️ ${session.user.email}` });
+    }
     
     res.json({
       user: {
@@ -349,8 +411,10 @@ app.get('/api/me', async (req: Request, res: Response) => {
         email: session.user.email,
         image: session.user.image,
       },
-      provider,
-      murklIdentifier: identifier,
+      identities,
+      // Legacy: first identity for backwards compat
+      provider: identities[0]?.provider || 'unknown',
+      murklIdentifier: identities[0]?.identifier || '',
     });
   } catch (e: unknown) {
     log('error', 'Get user failed', { error: String(e) });
@@ -856,6 +920,17 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       computeUnits: simResult.value.unitsConsumed,
     });
     
+    // Mark deposit as claimed in the index
+    const depositId = `${poolAddress}-${leafIndex}`;
+    for (const [, deposits] of depositIndex.entries()) {
+      const dep = deposits.find(d => d.id === depositId || d.leafIndex === leafIndex);
+      if (dep) {
+        dep.claimed = true;
+        log('info', 'Deposit marked claimed', { requestId, depositId: dep.id });
+        break;
+      }
+    }
+    
     res.json({
       success: true,
       signature: claimSig,
@@ -934,12 +1009,10 @@ app.get('/deposits', async (req: Request, res: Response) => {
     const identifierHash = hashIdentifier(identity);
     const deposits = depositIndex.get(identifierHash) || [];
     
-    // Filter out claimed deposits
-    const unclaimed = deposits.filter(d => !d.claimed);
-    
+    // Return all deposits — UI shows claimed ones with a badge
     res.json({
       identity: identity,
-      deposits: unclaimed.map(d => ({
+      deposits: deposits.map(d => ({
         id: d.id,
         amount: d.amount,
         token: d.token,
@@ -948,7 +1021,7 @@ app.get('/deposits', async (req: Request, res: Response) => {
         claimed: d.claimed,
       })),
       totalCount: deposits.length,
-      unclaimedCount: unclaimed.length,
+      unclaimedCount: deposits.filter(d => !d.claimed).length,
     });
   } catch (e: unknown) {
     log('error', 'Deposits query failed', { error: String(e) });
@@ -961,7 +1034,7 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
   try {
     const { identifier, amount, token, leafIndex, pool, commitment, txSignature } = req.body;
     
-    if (!identifier || !amount || !leafIndex === undefined || !pool || !commitment || !txSignature) {
+    if (!identifier || !amount || leafIndex === undefined || leafIndex === null || !pool || !commitment || !txSignature) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
@@ -979,6 +1052,59 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
     };
     
     indexDeposit(deposit);
+    
+    // Send notification email if depositing to an email identifier
+    if (identifier.startsWith('email:') && resend) {
+      const recipientEmail = identifier.slice('email:'.length);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const claimLink = `${frontendUrl}/?tab=claim&id=${encodeURIComponent(identifier)}&leaf=${leafIndex}&pool=${pool}`;
+      
+      try {
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM || 'Murkl <noreply@email.siklab.dev>',
+          to: recipientEmail,
+          subject: `💰 You received ${amount} ${token || 'SOL'} on Murkl`,
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem; background: #0a0a0f; color: #fff; border-radius: 16px;">
+              <div style="text-align: center; margin-bottom: 1.5rem;">
+                <span style="font-size: 2.5rem;">🐈‍⬛</span>
+                <h1 style="font-size: 1.5rem; font-weight: 700; margin: 0.5rem 0 0;">You received funds!</h1>
+              </div>
+              
+              <div style="background: #14141f; border: 1px solid #27272a; border-radius: 12px; padding: 1.5rem; text-align: center; margin: 1.5rem 0;">
+                <p style="color: #a1a1aa; font-size: 0.9rem; margin: 0 0 0.5rem;">Amount</p>
+                <p style="font-size: 2rem; font-weight: 700; margin: 0; color: #fff;">${amount} ${token || 'SOL'}</p>
+              </div>
+              
+              <p style="color: #a1a1aa; font-size: 0.95rem; line-height: 1.5; text-align: center;">
+                Someone sent you tokens privately via Murkl. You'll need the <strong style="color: #fff;">password</strong> they shared with you to claim.
+              </p>
+              
+              <div style="text-align: center; margin: 1.5rem 0;">
+                <a href="${claimLink}" style="display: inline-block; padding: 0.875rem 2rem; background: #3d95ce; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 1rem;">
+                  Claim your ${token || 'SOL'}
+                </a>
+              </div>
+              
+              <div style="background: #14141f; border: 1px solid #27272a; border-radius: 10px; padding: 1rem; margin-top: 1.5rem;">
+                <p style="color: #71717a; font-size: 0.8rem; margin: 0; text-align: center;">
+                  🔒 Your funds are secured by a STARK proof on Solana.<br>
+                  Only someone with the password can claim them.
+                </p>
+              </div>
+              
+              <p style="color: #52525b; font-size: 0.75rem; text-align: center; margin-top: 1.5rem;">
+                <a href="${claimLink}" style="color: #52525b; word-break: break-all;">${claimLink}</a>
+              </p>
+            </div>
+          `,
+        });
+        log('info', 'Claim notification email sent', { to: recipientEmail, leafIndex });
+      } catch (emailErr) {
+        log('warn', 'Failed to send claim notification email', { error: String(emailErr) });
+        // Non-critical — deposit still registered
+      }
+    }
     
     res.json({ success: true, depositId: deposit.id });
   } catch (e: unknown) {

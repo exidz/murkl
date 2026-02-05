@@ -84,17 +84,35 @@ function AppContent() {
     });
   }, [dismissSplash]);
 
-  // Check URL for claim params
+  // Sync tab from URL on load
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.has('id') || params.has('leaf')) {
+    const path = window.location.pathname;
+    
+    // ?tab=claim or /claim path or claim link params (?id, ?leaf)
+    if (params.get('tab') === 'claim' || path === '/claim' || params.has('id') || params.has('leaf')) {
       setTab('claim');
     }
   }, []);
 
-  // Track previous tab for animation direction
+  // Track previous tab for animation direction + sync URL
   useEffect(() => {
     prevTabRef.current = tab;
+    
+    // Update URL without reload — preserve existing claim params (id, leaf, pool)
+    const url = new URL(window.location.href);
+    if (tab === 'claim') {
+      url.searchParams.set('tab', 'claim');
+    } else {
+      url.searchParams.delete('tab');
+      // Only clean claim params when leaving the claim tab
+      url.searchParams.delete('id');
+      url.searchParams.delete('leaf');
+      url.searchParams.delete('pool');
+    }
+    // Clean path back to root
+    url.pathname = '/';
+    window.history.replaceState({}, '', url.toString());
   }, [tab]);
 
   return (

@@ -1,0 +1,16 @@
+{
+  "name": "murkl-wasm",
+  "type": "module",
+  "description": "WASM prover for Murkl",
+  "version": "0.1.0",
+  "files": [
+    "murkl_wasm_bg.wasm",
+    "murkl_wasm.js",
+    "murkl_wasm.d.ts"
+  ],
+  "main": "murkl_wasm.js",
+  "types": "murkl_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

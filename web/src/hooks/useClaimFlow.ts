@@ -77,21 +77,19 @@ export function useClaimFlow(wasmReady: boolean) {
 
       // Fetch merkle root from pool using TanStack Query cache
       let merkleRoot = '0'.repeat(64);
-      if (RELAYER_URL) {
-        try {
-          const poolInfo = await queryClient.fetchQuery({
-            queryKey: poolKeys.info(poolAddress),
-            queryFn: async () => {
-              const res = await fetch(`${RELAYER_URL}/pool-info?pool=${poolAddress}`);
-              if (!res.ok) throw new Error('Failed to fetch pool info');
-              return res.json();
-            },
-            staleTime: 30_000,
-          });
-          merkleRoot = poolInfo.merkleRoot || merkleRoot;
-        } catch {
-          // Use default
-        }
+      try {
+        const poolInfo = await queryClient.fetchQuery({
+          queryKey: poolKeys.info(poolAddress),
+          queryFn: async () => {
+            const res = await fetch(`${RELAYER_URL}/pool-info?pool=${poolAddress}`);
+            if (!res.ok) throw new Error('Failed to fetch pool info');
+            return res.json();
+          },
+          staleTime: 30_000,
+        });
+        merkleRoot = poolInfo.merkleRoot || merkleRoot;
+      } catch {
+        // Use default
       }
 
       // Generate proof

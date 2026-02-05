@@ -25,6 +25,39 @@ export default defineConfig({
       'stream': 'stream-browserify',
     },
   },
+  server: {
+    proxy: {
+      // Proxy API calls to relayer in dev — eliminates CORS issues
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/claim': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/deposits': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/pool-info': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/info': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/debug': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     // Manual chunks for better caching and smaller initial load
     rollupOptions: {

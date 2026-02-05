@@ -1,61 +1,74 @@
-/* TokenSelector — HeroUI Tabs + balance display */
+/* TokenSelector — custom segmented control */
 
 .token-selector {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
+}
+
+/* Segmented tab bar */
+.token-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-tertiary, #1e1e2e);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 14px;
+}
+
+.token-tab {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ============================================
-   HeroUI Tabs overrides for dark theme
-   ============================================ */
-
-.token-tabs-base {
-  /* Center the tabs */
+.token-tab:hover:not(:disabled):not(.selected) {
+  color: var(--text-primary, #fff);
 }
 
-.token-tabs-list {
-  background: var(--bg-tertiary, #1e1e2e) !important;
-  border: 1px solid var(--border, #27272a) !important;
-  border-radius: 14px !important;
-  padding: 4px !important;
-  gap: 0 !important;
+.token-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.token-tab-item {
-  min-height: 44px !important;
-  border-radius: 10px !important;
-  font-weight: 600 !important;
-  font-size: 0.95rem !important;
-  color: var(--text-secondary, #a1a1aa) !important;
+.token-tab.selected {
+  color: var(--text-primary, #fff);
 }
 
-.token-tab-item[data-selected="true"] {
-  color: var(--text-primary, #fff) !important;
-}
-
-.token-tab-item[data-hover="true"]:not([data-selected="true"]) {
-  color: var(--text-primary, #fff) !important;
-}
-
-.token-tab-cursor {
-  background: var(--bg-secondary, #14141f) !important;
-  border-radius: 10px !important;
+/* Animated background indicator */
+.token-tab-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-secondary, #14141f);
+  border-radius: 10px;
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  z-index: 0;
 }
 
-/* Tab title content layout */
-.token-tab-title {
+/* Tab content above the bg */
+.token-tab-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 0.375rem;
 }
 
-/* Token icon in tab */
 .token-icon {
   font-size: 1.125rem;
   line-height: 1;
@@ -66,7 +79,7 @@
   letter-spacing: 0.02em;
 }
 
-/* Balance display with Max button */
+/* Balance display */
 .token-balance {
   display: flex;
   align-items: center;
@@ -85,7 +98,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Max button — Venmo/crypto app style */
+/* Max button */
 .max-button {
   margin-left: 0.375rem;
   padding: 0.25rem 0.625rem;
@@ -98,18 +111,13 @@
   border: 1px solid rgba(61, 149, 206, 0.25);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s, border-color 0.15s;
   min-height: 24px;
 }
 
 .max-button:hover:not(:disabled) {
   background: rgba(61, 149, 206, 0.2);
   border-color: rgba(61, 149, 206, 0.4);
-  color: #5ba8d9;
-}
-
-.max-button:active:not(:disabled) {
-  background: rgba(61, 149, 206, 0.25);
 }
 
 .max-button:disabled {
@@ -117,10 +125,11 @@
   cursor: not-allowed;
 }
 
-/* Mobile optimizations */
+/* Mobile */
 @media (max-width: 480px) {
-  .token-tab-item {
-    font-size: 0.875rem !important;
+  .token-tab {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
   }
 
   .token-icon {
@@ -134,11 +143,7 @@
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .token-tab-cursor {
-    transition: none !important;
-  }
-
-  .token-tab-item {
-    transition: none !important;
+  .token-tab-bg {
+    transition: none;
   }
 }

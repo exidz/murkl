@@ -15,8 +15,8 @@ export const STARK_VERIFIER_ID = new PublicKey('StArKSLbAn43UCcujFMc5gKc8rY2BVfS
 // RPC endpoint
 export const RPC_ENDPOINT = import.meta.env.VITE_RPC_URL || 'https://api.devnet.solana.com';
 
-// Relayer URL
-export const RELAYER_URL = import.meta.env.DEV ? 'http://localhost:3001' : '';
+// Relayer URL — empty in dev (Vite proxies to localhost:3001) and prod (same origin)
+export const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || '';
 
 // Token decimals
 export const TOKEN_DECIMALS = 9;

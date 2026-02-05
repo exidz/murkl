@@ -1,12 +1,12 @@
 # ============================================================
-# Murkl Relayer + Frontend — Production Dockerfile
+# Murkl — Production Dockerfile
+# Single service: Express relayer serves API + static frontend
 # ============================================================
-# Single service: Express serves API + static frontend
 
 # ---- Build frontend ----
 FROM node:20-slim AS frontend-builder
 
-WORKDIR /app/web
+WORKDIR /build/web
 COPY web/package*.json ./
 RUN npm ci
 COPY web/ ./
@@ -15,7 +15,7 @@ RUN npm run build
 # ---- Build relayer ----
 FROM node:20-slim AS relayer-builder
 
-WORKDIR /app/relayer
+WORKDIR /build/relayer
 
 # better-sqlite3 needs build tools for native addon
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
@@ -29,21 +29,22 @@ RUN npm run build
 # ---- Production ----
 FROM node:20-slim
 
-WORKDIR /app
+WORKDIR /app/relayer
 
-# better-sqlite3 native addon needs these at runtime
+# better-sqlite3 native addon
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 # Install production deps
 COPY relayer/package*.json ./
 RUN npm ci --omit=dev && rm -rf /root/.npm
 
-# Copy built relayer
-COPY --from=relayer-builder /app/relayer/dist ./dist
+# Copy built relayer → /app/relayer/dist/
+COPY --from=relayer-builder /build/relayer/dist ./dist
 
-# Copy built frontend (relayer serves from ../web/dist relative to __dirname)
-# __dirname = /app/dist, so ../web/dist = /app/web/dist ✓
-COPY --from=frontend-builder /app/web/dist ./web/dist
+# Copy built frontend → /app/web/dist/
+# Relayer resolves: path.join(__dirname, '../..', 'web', 'dist')
+#   __dirname = /app/relayer/dist → ../../ = /app → web/dist = /app/web/dist ✓
+COPY --from=frontend-builder /build/web/dist /app/web/dist
 
 ENV NODE_ENV=production
 ENV PORT=3001

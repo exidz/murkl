@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+web/node_modules
+relayer/node_modules
+
+# Rust build artifacts (not needed — pre-built WASM is in web/src/wasm/)
+wasm/target
+wasm/pkg
+wasm/src
+target
+
+# Build outputs
+relayer/dist
+web/dist
+
+# Dev files
+.git
+.env
+.env.*
+*.md
+*.log
+auth.db
+
+# Secrets (NEVER include)
+.secrets
+*.json.bak
+
+# IDE
+.vscode
+.idea
+
+# Programs (on-chain, not needed for relayer)
+programs
+crates
+migrations
+tests
+Anchor.toml
+Cargo.toml
+Cargo.lock
