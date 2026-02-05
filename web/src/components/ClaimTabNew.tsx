@@ -402,8 +402,8 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
               >
-                <span className="celebration-emoji">🎉</span>
-                <p>Private transfer complete — no trace left behind</p>
+                <span className="celebration-emoji" aria-hidden="true">🎉</span>
+                <p>All set — it’s in your wallet.</p>
               </motion.div>
 
               {successSignature && (

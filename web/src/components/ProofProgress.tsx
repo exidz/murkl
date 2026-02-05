@@ -8,38 +8,37 @@ interface Props {
   onComplete?: () => void;
 }
 
-// Stage configuration with friendlier copy
+// Stage configuration with friendly, non-technical copy
 const stages = [
-  { id: 'generating', label: 'Proving', icon: '🔐', shortLabel: 'Prove' },
-  { id: 'uploading', label: 'Uploading', icon: '📤', shortLabel: 'Upload' },
-  { id: 'verifying', label: 'Verifying', icon: '✓', shortLabel: 'Verify' },
+  { id: 'generating', label: 'Getting it ready', icon: '🔐', shortLabel: 'Ready' },
+  { id: 'uploading', label: 'Sending', icon: '📤', shortLabel: 'Send' },
+  { id: 'verifying', label: 'Checking', icon: '✓', shortLabel: 'Check' },
   { id: 'claiming', label: 'Claiming', icon: '💰', shortLabel: 'Claim' },
 ] as const;
 
 const stageHints: Record<string, string> = {
-  generating: 'Creating proof in your browser...',
-  uploading: 'Sending proof to network...',
-  verifying: 'On-chain verification...',
-  claiming: 'Transferring to your wallet...',
-  complete: 'All done!',
+  generating: 'Preparing your claim…',
+  uploading: 'Sending it to the network…',
+  verifying: 'Doing a quick check…',
+  claiming: 'Moving it into your wallet…',
+  complete: 'All set!',
 };
 
-// Friendly tip messages that rotate during proving (more variety!)
+// Tip messages during the longer "generating" stage.
+// Keep it friendly (no crypto jargon) and reassuring.
 const provingTips = [
-  'Your browser is doing math magic ✨',
-  'Zero-knowledge = maximum privacy 🔒',
-  'No one can see what you\'re proving 👀',
-  'This proof is quantum-resistant 🛡️',
-  'Creating cryptographic evidence... 🔐',
-  'Your secrets never leave your device 💻',
+  'Hang tight — this can take a few seconds.',
+  'Almost there. Keep this tab open.',
+  'If you\'re on mobile, this can be a bit slower.',
+  'You can keep using your phone — we\'ll finish soon.',
+  'Thanks for waiting. Wrapping things up…',
 ];
 
 // Special messages when close to completion
 const almostDoneTips = [
-  'Almost there! 🎯',
-  'Just a moment more... ⏳',
-  'Finishing up! 🏁',
-  'Nearly done! 🐈‍⬛',
+  'Almost there…',
+  'Just a moment more…',
+  'Finishing up…',
 ];
 
 // Estimate time based on stage with friendly formatting
