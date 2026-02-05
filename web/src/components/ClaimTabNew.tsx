@@ -19,6 +19,8 @@ import './ClaimTabNew.css';
 
 interface Props {
   wasmReady: boolean;
+  /** Callback to report unclaimed deposit count to parent (for TabBar badge) */
+  onUnclaimedCount?: (count: number) => void;
 }
 
 interface Deposit {
@@ -30,7 +32,7 @@ interface Deposit {
   claimed: boolean;
 }
 
-export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
+export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
   const { connected, publicKey } = useWallet();
   const queryClient = useQueryClient();
 
@@ -108,6 +110,13 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     setWantsSwitch(false);
     setIdentity({ provider, handle });
   }, []);
+
+  // Report unclaimed deposit count to parent (for TabBar badge)
+  useEffect(() => {
+    if (!onUnclaimedCount) return;
+    const unclaimed = deposits.filter(d => !d.claimed).length;
+    onUnclaimedCount(unclaimed);
+  }, [deposits, onUnclaimedCount]);
 
   // Show toasts when deposits load
   useEffect(() => {

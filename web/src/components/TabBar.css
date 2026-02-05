@@ -64,6 +64,14 @@
   color: var(--text-primary, #fff);
 }
 
+/* Icon wrapper — relative container for badge positioning */
+.tab-icon-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Icon */
 .tab-icon {
   font-size: 1.1rem;
@@ -71,6 +79,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Badge anchor — positions the badge at top-right of the icon */
+.tab-badge-anchor {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Badge override inside tab — ensure outline matches tab bg */
+.tab-badge.notification-badge {
+  box-shadow:
+    0 1px 3px rgba(239, 68, 68, 0.35),
+    0 0 0 2px var(--bg-secondary, #14141f);
 }
 
 /* Label */
@@ -144,6 +168,11 @@
 
   .tab-icon {
     font-size: 1rem;
+  }
+
+  .tab-badge-anchor {
+    top: -5px;
+    right: -8px;
   }
 }
 

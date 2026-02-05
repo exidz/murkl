@@ -9,12 +9,15 @@ import {
   type TouchEvent,
 } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { NotificationBadge } from './NotificationBadge';
 import './TabBar.css';
 
 interface Tab {
   id: string;
   label: string;
   icon?: ReactNode;
+  /** Optional notification badge count (0 or undefined = hidden) */
+  badge?: number;
 }
 
 interface Props {
@@ -218,16 +221,28 @@ export const TabBar: FC<Props> = ({ tabs, activeTab, onChange }) => {
             whileTap={!reducedMotion ? { scale: 0.97 } : undefined}
           >
             {tab.icon && (
-              <motion.span 
-                className="tab-icon"
-                animate={isActive && !reducedMotion ? { 
-                  scale: [1, 1.15, 1],
-                } : {}}
-                transition={{ duration: 0.3, delay: 0.05 }}
-                key={isActive ? 'active' : 'inactive'}
-              >
-                {tab.icon}
-              </motion.span>
+              <span className="tab-icon-wrapper">
+                <motion.span 
+                  className="tab-icon"
+                  animate={isActive && !reducedMotion ? { 
+                    scale: [1, 1.15, 1],
+                  } : {}}
+                  transition={{ duration: 0.3, delay: 0.05 }}
+                  key={isActive ? 'active' : 'inactive'}
+                >
+                  {tab.icon}
+                </motion.span>
+                {/* Notification badge */}
+                {(tab.badge ?? 0) > 0 && (
+                  <span className="tab-badge-anchor">
+                    <NotificationBadge
+                      count={tab.badge!}
+                      pulse={!isActive}
+                      className="tab-badge"
+                    />
+                  </span>
+                )}
+              </span>
             )}
             <span className="tab-label">{tab.label}</span>
             

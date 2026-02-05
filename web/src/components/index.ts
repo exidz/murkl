@@ -24,3 +24,4 @@ export { ClaimLanding } from './ClaimLanding';
 export type { ClaimLinkData } from './ClaimLanding';
 export { StepProgress } from './StepProgress';
 export { OtpInput } from './OtpInput';
+export { NotificationBadge } from './NotificationBadge';

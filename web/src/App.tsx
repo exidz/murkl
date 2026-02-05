@@ -52,14 +52,18 @@ function AppContent() {
   const [wasmReady, setWasmReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [tab, setTab] = useState<Tab>('send');
+  const [unclaimedCount, setUnclaimedCount] = useState(0);
   const prevTabRef = useRef<Tab>('send');
   const splashStartRef = useRef(Date.now());
   
   // Track direction for slide animation (1 = right, -1 = left)
   const direction = tab === 'claim' ? 1 : -1;
   
-  // Memoize tabs to prevent unnecessary re-renders
-  const tabs = useMemo(() => TABS.map(t => ({ ...t })), []);
+  // Memoize tabs with badge counts — recalculate when unclaimed count changes
+  const tabs = useMemo(() => TABS.map(t => ({
+    ...t,
+    badge: t.id === 'claim' ? unclaimedCount : undefined,
+  })), [unclaimedCount]);
 
   // Dismiss splash after WASM ready + minimum duration
   const dismissSplash = useCallback(() => {
@@ -141,7 +145,7 @@ function AppContent() {
               style={{ width: '100%' }}
             >
               {tab === 'send' && <SendTab wasmReady={wasmReady} />}
-              {tab === 'claim' && <ClaimTab wasmReady={wasmReady} />}
+              {tab === 'claim' && <ClaimTab wasmReady={wasmReady} onUnclaimedCount={setUnclaimedCount} />}
             </motion.div>
           </AnimatePresence>
         </main>
