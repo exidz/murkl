@@ -448,7 +448,7 @@ pub fn generate_nullifier(password: &str, leaf_index: u32) -> String {
 }
 
 #[wasm_bindgen]
-pub fn generate_proof(identifier: &str, password: &str, leaf_index: u32, merkle_root_hex: &str) -> JsValue {
+pub fn generate_proof(identifier: &str, password: &str, leaf_index: u32, merkle_root_hex: &str, recipient_hex: &str) -> JsValue {
     let merkle_root: [u8; 32] = match hex::decode(merkle_root_hex) {
         Ok(bytes) if bytes.len() == 32 => {
             let mut arr = [0u8; 32];
@@ -468,11 +468,30 @@ pub fn generate_proof(identifier: &str, password: &str, leaf_index: u32, merkle_
         }
     };
     
+    let recipient: [u8; 32] = match hex::decode(recipient_hex) {
+        Ok(bytes) if bytes.len() == 32 => {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            arr
+        }
+        _ => {
+            let bundle = ProofBundle {
+                commitment: String::new(),
+                nullifier: String::new(),
+                leaf_index,
+                proof: String::new(),
+                proof_size: 0,
+                error: Some("Invalid recipient hex".to_string()),
+            };
+            return serde_wasm_bindgen::to_value(&bundle).unwrap();
+        }
+    };
+
     let id_hash = hash_identifier(identifier);
     let secret = hash_password(password);
     let commitment = pq_commitment(id_hash, secret);
     let nullifier = pq_nullifier(secret, leaf_index);
-    let proof = generate_stark_proof(id_hash, secret, leaf_index, &commitment, &nullifier, &merkle_root);
+    let proof = generate_stark_proof(id_hash, secret, leaf_index, &commitment, &nullifier, &merkle_root, &recipient);
 
     let bundle = ProofBundle {
         commitment: hex::encode(commitment),
@@ -510,6 +529,7 @@ fn generate_stark_proof(
     commitment: &[u8; 32],
     nullifier: &[u8; 32],
     merkle_root: &[u8; 32],
+    recipient: &[u8; 32],
 ) -> Vec<u8> {
     let mut proof = Vec::with_capacity(20000);
 
@@ -579,6 +599,8 @@ fn generate_stark_proof(
     channel.mix_digest(commitment);
     channel.mix_digest(nullifier);
     channel.mix_digest(merkle_root);
+    // Bind recipient ATA to the proof so the relayer cannot swap recipients
+    channel.mix_digest(recipient);
     channel.mix_digest(&trace_commitment);
     let alpha = channel.squeeze_qm31();
     channel.mix_digest(&composition_commitment);

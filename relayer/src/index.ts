@@ -872,7 +872,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     // Create a fresh buffer for this claim (temp account, closed after claim)
     const bufferKeypair = Keypair.generate();
-    const HEADER_SIZE = 137;
+    const HEADER_SIZE = 169;
     const accountSize = HEADER_SIZE + proofBytes.length;
     const rentExempt = await connection.getMinimumBalanceForRentExemption(accountSize);
     let numChunks = Math.ceil(proofBytes.length / config.chunkSize);
@@ -969,12 +969,14 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       proofFirst32: proofBytes.slice(0, 32).toString('hex'), // trace_commitment
     });
     
-    // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32])
+    // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32], recipient: [u8; 32])
+    const recipient32 = new PublicKey(recipientTokenAccount).toBuffer();
     const finalizeData = Buffer.concat([
       getDiscriminator('finalize_and_verify'),
       commitment32,
       nullifier32,
       merkleRoot32,
+      recipient32,
     ]);
     
     const finalizeIx = new TransactionInstruction({

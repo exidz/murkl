@@ -100,11 +100,15 @@ export function useClaimFlow(wasmReady: boolean) {
         merkleRoot: merkleRoot.slice(0, 16) + '...',
       });
 
+      const recipientAta = await getAssociatedTokenAddress(WSOL_MINT, publicKey);
+      const recipientHex = Buffer.from(recipientAta.toBytes()).toString('hex');
+
       const proofResult = await generate_proof(
         params.identifier,
         params.password,
         params.leafIndex,
         merkleRoot,
+        recipientHex,
       );
 
       console.log('[CLAIM] Proof result:', {
@@ -126,7 +130,7 @@ export function useClaimFlow(wasmReady: boolean) {
 
       // Submit to relayer
       setStage('verifying');
-      const recipientATA = await getAssociatedTokenAddress(WSOL_MINT, publicKey);
+      const recipientATA = recipientAta;
 
       const response = await fetch(`${RELAYER_URL}/claim`, {
         method: 'POST',

@@ -47,16 +47,19 @@ export function generate_nullifier(password, leaf_index) {
  * @param {string} password
  * @param {number} leaf_index
  * @param {string} merkle_root_hex
+ * @param {string} recipient_hex
  * @returns {any}
  */
-export function generate_proof(identifier, password, leaf_index, merkle_root_hex) {
+export function generate_proof(identifier, password, leaf_index, merkle_root_hex, recipient_hex) {
     const ptr0 = passStringToWasm0(identifier, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(password, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
     const ptr2 = passStringToWasm0(merkle_root_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.generate_proof(ptr0, len0, ptr1, len1, leaf_index, ptr2, len2);
+    const ptr3 = passStringToWasm0(recipient_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.generate_proof(ptr0, len0, ptr1, len1, leaf_index, ptr2, len2, ptr3, len3);
     return ret;
 }
 

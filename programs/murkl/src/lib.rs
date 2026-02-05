@@ -31,7 +31,8 @@ const VERIFIER_OFFSET_FINALIZED: usize = 40;
 const VERIFIER_OFFSET_COMMITMENT: usize = 41;
 const VERIFIER_OFFSET_NULLIFIER: usize = 73;
 const VERIFIER_OFFSET_MERKLE_ROOT: usize = 105;
-const VERIFIER_HEADER_SIZE: usize = 137;
+const VERIFIER_OFFSET_RECIPIENT: usize = 137;
+const VERIFIER_HEADER_SIZE: usize = 169;
 
 // ============================================================================
 // Constants
@@ -167,6 +168,10 @@ pub mod murkl {
         let buffer_merkle_root: [u8; 32] = data[VERIFIER_OFFSET_MERKLE_ROOT..VERIFIER_OFFSET_MERKLE_ROOT + 32]
             .try_into()
             .map_err(|_| MurklError::InvalidVerifierBuffer)?;
+
+        let buffer_recipient: [u8; 32] = data[VERIFIER_OFFSET_RECIPIENT..VERIFIER_OFFSET_RECIPIENT + 32]
+            .try_into()
+            .map_err(|_| MurklError::InvalidVerifierBuffer)?;
         
         // Verify commitment matches deposit
         require!(
@@ -184,6 +189,12 @@ pub mod murkl {
         require!(
             buffer_merkle_root == pool.merkle_root,
             MurklError::MerkleRootMismatch
+        );
+
+        // Verify recipient ATA is bound into the proof (prevents recipient substitution)
+        require!(
+            buffer_recipient == ctx.accounts.recipient_token.key().to_bytes(),
+            MurklError::InvalidVerifierBuffer
         );
         
         // Initialize nullifier record (will fail if already exists = replay attack)

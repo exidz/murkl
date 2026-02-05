@@ -5,7 +5,7 @@ export function generate_commitment(identifier: string, password: string): strin
 
 export function generate_nullifier(password: string, leaf_index: number): string;
 
-export function generate_proof(identifier: string, password: string, leaf_index: number, merkle_root_hex: string): any;
+export function generate_proof(identifier: string, password: string, leaf_index: number, merkle_root_hex: string, recipient_hex: string): any;
 
 export function get_sdk_version(): string;
 
@@ -17,7 +17,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly generate_commitment: (a: number, b: number, c: number, d: number) => [number, number];
     readonly generate_nullifier: (a: number, b: number, c: number) => [number, number];
-    readonly generate_proof: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
+    readonly generate_proof: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => any;
     readonly verify_commitment: (a: number, b: number, c: number, d: number, e: number, f: number) => number;
     readonly get_sdk_version: () => [number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;

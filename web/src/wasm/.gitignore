@@ -1,2 +1,0 @@
-# Keep WASM build artifacts in git (needed for Docker/Railway deploy)
-# Only ignore the package.json (npm artifact from wasm-pack)

@@ -46,7 +46,17 @@ pub const BLOWUP_FACTOR: usize = 1 << LOG_BLOWUP;
 // [105..137]: merkle_root (32 bytes)
 // [137..]: proof data
 
-const HEADER_SIZE: usize = 137;
+// Buffer layout:
+// [0..32)   owner pubkey
+// [32..36)  size (u32)
+// [36..40)  expected_size (u32)
+// [40]      finalized (u8)
+// [41..73)  commitment (32)
+// [73..105) nullifier (32)
+// [105..137) merkle_root (32)
+// [137..169) recipient (32)
+// [169..]   proof bytes
+const HEADER_SIZE: usize = 169;
 const OFFSET_OWNER: usize = 0;
 const OFFSET_SIZE: usize = 32;
 const OFFSET_EXPECTED_SIZE: usize = 36;
@@ -54,7 +64,8 @@ const OFFSET_FINALIZED: usize = 40;
 const OFFSET_COMMITMENT: usize = 41;
 const OFFSET_NULLIFIER: usize = 73;
 const OFFSET_MERKLE_ROOT: usize = 105;
-const OFFSET_PROOF_DATA: usize = 137;
+const OFFSET_RECIPIENT: usize = 137;
+const OFFSET_PROOF_DATA: usize = 169;
 
 // ============================================================================
 // Program
@@ -133,6 +144,7 @@ pub mod stark_verifier {
         commitment: [u8; 32],
         nullifier: [u8; 32],
         merkle_root: [u8; 32],
+        recipient: [u8; 32],
     ) -> Result<()> {
         let buffer = &ctx.accounts.proof_buffer;
         let mut buf_data = buffer.try_borrow_mut_data()?;
@@ -150,12 +162,14 @@ pub mod stark_verifier {
         let proof_data = &buf_data[OFFSET_PROOF_DATA..OFFSET_PROOF_DATA + size as usize].to_vec();
         
         // Full STARK verification - no shortcuts
-        verify_stark_proof(proof_data, &commitment, &nullifier, &merkle_root)?;
+        // Includes recipient binding via Fiat–Shamir transcript.
+        verify_stark_proof(proof_data, &commitment, &nullifier, &merkle_root, &recipient)?;
         
         // Store verified public inputs
         buf_data[OFFSET_COMMITMENT..OFFSET_COMMITMENT + 32].copy_from_slice(&commitment);
         buf_data[OFFSET_NULLIFIER..OFFSET_NULLIFIER + 32].copy_from_slice(&nullifier);
         buf_data[OFFSET_MERKLE_ROOT..OFFSET_MERKLE_ROOT + 32].copy_from_slice(&merkle_root);
+        buf_data[OFFSET_RECIPIENT..OFFSET_RECIPIENT + 32].copy_from_slice(&recipient);
         buf_data[OFFSET_FINALIZED] = 1;
         
         msg!("STARK proof verified and finalized");
@@ -596,6 +610,7 @@ pub fn verify_stark_proof(
     commitment: &[u8; 32],
     nullifier: &[u8; 32],
     merkle_root: &[u8; 32],
+    recipient: &[u8; 32],
 ) -> Result<()> {
     // 1. Parse proof
     let proof = parse_proof(proof_data)?;
@@ -612,6 +627,8 @@ pub fn verify_stark_proof(
     channel.mix_digest(commitment);
     channel.mix_digest(nullifier);
     channel.mix_digest(merkle_root);
+    // Bind recipient ATA to the proof so relayer/mitm cannot substitute recipients.
+    channel.mix_digest(recipient);
     
     // 4. Verify trace commitment phase
     channel.mix_digest(&proof.trace_commitment);
@@ -951,8 +968,9 @@ pub fn verify_proof_cpi(
     commitment: &[u8; 32],
     nullifier: &[u8; 32],
     merkle_root: &[u8; 32],
+    recipient: &[u8; 32],
 ) -> Result<VerificationResult> {
-    verify_stark_proof(proof_data, commitment, nullifier, merkle_root)?;
+    verify_stark_proof(proof_data, commitment, nullifier, merkle_root, recipient)?;
     
     Ok(VerificationResult {
         success: true,
