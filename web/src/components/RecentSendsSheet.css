@@ -1,0 +1,99 @@
+/* RecentSendsSheet - Venmo-style bottom sheet */
+
+.recent-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  z-index: 50;
+}
+
+.recent-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  background: var(--bg-primary, #0a0a0f);
+  border: 1px solid var(--border, #27272a);
+  border-bottom: none;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  z-index: 51;
+  box-shadow: 0 -24px 48px rgba(0, 0, 0, 0.45);
+}
+
+.recent-sheet-handle {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 0 0.25rem;
+  cursor: pointer;
+}
+
+.recent-sheet-handle-bar {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.recent-sheet-content {
+  padding: 0.75rem 1rem 1rem;
+  max-height: 78vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.recent-sheet-header {
+  text-align: center;
+  padding: 0.25rem 0 0.75rem;
+}
+
+.recent-sheet-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+}
+
+.recent-sheet-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #a1a1aa);
+}
+
+.recent-sheet-done {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.9rem 1.25rem;
+  min-height: 56px;
+  border-radius: 14px;
+  border: 1px solid var(--border, #27272a);
+  background: var(--bg-tertiary, #1e1e2e);
+  color: var(--text-primary, #fff);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.recent-sheet-done:hover {
+  background: var(--bg-secondary, #14141f);
+}
+
+/* Touch-friendly */
+.recent-sheet-done {
+  min-height: 44px;
+}
+
+@media (max-width: 480px) {
+  .recent-sheet-content {
+    padding: 0.75rem 0.75rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recent-sheet-backdrop {
+    backdrop-filter: none;
+  }
+}

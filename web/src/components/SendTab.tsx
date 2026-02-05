@@ -21,7 +21,7 @@ import { StepProgress } from './StepProgress';
 import { useTokenBalance } from '../hooks/useTokenBalance';
 import { useRegisterDeposit } from '../hooks/useRegisterDeposit';
 import { useRecentSends } from '../hooks/useRecentSends';
-import { RecentActivity } from './RecentActivity';
+import { RecentSendsSheet } from './RecentSendsSheet';
 import './SendTab.css';
 
 // Token-specific preset amounts
@@ -150,6 +150,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [showShareSheet, setShowShareSheet] = useState(false);
+  const [showRecentSheet, setShowRecentSheet] = useState(false);
   
   // Direction tracking for step transitions (1 = forward, -1 = backward)
   const [stepDirection, setStepDirection] = useState(1);
@@ -685,14 +686,31 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               Continue
             </Button>
 
-            <button className="help-link" onClick={() => setShowHowItWorks(true)}>
-              How it works →
-            </button>
-            
-            {/* Recent sends feed — Venmo-style activity history */}
-            <RecentActivity sends={recentSends} onClear={clearRecentSends} />
-            
+            <div className="send-links-row">
+              <button className="help-link" onClick={() => setShowHowItWorks(true)}>
+                How it works →
+              </button>
+
+              {recentSends.length > 0 && (
+                <button
+                  className="help-link"
+                  onClick={() => setShowRecentSheet(true)}
+                  aria-label="View recent sends"
+                >
+                  Recent ({recentSends.length}) →
+                </button>
+              )}
+            </div>
+
             <HowItWorks isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} />
+
+            {/* Keep the amount step focused: recent activity lives in a bottom sheet */}
+            <RecentSendsSheet
+              isOpen={showRecentSheet}
+              onClose={() => setShowRecentSheet(false)}
+              sends={recentSends}
+              onClear={clearRecentSends}
+            />
           </motion.div>
         )}
 

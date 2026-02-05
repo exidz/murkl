@@ -401,15 +401,23 @@
   background: var(--bg-secondary, #14141f);
 }
 
-/* Help Link */
+/* Help Links Row */
+.send-links-row {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
 .help-link {
   background: none;
   border: none;
   color: var(--text-secondary, #a1a1aa);
   font-size: 0.9rem;
   cursor: pointer;
-  margin-top: 1.5rem;
   transition: color 0.2s;
+  padding: 0.5rem 0.25rem;
 }
 
 .help-link:hover {
