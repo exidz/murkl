@@ -24,7 +24,9 @@ programs/target/
 deposit.json
 *.json
 !package.json
+!package-lock.json
 !tsconfig.json
+!tsconfig.*.json
 web/node_modules
 web/dist
 relayer/node_modules
