@@ -1406,20 +1406,34 @@ app.post('/vouchers/redeem', voucherRedeemLimiter, async (req: Request, res: Res
 });
 
 // Mark voucher as claimed (called after successful claim)
-app.post('/vouchers/mark-claimed', async (req: Request, res: Response) => {
+// Security: require the voucher password to prevent unauthenticated DoS
+// (without this, anyone could mark arbitrary vouchers as claimed).
+app.post('/vouchers/mark-claimed', voucherRedeemLimiter, async (req: Request, res: Response) => {
   try {
-    const { code } = req.body;
-    
-    if (!code || typeof code !== 'string') {
-      return res.status(400).json({ error: 'Code required' });
+    const { code, password } = req.body as { code?: unknown; password?: unknown };
+
+    if (typeof code !== 'string' || !isValidVoucherCode(code)) {
+      return res.status(400).json({ error: 'Invalid voucher code format' });
     }
-    
+
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ error: 'Invalid password format' });
+    }
+
+    // Verify password matches voucher (and that voucher exists / is unclaimed)
+    const redeemed = redeemVoucher(db, code, password);
+    if ('error' in redeemed) {
+      // Do not leak whether the code exists vs wrong password
+      await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+      return res.status(400).json({ error: 'Invalid code or password' });
+    }
+
     const success = markVoucherClaimed(db, code);
-    
     if (!success) {
+      // Extremely rare race (claimed between redeem and update)
       return res.status(404).json({ error: 'Voucher not found' });
     }
-    
+
     res.json({ success: true });
   } catch (e: unknown) {
     log('error', 'Mark voucher claimed failed', { error: String(e) });

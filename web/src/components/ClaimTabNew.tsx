@@ -251,7 +251,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
       fetch(`${RELAYER_URL}/vouchers/mark-claimed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: data.voucherCode }),
+        body: JSON.stringify({ code: data.voucherCode, password: data.password }),
       }).catch(() => {
         // Non-critical — claim succeeded regardless
       });
