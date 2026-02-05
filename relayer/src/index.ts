@@ -36,7 +36,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { auth, getMurklIdentifier, resend, runAuthMigrations } from './auth';
+import { auth, db, getMurklIdentifier, resend, runAuthMigrations } from './auth';
 import { toNodeHandler } from 'better-auth/node';
 
 // ============================================================================
@@ -926,15 +926,12 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       computeUnits: simResult.value.unitsConsumed,
     });
     
-    // Mark deposit as claimed in the index
+    // Mark deposit as claimed in the database
     const depositId = `${poolAddress}-${leafIndex}`;
-    for (const [, deposits] of depositIndex.entries()) {
-      const dep = deposits.find(d => d.id === depositId || d.leafIndex === leafIndex);
-      if (dep) {
-        dep.claimed = true;
-        log('info', 'Deposit marked claimed', { requestId, depositId: dep.id });
-        break;
-      }
+    const dep = stmtFindByIdOrLeaf.get(depositId, leafIndex) as any;
+    if (dep) {
+      stmtMarkClaimed.run(dep.id);
+      log('info', 'Deposit marked claimed', { requestId, depositId: dep.id });
     }
     
     res.json({
@@ -972,7 +969,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
 // Deposit Indexing (for OAuth claim flow)
 // ============================================================================
 
-// In-memory deposit index (production would use database)
+// SQLite-backed deposit index (persistent across restarts)
 interface IndexedDeposit {
   id: string;
   pool: string;
@@ -986,7 +983,48 @@ interface IndexedDeposit {
   txSignature: string;
 }
 
-const depositIndex: Map<string, IndexedDeposit[]> = new Map();
+// Initialize deposits table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS deposits (
+    id TEXT PRIMARY KEY,
+    pool TEXT NOT NULL,
+    commitment TEXT NOT NULL,
+    identifier_hash TEXT NOT NULL,
+    amount REAL NOT NULL,
+    token TEXT NOT NULL DEFAULT 'SOL',
+    leaf_index INTEGER NOT NULL,
+    timestamp TEXT NOT NULL,
+    claimed INTEGER NOT NULL DEFAULT 0,
+    tx_signature TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_deposits_identifier_hash ON deposits(identifier_hash);
+  CREATE INDEX IF NOT EXISTS idx_deposits_leaf_index ON deposits(leaf_index);
+`);
+
+// Prepared statements for performance
+const stmtInsertDeposit = db.prepare(`
+  INSERT OR IGNORE INTO deposits (id, pool, commitment, identifier_hash, amount, token, leaf_index, timestamp, claimed, tx_signature)
+  VALUES (@id, @pool, @commitment, @identifierHash, @amount, @token, @leafIndex, @timestamp, @claimed, @txSignature)
+`);
+const stmtGetByHash = db.prepare(`SELECT * FROM deposits WHERE identifier_hash = ?`);
+const stmtMarkClaimed = db.prepare(`UPDATE deposits SET claimed = 1 WHERE id = ?`);
+const stmtFindById = db.prepare(`SELECT * FROM deposits WHERE id = ?`);
+const stmtFindByIdOrLeaf = db.prepare(`SELECT * FROM deposits WHERE id = ? OR leaf_index = ?`);
+
+function rowToDeposit(row: any): IndexedDeposit {
+  return {
+    id: row.id,
+    pool: row.pool,
+    commitment: row.commitment,
+    identifierHash: row.identifier_hash,
+    amount: row.amount,
+    token: row.token,
+    leafIndex: row.leaf_index,
+    timestamp: row.timestamp,
+    claimed: !!row.claimed,
+    txSignature: row.tx_signature,
+  };
+}
 
 // Hash identifier for lookup (same as on-chain)
 function hashIdentifier(identifier: string): string {
@@ -995,9 +1033,18 @@ function hashIdentifier(identifier: string): string {
 
 // Index a new deposit
 function indexDeposit(deposit: IndexedDeposit): void {
-  const existing = depositIndex.get(deposit.identifierHash) || [];
-  existing.push(deposit);
-  depositIndex.set(deposit.identifierHash, existing);
+  stmtInsertDeposit.run({
+    id: deposit.id,
+    pool: deposit.pool,
+    commitment: deposit.commitment,
+    identifierHash: deposit.identifierHash,
+    amount: deposit.amount,
+    token: deposit.token,
+    leafIndex: deposit.leafIndex,
+    timestamp: deposit.timestamp,
+    claimed: deposit.claimed ? 1 : 0,
+    txSignature: deposit.txSignature,
+  });
   log('info', 'Deposit indexed', { 
     identifierHash: deposit.identifierHash.slice(0, 16) + '...', 
     leafIndex: deposit.leafIndex 
@@ -1013,7 +1060,8 @@ app.get('/deposits', async (req: Request, res: Response) => {
     }
     
     const identifierHash = hashIdentifier(identity);
-    const deposits = depositIndex.get(identifierHash) || [];
+    const rows = stmtGetByHash.all(identifierHash);
+    const deposits = rows.map(rowToDeposit);
     
     // Return all deposits — UI shows claimed ones with a badge
     res.json({
@@ -1165,20 +1213,19 @@ app.post('/deposits/mark-claimed', async (req: Request, res: Response) => {
       userIdentifierHashes.add(hashIdentifier(`email:${session.user.email}`));
     }
     
-    for (const [hash, deposits] of depositIndex.entries()) {
-      const deposit = deposits.find(d => d.id === depositId);
-      if (deposit) {
-        // Verify the deposit belongs to this user
-        if (!userIdentifierHashes.has(deposit.identifierHash)) {
-          return res.status(403).json({ error: 'Not your deposit' });
-        }
-        deposit.claimed = true;
-        log('info', 'Deposit marked claimed', { depositId, userId: session.user.id });
-        return res.json({ success: true });
-      }
+    const deposit = stmtFindById.get(depositId) as any;
+    if (!deposit) {
+      return res.status(404).json({ error: 'Deposit not found' });
     }
     
-    res.status(404).json({ error: 'Deposit not found' });
+    // Verify the deposit belongs to this user
+    if (!userIdentifierHashes.has(deposit.identifier_hash)) {
+      return res.status(403).json({ error: 'Not your deposit' });
+    }
+    
+    stmtMarkClaimed.run(depositId);
+    log('info', 'Deposit marked claimed', { depositId, userId: session.user.id });
+    return res.json({ success: true });
   } catch (e: unknown) {
     log('error', 'Mark claimed failed', { error: String(e) });
     res.status(500).json({ error: 'Internal error' });

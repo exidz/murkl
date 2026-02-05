@@ -46,7 +46,8 @@ export const resend = resendApiKey ? new Resend(resendApiKey) : null;
 const dbPath = process.env.AUTH_DB_PATH || path.join(process.cwd(), 'auth.db');
 
 // Initialize Better Auth
-const db = new Database(dbPath);
+const db: InstanceType<typeof Database> = new Database(dbPath);
+export { db };
 
 export const auth = betterAuth({
   database: db as any, // Type assertion to avoid TS4023
