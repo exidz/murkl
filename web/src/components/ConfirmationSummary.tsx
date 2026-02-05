@@ -148,7 +148,8 @@ export const ConfirmationSummary: FC<Props> = memo(({
             <span className="recipient-icon" aria-hidden="true">
               {recipientMeta.icon}
             </span>
-            <span className="recipient-handle">{recipient}</span>
+            {/* Friendly display: don’t show internal namespacing like `twitter:@` */}
+            <span className="recipient-handle">{recipientMeta.shortName}</span>
             {recipientMeta.platform && (
               <span className="recipient-platform">{recipientMeta.platform}</span>
             )}
@@ -314,7 +315,7 @@ function getRecipientMeta(recipient: string): RecipientMeta {
     const handle = trimmed.slice('twitter:'.length);
     return {
       icon: '𝕏',
-      platform: 'Twitter',
+      platform: 'X',
       shortName: handle.startsWith('@') ? handle : `@${handle}`,
     };
   }
@@ -353,7 +354,7 @@ function getRecipientMeta(recipient: string): RecipientMeta {
   if (trimmed.startsWith('@')) {
     return {
       icon: '𝕏',
-      platform: 'Twitter',
+      platform: 'X',
       shortName: trimmed,
     };
   }
