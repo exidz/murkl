@@ -1,4 +1,13 @@
-/* ConfirmationSummary - Venmo-inspired review card */
+/* ConfirmationSummary - Venmo-inspired review card
+ *
+ * The "are you sure?" moment before sending money.
+ * Must feel trustworthy, clear, and confident.
+ *
+ * Design principles:
+ * - Big, bold amounts — make the number the hero
+ * - Trust through simplicity — fewer elements = more confidence
+ * - One action per screen — don't overwhelm
+ */
 
 .confirmation-summary {
   position: relative;
@@ -9,7 +18,7 @@
   margin-bottom: 1.5rem;
 }
 
-/* Subtle glow at top */
+/* Subtle glow at top — establishes visual hierarchy */
 .confirmation-glow {
   position: absolute;
   top: 0;
@@ -19,7 +28,7 @@
   height: 100px;
   background: radial-gradient(
     ellipse at center top,
-    rgba(61, 149, 206, 0.15) 0%,
+    rgba(61, 149, 206, 0.12) 0%,
     transparent 70%
   );
   pointer-events: none;
@@ -27,23 +36,47 @@
 
 .confirmation-content {
   position: relative;
-  padding: 2rem 1.5rem;
+  padding: 1.75rem 1.5rem;
   z-index: 1;
 }
 
-/* Hero amount section */
-.confirmation-hero {
-  text-align: center;
-  margin-bottom: 1.5rem;
+/* ============================================
+   Review badge — "Review" label at top
+   ============================================ */
+
+.confirmation-review-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-primary, #3d95ce);
 }
 
-.confirmation-label {
-  display: block;
-  color: var(--text-secondary, #a1a1aa);
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin-bottom: 0.75rem;
-  letter-spacing: 0.02em;
+.review-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent-primary, #3d95ce);
+  border-radius: 50%;
+  animation: review-pulse 2s ease-in-out infinite;
+}
+
+@keyframes review-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ============================================
+   Hero amount section
+   ============================================ */
+
+.confirmation-hero {
+  text-align: center;
+  margin-bottom: 1.25rem;
 }
 
 .confirmation-amount-row {
@@ -55,7 +88,7 @@
 
 .confirmation-token-icon {
   font-size: 2rem;
-  opacity: 0.8;
+  opacity: 0.7;
 }
 
 .confirmation-amount {
@@ -64,6 +97,7 @@
   color: var(--text-primary, #fff);
   line-height: 1;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .confirmation-token {
@@ -73,10 +107,13 @@
   text-transform: uppercase;
 }
 
-/* Recipient section */
+/* ============================================
+   Recipient section
+   ============================================ */
+
 .confirmation-recipient {
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .recipient-label {
@@ -94,11 +131,18 @@
   border: 1px solid var(--border, #27272a);
   border-radius: 100px;
   padding: 0.5rem 1rem;
+  max-width: 100%;
+  transition: border-color 0.2s;
+}
+
+.recipient-badge:hover {
+  border-color: var(--text-muted, #52525b);
 }
 
 .recipient-icon {
   font-size: 1rem;
   opacity: 0.8;
+  flex-shrink: 0;
 }
 
 .recipient-handle {
@@ -111,7 +155,22 @@
   white-space: nowrap;
 }
 
-/* Divider */
+.recipient-platform {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #52525b);
+  padding: 0.15rem 0.4rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Divider
+   ============================================ */
+
 .confirmation-divider {
   height: 1px;
   background: linear-gradient(
@@ -125,11 +184,14 @@
   transform-origin: center;
 }
 
-/* Fee breakdown */
+/* ============================================
+   Fee breakdown
+   ============================================ */
+
 .confirmation-fees {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.625rem;
   margin-bottom: 1.25rem;
 }
 
@@ -142,10 +204,28 @@
   color: var(--text-secondary, #a1a1aa);
   cursor: default;
   position: relative;
+  padding: 0.25rem 0;
 }
 
-.fee-row:has(.fee-info) {
+.fee-row.has-tooltip {
   cursor: pointer;
+  border-radius: 8px;
+  padding: 0.375rem 0.5rem;
+  margin: -0.125rem -0.5rem;
+  transition: background 0.15s;
+}
+
+.fee-row.has-tooltip:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.fee-row.has-tooltip:active {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.fee-row.has-tooltip:focus-visible {
+  outline: 2px solid var(--accent-primary, #3d95ce);
+  outline-offset: 2px;
 }
 
 .fee-label {
@@ -156,27 +236,60 @@
 
 .fee-info {
   font-size: 0.75rem;
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: help;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.fee-info.active,
+.fee-row.has-tooltip:hover .fee-info {
+  opacity: 1;
+  color: var(--accent-primary, #3d95ce);
 }
 
 .fee-value {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary, #fff);
 }
 
-.fee-tooltip {
-  flex-basis: 100%;
-  font-size: 0.8rem;
-  color: var(--text-muted, #52525b);
-  margin-top: 0.5rem;
-  padding: 0.75rem;
-  background: var(--bg-tertiary, #1e1e2e);
-  border-radius: 8px;
-  line-height: 1.4;
+.fee-value-muted {
+  font-weight: 500;
+  color: var(--text-secondary, #a1a1aa);
 }
 
-/* Privacy badge */
+/* Total row — visually distinct */
+.fee-total {
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+  border-top: 1px dashed var(--border, #27272a);
+}
+
+.fee-value-total {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+}
+
+/* Fee tooltip expansion */
+.fee-tooltip {
+  flex-basis: 100%;
+  overflow: hidden;
+}
+
+.fee-tooltip p {
+  font-size: 0.8rem;
+  color: var(--text-muted, #52525b);
+  padding: 0.625rem 0.75rem;
+  background: var(--bg-tertiary, #1e1e2e);
+  border-radius: 8px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ============================================
+   Privacy badge
+   ============================================ */
+
 .confirmation-privacy {
   display: flex;
   align-items: center;
@@ -186,6 +299,7 @@
   background: rgba(34, 197, 94, 0.08);
   border: 1px solid rgba(34, 197, 94, 0.2);
   border-radius: 10px;
+  margin-bottom: 0.75rem;
 }
 
 .privacy-icon {
@@ -198,48 +312,128 @@
   font-weight: 500;
 }
 
-/* Action area */
+/* ============================================
+   Irreversibility notice
+   ============================================ */
+
+.confirmation-notice {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted, #52525b);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ============================================
+   Action area
+   ============================================ */
+
 .confirmation-actions {
   padding: 0 1.5rem 1.5rem;
 }
 
-/* Responsive */
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
 @media (max-width: 480px) {
   .confirmation-content {
     padding: 1.5rem 1rem;
   }
-  
+
   .confirmation-amount {
     font-size: 2.5rem;
   }
-  
+
   .confirmation-token-icon {
     font-size: 1.75rem;
   }
-  
+
   .confirmation-token {
     font-size: 1.25rem;
   }
-  
+
   .confirmation-actions {
     padding: 0 1rem 1rem;
   }
+
+  .confirmation-review-badge {
+    margin-bottom: 1rem;
+  }
+
+  .fee-row {
+    font-size: 0.85rem;
+  }
 }
 
-/* High contrast mode */
+@media (max-width: 360px) {
+  .confirmation-amount {
+    font-size: 2rem;
+  }
+
+  .confirmation-token {
+    font-size: 1rem;
+  }
+
+  .recipient-handle {
+    max-width: 150px;
+    font-size: 0.9rem;
+  }
+
+  .recipient-platform {
+    display: none;
+  }
+}
+
+/* ============================================
+   HIGH CONTRAST MODE
+   ============================================ */
+
 @media (prefers-contrast: high) {
   .confirmation-summary {
     border-width: 2px;
   }
-  
+
   .recipient-badge {
     border-width: 2px;
   }
+
+  .confirmation-privacy {
+    border-width: 2px;
+  }
+
+  .fee-total {
+    border-top-width: 2px;
+  }
+
+  .review-dot {
+    animation: none;
+    outline: 2px solid currentColor;
+  }
 }
 
-/* Reduced motion */
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
 @media (prefers-reduced-motion: reduce) {
   .confirmation-glow {
     display: none;
+  }
+
+  .review-dot {
+    animation: none;
+  }
+
+  .fee-row.has-tooltip {
+    transition: none;
+  }
+
+  .fee-info {
+    transition: none;
+  }
+
+  .recipient-badge {
+    transition: none;
   }
 }

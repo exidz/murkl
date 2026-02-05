@@ -677,6 +677,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 { 
                   label: 'Network fee', 
                   value: '~0.00001 SOL',
+                  rawValue: 0.00001,
                   tooltip: 'Paid to Solana validators for processing your transaction'
                 },
               ]}
