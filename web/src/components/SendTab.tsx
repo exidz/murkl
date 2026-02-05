@@ -408,11 +408,39 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       }
       toast.dismiss(txToastId);
       
+      // Register deposit with relayer for indexing + email notification.
+      // If recipient is email, we want the voucherCode so we can show/share the SAME claim link/QR
+      // that the recipient will get in their email.
+      const registerPayload = {
+        identifier: fullIdentifier,
+        amount: amountNum,
+        token: selectedToken.symbol,
+        leafIndex: depositResult.leafIndex,
+        pool: POOL_ADDRESS.toBase58(),
+        commitment: depositResult.commitment,
+        txSignature: signature,
+        ...(fullIdentifier.startsWith('email:') && { password }),
+      };
+
+      let voucherCode: string | undefined;
+      if (fullIdentifier.startsWith('email:')) {
+        try {
+          const result = await registerDeposit.mutateAsync(registerPayload);
+          voucherCode = result?.voucherCode;
+        } catch {
+          // Non-critical — deposit succeeded; recipient can still claim via id/leaf if needed
+        }
+      } else {
+        // Fire-and-forget for socials
+        registerDeposit.mutate(registerPayload);
+      }
+
       // Generate share link
       const shareLink = createShareLink(
         fullIdentifier,
         depositResult.leafIndex,
         POOL_ADDRESS.toBase58(),
+        voucherCode ? { voucherCode } : undefined,
       );
       
       setSuccess({
@@ -423,19 +451,6 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         identifier: fullIdentifier,
         amount: amountNum,
         token: selectedToken.symbol,
-      });
-      
-      // Register deposit with relayer for OAuth lookup (non-critical, fire-and-forget)
-      // Include password for email deposits — enables voucher code creation (OTP-free claiming)
-      registerDeposit.mutate({
-        identifier: fullIdentifier,
-        amount: amountNum,
-        token: selectedToken.symbol,
-        leafIndex: depositResult.leafIndex,
-        pool: POOL_ADDRESS.toBase58(),
-        commitment: depositResult.commitment,
-        txSignature: signature,
-        ...(fullIdentifier.startsWith('email:') && { password }),
       });
       
       // Persist to recent sends (localStorage)
