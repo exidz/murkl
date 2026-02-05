@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, type FC } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Button } from './Button';
 import { OtpInput } from './OtpInput';
@@ -24,8 +24,141 @@ interface Props {
   onSwitchToOAuth: () => void;
 }
 
+// ─── Count-up animation hook ─────────────────────────────────
+// Animates a number from 0 to target with easeOut. Used for the hero amount
+// so receiving money feels exciting — like Venmo's "you got paid" moment.
+
+function useCountUp(target: number, duration = 1200, delay = 400): string {
+  const [display, setDisplay] = useState('0');
+  const reducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!target || reducedMotion) {
+      setDisplay(String(target || 0));
+      return;
+    }
+
+    // Determine decimal places from the target value
+    const decimals = String(target).includes('.')
+      ? String(target).split('.')[1].length
+      : 0;
+
+    let rafId: number;
+    let startTime: number;
+
+    const delayTimer = setTimeout(() => {
+      const animate = (timestamp: number) => {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // easeOutCubic — fast start, satisfying settle
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = eased * target;
+
+        setDisplay(current.toFixed(decimals));
+
+        if (progress < 1) {
+          rafId = requestAnimationFrame(animate);
+        }
+      };
+
+      rafId = requestAnimationFrame(animate);
+    }, delay);
+
+    return () => {
+      clearTimeout(delayTimer);
+      cancelAnimationFrame(rafId);
+    };
+  }, [target, duration, delay, reducedMotion]);
+
+  return display;
+}
+
+// ─── Provider detection helpers ──────────────────────────────
+
+interface IdentifierMeta {
+  icon: string;
+  displayName: string;
+  providerLabel: string | null;
+}
+
+function getIdentifierMeta(identifier: string): IdentifierMeta {
+  if (identifier.startsWith('email:')) {
+    return {
+      icon: '✉️',
+      displayName: identifier.slice('email:'.length),
+      providerLabel: 'Email',
+    };
+  }
+  if (identifier.startsWith('twitter:')) {
+    const handle = identifier.slice('twitter:'.length);
+    return {
+      icon: '𝕏',
+      displayName: handle.startsWith('@') ? handle : `@${handle}`,
+      providerLabel: 'Twitter',
+    };
+  }
+  if (identifier.startsWith('discord:')) {
+    return {
+      icon: '🎮',
+      displayName: identifier.slice('discord:'.length),
+      providerLabel: 'Discord',
+    };
+  }
+  return { icon: '👤', displayName: identifier, providerLabel: null };
+}
+
+// ─── Floating particles (ambient depth, like SplashScreen) ───
+
+const LANDING_PARTICLES = Array.from({ length: 5 }, (_, i) => ({
+  id: i,
+  x: 20 + Math.random() * 60,
+  y: 10 + Math.random() * 40,
+  size: 2 + Math.random() * 2.5,
+  delay: Math.random() * 2,
+  duration: 3 + Math.random() * 3,
+}));
+
+// ─── Stagger variants ────────────────────────────────────────
+
+const heroContainerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const heroItemVariants = {
+  hidden: { opacity: 0, y: 15, scale: 0.97 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: 'spring' as const, stiffness: 300, damping: 24 },
+  },
+};
+
 /**
  * Claim Link Landing — Venmo-style "You received" hero screen.
+ *
+ * This is the FIRST thing a recipient sees when they click a claim link.
+ * Must feel exciting, trustworthy, and premium.
+ *
+ * Features:
+ * - Animated count-up for the amount (like getting paid!)
+ * - Ambient floating particles + glow for depth
+ * - Pulse ring on the hero icon
+ * - Shimmer gradient on the amount text
+ * - Staggered entrance animation
+ * - Platform-aware recipient badge with provider icon
+ * - Email OTP verification for email identifiers
+ * - Respects reduced motion
+ *
  * For email identifiers: requires OTP verification before password entry.
  * For social identifiers: goes directly to password entry.
  */
@@ -40,6 +173,7 @@ export const ClaimLanding: FC<Props> = ({
   const [showPassword, setShowPassword] = useState(false);
   const { setVisible: openWalletModal } = useWalletModal();
   const inputRef = useRef<HTMLInputElement>(null);
+  const reducedMotion = useReducedMotion();
 
   // Email OTP verification state
   const isEmailIdentifier = data.identifier.startsWith('email:');
@@ -51,6 +185,12 @@ export const ClaimLanding: FC<Props> = ({
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+
+  // Animated count-up for the amount
+  const animatedAmount = useCountUp(data.amount || 0, 1200, 500);
+
+  // Identifier display info
+  const identifierMeta = getIdentifierMeta(data.identifier);
 
   // Cooldown timer for resend
   useEffect(() => {
@@ -115,15 +255,6 @@ export const ClaimLanding: FC<Props> = ({
     }
   };
 
-  // Friendly display of the identifier
-  const displayName = data.identifier.startsWith('email:')
-    ? data.identifier.slice('email:'.length)
-    : data.identifier.startsWith('twitter:')
-      ? data.identifier.slice('twitter:'.length)
-      : data.identifier.startsWith('discord:')
-        ? data.identifier.slice('discord:'.length)
-        : data.identifier;
-
   // Format cooldown for display
   const formatCooldown = (s: number) => {
     const m = Math.floor(s / 60);
@@ -134,69 +265,110 @@ export const ClaimLanding: FC<Props> = ({
   // Whether we need email verification before showing password
   const needsEmailVerification = isEmailIdentifier && !emailVerified;
 
+  const tokenSymbol = data.token || 'SOL';
+
   return (
     <motion.div
       className="claim-landing"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Hero section */}
-      <div className="landing-hero">
+      {/* Ambient background glow — premium depth effect */}
+      <div className="landing-ambient-glow" aria-hidden="true" />
+
+      {/* Floating particles — subtle depth like SplashScreen */}
+      {!reducedMotion && (
+        <div className="landing-particles" aria-hidden="true">
+          {LANDING_PARTICLES.map(p => (
+            <motion.div
+              key={p.id}
+              className="landing-particle"
+              style={{
+                left: `${p.x}%`,
+                top: `${p.y}%`,
+                width: p.size,
+                height: p.size,
+              }}
+              animate={{
+                y: [0, -15, 0],
+                opacity: [0.1, 0.35, 0.1],
+              }}
+              transition={{
+                duration: p.duration,
+                delay: p.delay,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Hero section — staggered entrance */}
+      <motion.div
+        className="landing-hero"
+        variants={heroContainerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Icon with pulse ring */}
         <motion.div
           className="landing-icon"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
+          variants={heroItemVariants}
         >
-          💰
+          <span>💰</span>
+          {/* Pulse ring (like success-check) */}
+          {!reducedMotion && <div className="landing-icon-pulse" aria-hidden="true" />}
         </motion.div>
 
+        {/* Title — contextual based on whether amount is known */}
         <motion.h2
           className="landing-title"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
+          variants={heroItemVariants}
         >
           {data.amount
-            ? `${data.amount} ${data.token || 'SOL'} waiting`
+            ? 'You received'
             : 'Funds waiting for you'}
         </motion.h2>
 
+        {/* Big amount with count-up + shimmer */}
+        {data.amount != null && data.amount > 0 && (
+          <motion.div
+            className="landing-amount"
+            variants={heroItemVariants}
+          >
+            <span className="landing-amount-value">{animatedAmount}</span>
+            <span className="landing-amount-token">{tokenSymbol}</span>
+          </motion.div>
+        )}
+
+        {/* Recipient badge with provider-aware icon */}
         <motion.div
           className="landing-recipient"
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          variants={heroItemVariants}
         >
           <span className="landing-recipient-icon">
-            {isEmailIdentifier ? '✉️' : '👤'}
+            {identifierMeta.icon}
           </span>
-          <span className="landing-recipient-name">{displayName}</span>
+          <span className="landing-recipient-name">{identifierMeta.displayName}</span>
+          {identifierMeta.providerLabel && (
+            <span className="landing-recipient-platform">
+              {identifierMeta.providerLabel}
+            </span>
+          )}
           {emailVerified && (
             <span className="landing-verified-badge">✓ verified</span>
           )}
         </motion.div>
-
-        {data.amount && (
-          <motion.div
-            className="landing-amount"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.25, type: 'spring', stiffness: 200 }}
-          >
-            <span className="landing-amount-value">{data.amount}</span>
-            <span className="landing-amount-token">{data.token || 'SOL'}</span>
-          </motion.div>
-        )}
-      </div>
+      </motion.div>
 
       {/* Action section */}
       <motion.div
         className="landing-action"
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.45 }}
       >
         {!connected ? (
           /* Wallet not connected */
@@ -343,12 +515,35 @@ export const ClaimLanding: FC<Props> = ({
         )}
       </motion.div>
 
+      {/* Trust indicators — like SplashScreen badges */}
+      <motion.div
+        className="landing-trust"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.55 }}
+      >
+        <div className="landing-trust-item">
+          <span className="landing-trust-icon">🔒</span>
+          <span className="landing-trust-label">Private</span>
+        </div>
+        <span className="landing-trust-divider" aria-hidden="true">•</span>
+        <div className="landing-trust-item">
+          <span className="landing-trust-icon">🛡️</span>
+          <span className="landing-trust-label">Post-quantum</span>
+        </div>
+        <span className="landing-trust-divider" aria-hidden="true">•</span>
+        <div className="landing-trust-item">
+          <span className="landing-trust-icon">⚡</span>
+          <span className="landing-trust-label">Instant</span>
+        </div>
+      </motion.div>
+
       {/* Privacy footer */}
       <motion.div
         className="landing-privacy"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
+        transition={{ delay: 0.6 }}
       >
         <span className="landing-privacy-icon">🔒</span>
         <span>
@@ -364,7 +559,7 @@ export const ClaimLanding: FC<Props> = ({
         onClick={onSwitchToOAuth}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
+        transition={{ delay: 0.65 }}
       >
         Sign in to see all deposits →
       </motion.button>

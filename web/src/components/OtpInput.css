@@ -1,10 +1,20 @@
 /* OtpInput — Segmented digit boxes for verification codes
  * Venmo-style: clean, centered, satisfying fill animation.
+ *
+ * Design notes (from DESIGN.md):
+ * - Big, bold amounts — make the number the hero
+ * - Trust through simplicity — clean, minimal
+ * - Subtle glow when focused
  */
 
 .otp-container {
   position: relative;
   cursor: text;
+}
+
+.otp-container.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .otp-hidden-input {
@@ -18,6 +28,10 @@
   cursor: text;
 }
 
+.otp-container.disabled .otp-hidden-input {
+  cursor: not-allowed;
+}
+
 .otp-segments {
   display: flex;
   gap: 0.5rem;
@@ -25,10 +39,11 @@
 }
 
 /* ============================================
-   Medium size (default — used in OAuthLogin)
+   Segment Box
    ============================================ */
 
 .otp-segment {
+  position: relative;
   width: 3rem;
   height: 3.5rem;
   display: flex;
@@ -37,21 +52,63 @@
   background: var(--bg-tertiary, #1e1e2e);
   border: 2px solid var(--border, #27272a);
   border-radius: 10px;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text-primary, #fff);
   font-variant-numeric: tabular-nums;
-  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  overflow: hidden;
 }
 
 .otp-segment.active {
   border-color: var(--accent-primary, #3d95ce);
   box-shadow: 0 0 0 1px var(--accent-primary, #3d95ce);
+  background: color-mix(in srgb, var(--bg-tertiary, #1e1e2e) 95%, var(--accent-primary, #3d95ce));
 }
 
 .otp-segment.filled {
   border-color: var(--text-secondary, #a1a1aa);
-  transform: scale(1.02);
+}
+
+.otp-segment.error {
+  border-color: var(--accent-error, #ef4444);
+  background: color-mix(in srgb, var(--bg-tertiary, #1e1e2e) 95%, var(--accent-error, #ef4444));
+}
+
+/* ============================================
+   Digit Display
+   ============================================ */
+
+.otp-digit {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  line-height: 1;
+}
+
+/* ============================================
+   Caret Animation
+   ============================================ */
+
+.otp-caret {
+  width: 2px;
+  height: 1.5rem;
+  background: var(--accent-primary, #3d95ce);
+  border-radius: 1px;
+}
+
+/* ============================================
+   Focus Glow (behind segment)
+   ============================================ */
+
+.otp-segment-glow {
+  position: absolute;
+  inset: -4px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(61, 149, 206, 0.15) 0%,
+    transparent 70%
+  );
+  border-radius: 14px;
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* ============================================
@@ -61,12 +118,23 @@
 .otp-lg .otp-segment {
   width: 3.25rem;
   height: 3.75rem;
-  font-size: 1.75rem;
   border-radius: 12px;
+}
+
+.otp-lg .otp-digit {
+  font-size: 1.75rem;
+}
+
+.otp-lg .otp-caret {
+  height: 1.75rem;
 }
 
 .otp-lg .otp-segments {
   gap: 0.625rem;
+}
+
+.otp-lg .otp-segment-glow {
+  border-radius: 16px;
 }
 
 /* ============================================
@@ -77,19 +145,37 @@
   .otp-segment {
     width: 2.75rem;
     height: 3.25rem;
-    font-size: 1.25rem;
     border-radius: 8px;
+  }
+
+  .otp-digit {
+    font-size: 1.25rem;
+  }
+
+  .otp-caret {
+    height: 1.25rem;
   }
 
   .otp-segments {
     gap: 0.375rem;
   }
 
+  .otp-segment-glow {
+    border-radius: 12px;
+  }
+
   .otp-lg .otp-segment {
     width: 2.75rem;
     height: 3.25rem;
-    font-size: 1.5rem;
     border-radius: 10px;
+  }
+
+  .otp-lg .otp-digit {
+    font-size: 1.5rem;
+  }
+
+  .otp-lg .otp-caret {
+    height: 1.5rem;
   }
 
   .otp-lg .otp-segments {
@@ -101,8 +187,15 @@
   .otp-segment {
     width: 2.5rem;
     height: 3rem;
-    font-size: 1.125rem;
     border-radius: 8px;
+  }
+
+  .otp-digit {
+    font-size: 1.125rem;
+  }
+
+  .otp-caret {
+    height: 1.125rem;
   }
 
   .otp-segments {
@@ -112,6 +205,9 @@
   .otp-lg .otp-segment {
     width: 2.5rem;
     height: 3rem;
+  }
+
+  .otp-lg .otp-digit {
     font-size: 1.25rem;
   }
 }
@@ -125,8 +221,9 @@
     transition: none;
   }
 
-  .otp-segment.filled {
-    transform: none;
+  .otp-caret {
+    animation: none;
+    opacity: 1;
   }
 }
 
@@ -144,4 +241,39 @@
     outline: 2px solid var(--accent-primary, #3d95ce);
     outline-offset: 2px;
   }
+
+  .otp-segment.error {
+    outline: 2px solid var(--accent-error, #ef4444);
+    outline-offset: 2px;
+  }
+
+  .otp-segment-glow {
+    display: none;
+  }
+}
+
+/* ============================================
+   Dark mode specifics (already dark by default)
+   ============================================ */
+
+@media (prefers-color-scheme: light) {
+  /* If we ever support light mode, adjust here */
+}
+
+/* ============================================
+   Focus visible for keyboard navigation
+   ============================================ */
+
+.otp-container:focus-within .otp-segment.active {
+  border-color: var(--accent-primary, #3d95ce);
+}
+
+/* ============================================
+   Touch targets
+   ============================================ */
+
+.otp-segment {
+  /* Ensure minimum 44px touch target */
+  min-width: 44px;
+  min-height: 44px;
 }
