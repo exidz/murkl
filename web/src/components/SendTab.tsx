@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, lazy, Suspense } from 'react';
 import type { FC } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
@@ -7,7 +7,6 @@ import toast from './Toast';
 import { buildDepositTransaction, generatePassword, createShareLink } from '../lib/deposit';
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
 import { POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
-import { HowItWorks } from './HowItWorks';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { AmountPresets } from './AmountPresets';
 import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
@@ -15,14 +14,17 @@ import { Confetti } from './Confetti';
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
-import { ShareSheet } from './ShareSheet';
 import { BalanceDisplay } from './BalanceDisplay';
 import { StepProgress } from './StepProgress';
 import { useTokenBalance } from '../hooks/useTokenBalance';
 import { useRegisterDeposit } from '../hooks/useRegisterDeposit';
 import { useRecentSends } from '../hooks/useRecentSends';
-import { RecentSendsSheet } from './RecentSendsSheet';
 import './SendTab.css';
+
+// Lazy-load bottom sheets to keep initial bundle small (Venmo-style: focus on the amount)
+const LazyHowItWorks = lazy(() => import('./HowItWorks'));
+const LazyShareSheet = lazy(() => import('./ShareSheet'));
+const LazyRecentSendsSheet = lazy(() => import('./RecentSendsSheet'));
 
 // Token-specific preset amounts
 const TOKEN_PRESETS: Record<string, { value: number; label: string }[]> = {
@@ -659,18 +661,22 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           </motion.div>
         </motion.div>
 
-        {/* Share bottom sheet */}
-        <ShareSheet
-          isOpen={showShareSheet}
-          onClose={() => setShowShareSheet(false)}
-          data={{
-            link: success.shareLink,
-            password: success.password,
-            amount: String(success.amount),
-            token: success.token,
-            recipient: success.identifier,
-          }}
-        />
+        {/* Share bottom sheet (lazy-loaded) */}
+        {showShareSheet && (
+          <Suspense fallback={null}>
+            <LazyShareSheet
+              isOpen={showShareSheet}
+              onClose={() => setShowShareSheet(false)}
+              data={{
+                link: success.shareLink,
+                password: success.password,
+                amount: String(success.amount),
+                token: success.token,
+                recipient: success.identifier,
+              }}
+            />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -728,15 +734,30 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 balance={tokenBalance}
               />
 
-              <HowItWorks isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} />
+
+              {showHowItWorks && (
+                <Suspense fallback={null}>
+                  <LazyHowItWorks
+                    isOpen={showHowItWorks}
+                    onClose={() => setShowHowItWorks(false)}
+                  />
+                </Suspense>
+              )}
+
 
               {/* Keep the amount step focused: recent activity lives in a bottom sheet */}
-              <RecentSendsSheet
-                isOpen={showRecentSheet}
-                onClose={() => setShowRecentSheet(false)}
-                sends={recentSends}
-                onClear={clearRecentSends}
-              />
+              {/* Keep the amount step focused: recent activity lives in a bottom sheet */}
+
+              {showRecentSheet && (
+                <Suspense fallback={null}>
+                  <LazyRecentSendsSheet
+                    isOpen={showRecentSheet}
+                    onClose={() => setShowRecentSheet(false)}
+                    sends={recentSends}
+                    onClear={clearRecentSends}
+                  />
+                </Suspense>
+              )}
             </div>
 
             <div className="step-footer">
