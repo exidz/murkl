@@ -363,13 +363,14 @@ export const ClaimLanding: FC<Props> = ({
         </motion.div>
       </motion.div>
 
-      {/* Action section */}
-      <motion.div
-        className="landing-action"
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45 }}
-      >
+      {/* Action section (sticky on mobile) */}
+      <div className="landing-action-surface">
+        <motion.div
+          className="landing-action"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+        >
         {!connected ? (
           /* Wallet not connected */
           <div className="landing-connect">
@@ -468,7 +469,7 @@ export const ClaimLanding: FC<Props> = ({
                 ref={inputRef}
                 type={showPassword ? 'text' : 'password'}
                 className={`landing-password-input ${password.length > 0 ? 'has-value' : ''} ${isReady ? 'ready' : ''}`}
-                placeholder="Secret code from sender…"
+                placeholder="Secret code from the sender…"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -506,14 +507,20 @@ export const ClaimLanding: FC<Props> = ({
               fullWidth
               onClick={handleSubmit}
               disabled={!isReady || !wasmReady}
-              loading={!wasmReady}
-              loadingText="Getting things ready..."
             >
               Claim
             </Button>
+
+            {!wasmReady && (
+              <div className="landing-wasm-loading" role="status" aria-live="polite">
+                <span className="landing-inline-spinner" aria-hidden="true" />
+                <span>Getting things ready…</span>
+              </div>
+            )}
           </div>
         )}
-      </motion.div>
+        </motion.div>
+      </div>
 
       {/* Trust indicators — like SplashScreen badges */}
       <motion.div

@@ -918,10 +918,58 @@
 }
 
 /* Action section */
+
+/* Sticky action surface — keeps the primary button reachable on mobile,
+   while still feeling clean like Venmo. */
+.landing-action-surface {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+
+  padding-top: 1rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0));
+
+  background: linear-gradient(
+    to top,
+    var(--bg-primary, #0a0a0f) 72%,
+    rgba(10, 10, 15, 0) 100%
+  );
+  backdrop-filter: blur(6px);
+}
+
 .landing-action {
   width: 100%;
   max-width: 360px;
-  margin-bottom: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+/* WASM warmup status — friendly and non-blocking */
+.landing-wasm-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  margin-top: 0.75rem;
+  color: var(--text-muted, #52525b);
+  font-size: 0.85rem;
+}
+
+.landing-inline-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.7);
+  animation: landing-spin 0.8s linear infinite;
+}
+
+@keyframes landing-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Connect wallet state */
@@ -1241,6 +1289,10 @@
   }
   
   .celebration-emoji {
+    animation: none;
+  }
+
+  .landing-inline-spinner {
     animation: none;
   }
   
