@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, type FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from './Toast';
 import { OAuthLogin } from './OAuthLogin';
@@ -9,9 +10,10 @@ import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { Confetti } from './Confetti';
 import { PasswordSheet } from './PasswordSheet';
-import { ManualClaimSection } from './ManualClaimSection';
 import { ClaimLanding, type ClaimLinkData } from './ClaimLanding';
 import { useClaimFlow } from '../hooks/useClaimFlow';
+import { useDeposits, depositKeys } from '../hooks/useDeposits';
+import { signOut } from '../lib/auth-client';
 import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import './ClaimTabNew.css';
 
@@ -30,6 +32,7 @@ interface Deposit {
 
 export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
   const { connected, publicKey } = useWallet();
+  const queryClient = useQueryClient();
 
   // Shared claim pipeline
   const { stage, proofProgress, successSignature, executeClaim, reset } = useClaimFlow(wasmReady);
@@ -40,8 +43,9 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
 
   // Auth state
   const [identity, setIdentity] = useState<{ provider: string; handle: string } | null>(null);
-  const [deposits, setDeposits] = useState<Deposit[]>([]);
-  const [loadingDeposits, setLoadingDeposits] = useState(false);
+
+  // TanStack Query: deposits for authenticated identity
+  const { data: deposits = [], isPending: loadingDeposits } = useDeposits(identity?.handle ?? null);
 
   // Claim state
   const [claimingDeposit, setClaimingDeposit] = useState<Deposit | null>(null);
@@ -99,53 +103,22 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     }
   }, [showPasswordSheet]);
 
-  // Handle OAuth login
+  // Handle OAuth login — just set identity; deposits load automatically via useDeposits
   const handleLogin = useCallback(async (provider: string, handle: string) => {
     setIdentity({ provider, handle });
-    setLoadingDeposits(true);
-
-    try {
-      const response = await fetch(`${RELAYER_URL}/deposits?identity=${encodeURIComponent(handle)}`);
-
-      if (response.ok) {
-        const data = await response.json();
-        setDeposits(data.deposits || []);
-
-        if (data.deposits?.length === 0) {
-          toast.info('No deposits yet — ask someone to send!', { icon: '📭' });
-        } else {
-          toast.success(`Found ${data.deposits.length} deposit(s)!`);
-        }
-      } else {
-        // Demo mode
-        setDeposits([
-          {
-            id: 'demo-1',
-            amount: 0.1,
-            token: 'SOL',
-            leafIndex: 1,
-            timestamp: new Date().toISOString(),
-            claimed: false,
-          },
-        ]);
-        toast.success('Demo: Found 1 deposit');
-      }
-    } catch {
-      // Demo fallback
-      setDeposits([
-        {
-          id: 'demo-1',
-          amount: 0.1,
-          token: 'SOL',
-          leafIndex: 1,
-          timestamp: new Date().toISOString(),
-          claimed: false,
-        },
-      ]);
-    } finally {
-      setLoadingDeposits(false);
-    }
   }, []);
+
+  // Show toasts when deposits load
+  useEffect(() => {
+    if (!identity || loadingDeposits) return;
+    // Only toast on initial load (not refetches)
+    if (deposits.length === 0) {
+      toast.info('No deposits yet — ask someone to send!', { icon: '📭' });
+    } else {
+      toast.success(`Found ${deposits.length} deposit(s)!`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity?.handle, loadingDeposits]);
 
   // Initiate claim (opens password sheet)
   const initiateClaim = useCallback((deposit: Deposit) => {
@@ -172,14 +145,12 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     });
 
     if (success) {
-      // Update deposit list to mark as claimed
-      setDeposits(prev =>
-        prev.map(d => d.id === deposit.id ? { ...d, claimed: true } : d),
-      );
+      // Invalidate deposits query so it refetches with updated claimed status
+      queryClient.invalidateQueries({ queryKey: depositKeys.byIdentity(identity.handle) });
     } else {
       setClaimingDeposit(null);
     }
-  }, [showPasswordSheet, password, identity, executeClaim]);
+  }, [showPasswordSheet, password, identity, executeClaim, queryClient]);
 
   // Handle claim from landing page (claim link flow)
   const handleLandingClaim = useCallback(async (landingPassword: string) => {
@@ -224,10 +195,14 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
     setClaimingDeposit(null);
   }, [reset]);
 
-  // Handle logout
-  const handleLogout = () => {
+  // Handle logout — clear local state AND Better Auth session
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (e) {
+      console.warn('Sign out error:', e);
+    }
     setIdentity(null);
-    setDeposits([]);
   };
 
   // ─── RENDER ───────────────────────────────────────────────
@@ -251,8 +226,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady }) => {
   if (!identity) {
     return (
       <div className="claim-tab-new">
-        <OAuthLogin onLogin={handleLogin} loading={loadingDeposits} />
-        <ManualClaimSection onLogin={handleLogin} />
+        <OAuthLogin onLogin={handleLogin} loading={false} />
       </div>
     );
   }

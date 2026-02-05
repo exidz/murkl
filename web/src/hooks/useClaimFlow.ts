@@ -2,8 +2,10 @@ import { useState, useCallback, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
+import { useQueryClient } from '@tanstack/react-query';
 import toast from '../components/Toast';
 import { RELAYER_URL, POOL_ADDRESS } from '../lib/constants';
+import { poolKeys } from './usePoolInfo';
 import { generate_proof } from '../wasm/murkl_wasm';
 
 // WSOL mint address
@@ -33,6 +35,7 @@ export interface ClaimFlowState {
  */
 export function useClaimFlow(wasmReady: boolean) {
   const { publicKey } = useWallet();
+  const queryClient = useQueryClient();
 
   const [stage, setStage] = useState<ClaimStage>('idle');
   const [proofProgress, setProofProgress] = useState(0);
@@ -72,15 +75,20 @@ export function useClaimFlow(wasmReady: boolean) {
         });
       }, 200);
 
-      // Fetch merkle root from pool
+      // Fetch merkle root from pool using TanStack Query cache
       let merkleRoot = '0'.repeat(64);
       if (RELAYER_URL) {
         try {
-          const poolInfoRes = await fetch(`${RELAYER_URL}/pool-info?pool=${poolAddress}`);
-          if (poolInfoRes.ok) {
-            const poolInfo = await poolInfoRes.json();
-            merkleRoot = poolInfo.merkleRoot || merkleRoot;
-          }
+          const poolInfo = await queryClient.fetchQuery({
+            queryKey: poolKeys.info(poolAddress),
+            queryFn: async () => {
+              const res = await fetch(`${RELAYER_URL}/pool-info?pool=${poolAddress}`);
+              if (!res.ok) throw new Error('Failed to fetch pool info');
+              return res.json();
+            },
+            staleTime: 30_000,
+          });
+          merkleRoot = poolInfo.merkleRoot || merkleRoot;
         } catch {
           // Use default
         }
@@ -159,7 +167,7 @@ export function useClaimFlow(wasmReady: boolean) {
       setStage('idle');
       return false;
     }
-  }, [publicKey, wasmReady]);
+  }, [publicKey, wasmReady, queryClient]);
 
   return {
     stage,

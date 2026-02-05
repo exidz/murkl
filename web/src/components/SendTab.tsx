@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from './Toast';
 import { buildDepositTransaction, generatePassword, createShareLink } from '../lib/deposit';
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
-import { POOL_ADDRESS, RELAYER_URL, getExplorerUrl } from '../lib/constants';
+import { POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import { HowItWorks } from './HowItWorks';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { AmountPresets } from './AmountPresets';
@@ -18,6 +18,8 @@ import { ConfirmationSummary } from './ConfirmationSummary';
 import { ShareSheet } from './ShareSheet';
 import { BalanceDisplay } from './BalanceDisplay';
 import { StepProgress } from './StepProgress';
+import { useTokenBalance } from '../hooks/useTokenBalance';
+import { useRegisterDeposit } from '../hooks/useRegisterDeposit';
 import './SendTab.css';
 
 // Token-specific preset amounts
@@ -68,7 +70,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const SOCIAL_PROVIDERS = [
     { id: 'twitter', label: '𝕏', prefix: 'twitter:@', placeholder: 'username' },
     { id: 'discord', label: '💬', prefix: 'discord:', placeholder: 'username' },
-    { id: 'google', label: '📧', prefix: 'google:', placeholder: 'email@gmail.com' },
+    { id: 'email', label: '✉️', prefix: 'email:', placeholder: 'you@example.com' },
   ] as const;
 
   // Form state
@@ -83,7 +85,10 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [showShareSheet, setShowShareSheet] = useState(false);
-  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+
+  // TanStack Query: token balance & deposit registration
+  const { data: tokenBalance = null } = useTokenBalance(selectedToken.symbol);
+  const registerDeposit = useRegisterDeposit();
   
   // Refs
   const amountInputRef = useRef<AmountInputHandle>(null);
@@ -106,45 +111,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     }
   }, []);
 
-  // Fetch token balance when wallet connects or token changes
-  useEffect(() => {
-    if (!connected || !publicKey) {
-      setTokenBalance(null);
-      return;
-    }
-
-    const fetchBalance = async () => {
-      try {
-        if (selectedToken.symbol === 'SOL') {
-          // Native SOL balance
-          const balance = await connection.getBalance(publicKey);
-          setTokenBalance(balance / 1e9); // Convert lamports to SOL
-        } else if (selectedToken.symbol === 'WSOL') {
-          // WSOL (wrapped SOL) token account balance
-          const { getAssociatedTokenAddress } = await import('@solana/spl-token');
-          const { PublicKey } = await import('@solana/web3.js');
-          const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
-          const ata = await getAssociatedTokenAddress(WSOL_MINT, publicKey);
-          const ataInfo = await connection.getAccountInfo(ata);
-          if (ataInfo) {
-            // Parse token account data - balance is at offset 64, u64 LE
-            const balance = ataInfo.data.readBigUInt64LE(64);
-            setTokenBalance(Number(balance) / 1e9);
-          } else {
-            setTokenBalance(0);
-          }
-        } else {
-          // For other SPL tokens
-          setTokenBalance(null);
-        }
-      } catch (e) {
-        console.warn('Failed to fetch balance:', e);
-        setTokenBalance(null);
-      }
-    };
-
-    fetchBalance();
-  }, [connected, publicKey, selectedToken, connection]);
+  // Token balance is now handled by useTokenBalance hook (TanStack Query)
 
   // Handle token change
   const handleTokenChange = useCallback((token: Token) => {
@@ -290,25 +257,16 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         token: selectedToken.symbol,
       });
       
-      // Register deposit with relayer for OAuth lookup
-      try {
-        await fetch(`${RELAYER_URL}/deposits/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            identifier: fullIdentifier,
-            amount: amountNum,
-            token: selectedToken.symbol,
-            leafIndex: depositResult.leafIndex,
-            pool: POOL_ADDRESS.toBase58(),
-            commitment: depositResult.commitment,
-            txSignature: signature,
-          }),
-        });
-      } catch (e) {
-        // Non-critical
-        console.warn('Failed to register deposit with relayer:', e);
-      }
+      // Register deposit with relayer for OAuth lookup (non-critical, fire-and-forget)
+      registerDeposit.mutate({
+        identifier: fullIdentifier,
+        amount: amountNum,
+        token: selectedToken.symbol,
+        leafIndex: depositResult.leafIndex,
+        pool: POOL_ADDRESS.toBase58(),
+        commitment: depositResult.commitment,
+        txSignature: signature,
+      });
       
       setStep('success');
       toast.success('Sent! 🎉');

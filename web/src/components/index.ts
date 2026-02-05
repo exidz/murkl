@@ -19,7 +19,6 @@ export { ShareSheet } from './ShareSheet';
 export { BalanceDisplay } from './BalanceDisplay';
 export { SplashScreen } from './SplashScreen';
 export { PasswordSheet } from './PasswordSheet';
-export { ManualClaimSection } from './ManualClaimSection';
 export { ClaimLanding } from './ClaimLanding';
 export type { ClaimLinkData } from './ClaimLanding';
 export { StepProgress } from './StepProgress';
