@@ -642,75 +642,79 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             animate="center"
             exit="exit"
           >
-            {/* Balance context - Venmo-style */}
-            <BalanceDisplay
-              variant="inline"
-              onClick={(balance) => setAmount(String(Math.floor(balance * 10000) / 10000))}
-              className="send-balance"
-            />
+            <div className="step-body">
+              {/* Balance context - Venmo-style */}
+              <BalanceDisplay
+                variant="inline"
+                onClick={(balance) => setAmount(String(Math.floor(balance * 10000) / 10000))}
+                className="send-balance"
+              />
 
-            <AmountInput
-              ref={amountInputRef}
-              value={amount}
-              onChange={handleAmountChange}
-              onSubmit={goNext}
-              currency={selectedToken.symbol}
-              currencySymbol={selectedToken.icon}
-              maxDecimals={selectedToken.decimals}
-              autoFocus
-            />
+              <AmountInput
+                ref={amountInputRef}
+                value={amount}
+                onChange={handleAmountChange}
+                onSubmit={goNext}
+                currency={selectedToken.symbol}
+                currencySymbol={selectedToken.icon}
+                maxDecimals={selectedToken.decimals}
+                autoFocus
+              />
 
-            {/* Quick amount presets - Venmo style */}
-            <AmountPresets
-              onSelect={handleAmountChange}
-              currentValue={amount}
-              currency={selectedToken.symbol}
-              presets={TOKEN_PRESETS[selectedToken.symbol] || TOKEN_PRESETS.SOL}
-            />
+              {/* Quick amount presets - Venmo style */}
+              <AmountPresets
+                onSelect={handleAmountChange}
+                currentValue={amount}
+                currency={selectedToken.symbol}
+                presets={TOKEN_PRESETS[selectedToken.symbol] || TOKEN_PRESETS.SOL}
+              />
 
-            <TokenSelector
-              tokens={SUPPORTED_TOKENS}
-              selected={selectedToken}
-              onChange={handleTokenChange}
-              onMaxClick={handleMaxClick}
-              balance={tokenBalance}
-            />
+              <TokenSelector
+                tokens={SUPPORTED_TOKENS}
+                selected={selectedToken}
+                onChange={handleTokenChange}
+                onMaxClick={handleMaxClick}
+                balance={tokenBalance}
+              />
 
-            <Button 
-              variant="primary"
-              size="lg"
-              fullWidth
-              onClick={goNext}
-              disabled={!amount || parseFloat(amount) <= 0}
-            >
-              Continue
-            </Button>
+              <HowItWorks isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} />
 
-            <div className="send-links-row">
-              <button className="help-link" onClick={() => setShowHowItWorks(true)}>
-                How it works →
-              </button>
-
-              {recentSends.length > 0 && (
-                <button
-                  className="help-link"
-                  onClick={() => setShowRecentSheet(true)}
-                  aria-label="View recent sends"
-                >
-                  Recent ({recentSends.length}) →
-                </button>
-              )}
+              {/* Keep the amount step focused: recent activity lives in a bottom sheet */}
+              <RecentSendsSheet
+                isOpen={showRecentSheet}
+                onClose={() => setShowRecentSheet(false)}
+                sends={recentSends}
+                onClear={clearRecentSends}
+              />
             </div>
 
-            <HowItWorks isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} />
+            <div className="step-footer">
+              <Button 
+                variant="primary"
+                size="lg"
+                fullWidth
+                onClick={goNext}
+                disabled={!amount || parseFloat(amount) <= 0}
+              >
+                Continue
+              </Button>
 
-            {/* Keep the amount step focused: recent activity lives in a bottom sheet */}
-            <RecentSendsSheet
-              isOpen={showRecentSheet}
-              onClose={() => setShowRecentSheet(false)}
-              sends={recentSends}
-              onClear={clearRecentSends}
-            />
+              <div className="send-links-row">
+                <button className="help-link" onClick={() => setShowHowItWorks(true)}>
+                  How it works →
+                </button>
+
+                {recentSends.length > 0 && (
+                  <button
+                    className="help-link"
+                    onClick={() => setShowRecentSheet(true)}
+                    aria-label="View recent sends"
+                  >
+                    Recent ({recentSends.length}) →
+                  </button>
+                )}
+              </div>
+            </div>
           </motion.div>
         )}
 
