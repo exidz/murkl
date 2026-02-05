@@ -8,6 +8,8 @@ import { TabBar } from './components/TabBar';
 import { Footer } from './components/Footer';
 import { SplashScreen } from './components/SplashScreen';
 import { ToastContainer } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { NetworkStatus } from './components/NetworkStatus';
 import './App.css';
 
 // WASM module
@@ -124,6 +126,9 @@ function AppContent() {
       {/* Branded splash screen during WASM init */}
       <SplashScreen visible={showSplash} />
 
+      {/* Network connectivity banner — warns users before they try transacting offline */}
+      <NetworkStatus />
+
       <div className="app">
         <Header wasmReady={wasmReady} />
 
@@ -144,8 +149,16 @@ function AppContent() {
               exit="exit"
               style={{ width: '100%' }}
             >
-              {tab === 'send' && <SendTab wasmReady={wasmReady} />}
-              {tab === 'claim' && <ClaimTab wasmReady={wasmReady} onUnclaimedCount={setUnclaimedCount} />}
+              {tab === 'send' && (
+                <ErrorBoundary scope="SendTab" compact>
+                  <SendTab wasmReady={wasmReady} />
+                </ErrorBoundary>
+              )}
+              {tab === 'claim' && (
+                <ErrorBoundary scope="ClaimTab" compact>
+                  <ClaimTab wasmReady={wasmReady} onUnclaimedCount={setUnclaimedCount} />
+                </ErrorBoundary>
+              )}
             </motion.div>
           </AnimatePresence>
         </main>
@@ -158,10 +171,12 @@ function AppContent() {
 
 function App() {
   return (
-    <WalletProvider>
-      <AppContent />
-      <ToastContainer />
-    </WalletProvider>
+    <ErrorBoundary scope="App">
+      <WalletProvider>
+        <AppContent />
+        <ToastContainer />
+      </WalletProvider>
+    </ErrorBoundary>
   );
 }
 
