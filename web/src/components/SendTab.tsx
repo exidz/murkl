@@ -20,6 +20,8 @@ import { BalanceDisplay } from './BalanceDisplay';
 import { StepProgress } from './StepProgress';
 import { useTokenBalance } from '../hooks/useTokenBalance';
 import { useRegisterDeposit } from '../hooks/useRegisterDeposit';
+import { useRecentSends } from '../hooks/useRecentSends';
+import { RecentActivity } from './RecentActivity';
 import './SendTab.css';
 
 // Token-specific preset amounts
@@ -148,6 +150,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   // TanStack Query: token balance & deposit registration
   const { data: tokenBalance = null } = useTokenBalance(selectedToken.symbol);
   const registerDeposit = useRegisterDeposit();
+  
+  // Recent sends history (persisted in localStorage)
+  const { sends: recentSends, addSend: addRecentSend, clearSends: clearRecentSends } = useRecentSends();
   
   // Refs
   const amountInputRef = useRef<AmountInputHandle>(null);
@@ -384,6 +389,15 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         pool: POOL_ADDRESS.toBase58(),
         commitment: depositResult.commitment,
         txSignature: signature,
+      });
+      
+      // Persist to recent sends (localStorage)
+      addRecentSend({
+        amount: amountNum,
+        token: selectedToken.symbol,
+        recipient: fullIdentifier,
+        signature,
+        shareLink,
       });
       
       setStepDirection(1);
@@ -652,6 +666,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             <button className="help-link" onClick={() => setShowHowItWorks(true)}>
               How it works →
             </button>
+            
+            {/* Recent sends feed — Venmo-style activity history */}
+            <RecentActivity sends={recentSends} onClear={clearRecentSends} />
             
             <HowItWorks isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} />
           </motion.div>

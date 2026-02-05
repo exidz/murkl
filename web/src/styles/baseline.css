@@ -19,7 +19,8 @@ p,
 .share-hint,
 .landing-connect-hint,
 .landing-password-label,
-.landing-email-hint {
+.landing-email-hint,
+.recent-title {
   text-wrap: pretty;
 }
 
