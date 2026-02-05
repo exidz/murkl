@@ -227,10 +227,15 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'wasm-unsafe-eval'"], // Required for WASM
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:"],
-      connectSrc: ["'self'", config.rpcUrl],
+      scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"], // Allow avatars from OAuth providers
+      connectSrc: [
+        "'self'",
+        config.rpcUrl,
+        config.rpcUrl.replace('https://', 'wss://'), // WebSocket for tx confirmation
+      ],
     }
   },
   crossOriginEmbedderPolicy: false, // Required for WASM

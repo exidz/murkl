@@ -120,10 +120,10 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     setAmount('');
   }, []);
 
-  // Handle Max button click - fills in max balance (minus small buffer for fees)
+  // Handle Max button click - fills in max balance (minus buffer for fees + rent)
   const handleMaxClick = useCallback((balance: number) => {
-    // Leave a small buffer for transaction fees (0.001 SOL for native, none for tokens)
-    const feeBuffer = selectedToken.symbol === 'SOL' ? 0.001 : 0;
+    // Reserve for: tx fees (~0.000005) + WSOL account rent (~0.002) + wallet rent-exempt (~0.001)
+    const feeBuffer = selectedToken.symbol === 'SOL' ? 0.005 : 0;
     const maxAmount = Math.max(0, balance - feeBuffer);
     
     // Format to avoid floating point issues, respect token decimals
@@ -203,6 +203,17 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       const provider = SOCIAL_PROVIDERS.find(p => p.id === selectedProvider)!;
       const fullIdentifier = `${provider.prefix}${sanitizeInput(identifier)}`;
       const amountNum = parseFloat(amount);
+      
+      // Validate user keeps enough SOL for rent + fees when depositing native SOL
+      if (selectedToken.symbol === 'SOL') {
+        const solBalance = await connection.getBalance(publicKey);
+        const solBalanceNum = solBalance / 1e9;
+        const minReserve = 0.005; // rent-exempt + fees + WSOL rent
+        if (solBalanceNum - amountNum < minReserve) {
+          toast.error(`Keep at least ${minReserve} SOL for fees. Max: ${(solBalanceNum - minReserve).toFixed(4)} SOL`);
+          return;
+        }
+      }
       
       // Build transaction
       // If user selected SOL, wrap native SOL to WSOL
