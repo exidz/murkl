@@ -1,8 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { FC } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import toast from './Toast';
 import { buildDepositTransaction, generatePassword, createShareLink } from '../lib/deposit';
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
@@ -62,9 +62,64 @@ const SEND_STEPS = [
   { id: 'confirm', label: 'Review' },
 ] as const;
 
+// Direction-aware step transitions — slides in from right when going forward,
+// from left when going back. Matches Venmo's natural navigation feel.
+const stepVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 40 : -40,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+    transition: {
+      x: { type: 'spring' as const, stiffness: 400, damping: 35 },
+      opacity: { duration: 0.2 },
+    },
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -40 : 40,
+    opacity: 0,
+    transition: {
+      x: { type: 'spring' as const, stiffness: 400, damping: 35 },
+      opacity: { duration: 0.15 },
+    },
+  }),
+};
+
+/**
+ * Password strength score (0-4).
+ * Simple entropy-based calculation — not a security library,
+ * just enough for UX feedback.
+ */
+function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
+  if (!pw) return { score: 0, label: '', color: 'transparent' };
+  
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  
+  // Cap at 4 for the bar
+  score = Math.min(4, score);
+  
+  const levels = [
+    { label: 'Weak', color: 'var(--accent-error, #ef4444)' },
+    { label: 'Fair', color: 'var(--accent-warning, #f59e0b)' },
+    { label: 'Good', color: 'var(--accent-primary, #3d95ce)' },
+    { label: 'Strong', color: 'var(--accent-success, #22c55e)' },
+    { label: 'Excellent', color: 'var(--accent-success, #22c55e)' },
+  ];
+  
+  return { score, ...levels[score] };
+}
+
 export const SendTab: FC<Props> = ({ wasmReady }) => {
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
+  const reducedMotion = useReducedMotion();
   
   // Social providers for recipient
   const SOCIAL_PROVIDERS = [
@@ -85,6 +140,10 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [showShareSheet, setShowShareSheet] = useState(false);
+  
+  // Direction tracking for step transitions (1 = forward, -1 = backward)
+  const [stepDirection, setStepDirection] = useState(1);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   // TanStack Query: token balance & deposit registration
   const { data: tokenBalance = null } = useTokenBalance(selectedToken.symbol);
@@ -94,6 +153,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const amountInputRef = useRef<AmountInputHandle>(null);
   const identifierInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  // Password strength for visual indicator
+  const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
 
   // Focus input on step change (AmountInput handles its own focus)
   useEffect(() => {
@@ -151,7 +213,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     setAmount(value);
   }, []);
 
-  // Navigation
+  // Navigation — tracks direction for slide animation
   const goNext = useCallback(() => {
     if (step === 'amount') {
       if (!isValidAmount(amount)) {
@@ -159,27 +221,39 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         toast.error('Enter a valid amount');
         return;
       }
+      setStepDirection(1);
       setStep('recipient');
     } else if (step === 'recipient') {
       if (!isValidIdentifier(identifier)) {
         toast.error('Enter a valid recipient');
         return;
       }
+      setStepDirection(1);
       setStep('password');
     } else if (step === 'password') {
       if (!isValidPassword(password)) {
         toast.error('Password must be 8-128 characters');
         return;
       }
+      setStepDirection(1);
       setStep('confirm');
     }
   }, [step, amount, identifier, password]);
 
   const goBack = useCallback(() => {
+    setStepDirection(-1);
     if (step === 'recipient') setStep('amount');
     else if (step === 'password') setStep('recipient');
     else if (step === 'confirm') setStep('password');
   }, [step]);
+
+  // Regenerate password with spin animation
+  const handleRegenerate = useCallback(() => {
+    setIsRegenerating(true);
+    setPassword(generatePassword(16));
+    // Reset spin after animation duration
+    setTimeout(() => setIsRegenerating(false), 500);
+  }, []);
 
   // Handle key press for navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -312,6 +386,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         txSignature: signature,
       });
       
+      setStepDirection(1);
       setStep('success');
       toast.success('Sent! 🎉');
       
@@ -329,6 +404,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     setIdentifier('');
     setAmount('');
     setPassword(generatePassword(16));
+    setStepDirection(-1);
     setStep('amount');
   }, []);
 
@@ -517,15 +593,17 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       {/* Step progress indicator — hidden on success */}
       <StepProgress steps={[...SEND_STEPS]} activeStep={step} />
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" custom={stepDirection} initial={false}>
         {/* Step 1: Amount */}
         {step === 'amount' && (
           <motion.div 
             key="amount"
             className="step-view"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            custom={stepDirection}
+            variants={reducedMotion ? undefined : stepVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
           >
             {/* Balance context - Venmo-style */}
             <BalanceDisplay
@@ -584,9 +662,11 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           <motion.div 
             key="recipient"
             className="step-view"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            custom={stepDirection}
+            variants={reducedMotion ? undefined : stepVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
           >
             <button className="back-btn" onClick={goBack}>
               ← Back
@@ -657,9 +737,11 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           <motion.div 
             key="password"
             className="step-view"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            custom={stepDirection}
+            variants={reducedMotion ? undefined : stepVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
           >
             <button className="back-btn" onClick={goBack}>
               ← Back
@@ -683,14 +765,53 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                   maxLength={128}
                   autoComplete="off"
                 />
-                <button 
-                  className="regenerate-btn"
-                  onClick={() => setPassword(generatePassword(16))}
+                <motion.button 
+                  className={`regenerate-btn ${isRegenerating ? 'spinning' : ''}`}
+                  onClick={handleRegenerate}
                   title="Generate new password"
+                  whileTap={{ scale: 0.9 }}
+                  aria-label="Generate random password"
                 >
-                  🎲
-                </button>
+                  <motion.span
+                    animate={isRegenerating ? { rotate: 360 } : { rotate: 0 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    style={{ display: 'inline-block' }}
+                  >
+                    🎲
+                  </motion.span>
+                </motion.button>
               </div>
+              
+              {/* Password strength indicator */}
+              {password.length > 0 && (
+                <motion.div 
+                  className="password-strength"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="strength-bar-track">
+                    {[0, 1, 2, 3].map(i => (
+                      <motion.div
+                        key={i}
+                        className="strength-bar-segment"
+                        initial={{ scaleX: 0 }}
+                        animate={{ 
+                          scaleX: i < passwordStrength.score ? 1 : 0,
+                          backgroundColor: i < passwordStrength.score ? passwordStrength.color : 'var(--bg-tertiary)',
+                        }}
+                        transition={{ duration: 0.2, delay: i * 0.05 }}
+                        style={{ transformOrigin: 'left' }}
+                      />
+                    ))}
+                  </div>
+                  <span className="strength-label" style={{ color: passwordStrength.color }}>
+                    {passwordStrength.label}
+                  </span>
+                </motion.div>
+              )}
+              
               <p className="input-hint">Share this with the recipient secretly</p>
             </div>
 
@@ -711,9 +832,11 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           <motion.div 
             key="confirm"
             className="step-view"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            custom={stepDirection}
+            variants={reducedMotion ? undefined : stepVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
           >
             <button className="back-btn" onClick={goBack}>
               ← Back
