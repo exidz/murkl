@@ -1,0 +1,101 @@
+/* TxStatusOverlay — friendly, Venmo-style sending status */
+
+.tx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+/* Bottom-sheet-ish card (mobile-first) */
+.tx-overlay-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #27272a);
+  border-radius: 18px;
+  padding: 1.1rem 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.tx-overlay-header {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.tx-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+}
+
+.tx-body {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #a1a1aa);
+  line-height: 1.35;
+}
+
+.tx-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent-primary, #3d95ce);
+  animation: tx-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes tx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tx-progress {
+  margin-top: 0.9rem;
+}
+
+.tx-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.tx-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary, #3d95ce), rgba(61, 149, 206, 0.7));
+}
+
+.tx-progress-steps {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #52525b);
+}
+
+.tx-progress-steps span.on {
+  color: var(--text-secondary, #a1a1aa);
+}
+
+.tx-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted, #52525b);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-spinner {
+    animation: none;
+    border-top-color: rgba(255, 255, 255, 0.45);
+  }
+}

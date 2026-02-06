@@ -17,6 +17,7 @@ import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
 import { InlineBalancePill } from './InlineBalancePill';
 import { StepProgress } from './StepProgress';
+import { TxStatusOverlay, type TxStage } from './TxStatusOverlay';
 import { useTokenBalance } from '../hooks/useTokenBalance';
 import { useRegisterDeposit } from '../hooks/useRegisterDeposit';
 import { useRecentSends } from '../hooks/useRecentSends';
@@ -188,6 +189,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   const [password, setPassword] = useState('');
   const [step, setStep] = useState<Step>('amount');
   const [loading, setLoading] = useState(false);
+  const [txStage, setTxStage] = useState<TxStage>('idle');
   const [success, setSuccess] = useState<DepositSuccess | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
@@ -325,15 +327,16 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       toast.error('Please connect your wallet');
       return;
     }
-    
+
     setLoading(true);
-    
+    setTxStage('approve');
+
     try {
       // Build namespaced identifier: <provider>:<handle>
       const provider = getProvider(selectedProvider);
       const fullIdentifier = `${provider.prefix}${sanitizeInput(identifier)}`;
       const amountNum = parseFloat(amount);
-      
+
       // Validate user keeps enough SOL for rent + fees when depositing native SOL
       if (selectedToken.symbol === 'SOL') {
         const solBalance = await connection.getBalance(publicKey);
@@ -344,7 +347,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
           return;
         }
       }
-      
+
       // Build transaction
       // If user selected SOL, wrap native SOL to WSOL
       // If user selected WSOL, use existing WSOL directly
@@ -358,25 +361,24 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         amountNum,
         { wrapSol },
       );
-      
+
       // Get blockhash right before signing
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       depositResult.transaction.recentBlockhash = blockhash;
       depositResult.transaction.feePayer = publicKey;
-      
-      // Sign transaction
-      const txToastId = toast.loading('Approve in wallet...');
+
+      // Sign transaction (wallet approval)
       const signed = await signTransaction(depositResult.transaction);
-      toast.update(txToastId, { message: 'Sending...', type: 'loading' });
-      
+
       // Send with retries for devnet reliability
+      setTxStage('sending');
       const signature = await connection.sendRawTransaction(signed.serialize(), {
         skipPreflight: false,
         maxRetries: 5,
       });
-      
+
       // Confirm with block-height-exceeded fallback (devnet can be slow)
-      toast.update(txToastId, { message: 'Confirming...', type: 'loading' });
+      setTxStage('confirming');
       let confirmed = false;
       try {
         await connection.confirmTransaction({
@@ -388,7 +390,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       } catch (confirmErr: any) {
         // Block height exceeded — TX was sent, poll to see if it landed
         if (confirmErr?.message?.includes('block height') || confirmErr?.message?.includes('expired')) {
-          toast.update(txToastId, { message: 'Verifying transaction...', type: 'loading' });
+          setTxStage('verifying');
           // Poll up to 10 times over ~15 seconds
           for (let i = 0; i < 10; i++) {
             await new Promise(r => setTimeout(r, 1500));
@@ -402,19 +404,20 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 }
                 break;
               }
-            } catch { /* retry */ }
+            } catch {
+              /* retry */
+            }
           }
           if (!confirmed) {
             throw new Error(
               `Transaction sent but confirmation timed out. ` +
-              `Check explorer: https://explorer.solana.com/tx/${signature}?cluster=devnet`
+                `Check explorer: https://explorer.solana.com/tx/${signature}?cluster=devnet`,
             );
           }
         } else {
           throw confirmErr;
         }
       }
-      toast.dismiss(txToastId);
 
       // Register deposit with relayer for indexing + email notification.
       // Note: for email recipients, claiming is login-only (no vouchers / no claim links).
@@ -435,7 +438,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
       const shareLink = isEmailRecipient
         ? ''
         : createShareLink(fullIdentifier, depositResult.leafIndex, POOL_ADDRESS.toBase58());
-      
+
       setSuccess({
         signature,
         leafIndex: depositResult.leafIndex,
@@ -445,7 +448,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         amount: amountNum,
         token: selectedToken.symbol,
       });
-      
+
       // Persist to recent sends (localStorage)
       addRecentSend({
         amount: amountNum,
@@ -454,16 +457,16 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         signature,
         shareLink,
       });
-      
+
       setStepDirection(1);
       setStep('success');
-      toast.success('Sent! 🎉');
-      
+      toast.success('Sent!');
     } catch (error) {
       console.error('Deposit error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to send');
     } finally {
       setLoading(false);
+      setTxStage('idle');
     }
   }, [
     connected,
@@ -485,6 +488,8 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
     setIdentifier('');
     setAmount('');
     setPassword(generatePassword(16));
+    setTxStage('idle');
+    setLoading(false);
     setStepDirection(-1);
     setStep('amount');
   }, []);
@@ -687,6 +692,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   // Main send flow
   return (
     <div className="send-tab">
+      <TxStatusOverlay open={loading} stage={txStage} />
       {/* Step progress indicator — hidden on success */}
       <StepProgress steps={[...SEND_STEPS]} activeStep={step} />
 

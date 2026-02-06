@@ -23,6 +23,8 @@ export { DepositCard } from './DepositCard';
 export { ClaimLanding } from './ClaimLanding';
 export type { ClaimLinkData } from './ClaimLanding';
 export { StepProgress } from './StepProgress';
+export { TxStatusOverlay } from './TxStatusOverlay';
+export type { TxStage } from './TxStatusOverlay';
 export { OtpInput } from './OtpInput';
 export { NotificationBadge } from './NotificationBadge';
 export { RecentActivity } from './RecentActivity';
