@@ -401,7 +401,8 @@ pub struct Claim<'info> {
     #[account(
         mut,
         seeds = [b"deposit", pool.key().as_ref(), &deposit.leaf_index.to_le_bytes()],
-        bump = deposit.bump
+        bump = deposit.bump,
+        constraint = deposit.pool == pool.key() @ MurklError::InvalidDepositPool
     )]
     pub deposit: Account<'info, DepositRecord>,
     
@@ -583,6 +584,9 @@ pub enum MurklError {
     
     #[msg("Nullifier already used - replay attack detected")]
     NullifierReplay,
+
+    #[msg("Deposit does not belong to pool")]
+    InvalidDepositPool,
 
     #[msg("Invalid pool config")]
     InvalidPoolConfig,

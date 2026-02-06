@@ -1137,7 +1137,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     
     // Mark deposit as claimed in the database
     const depositId = `${poolAddress}-${leafIndex}`;
-    const dep = stmtFindByIdOrLeaf.get(depositId, leafIndex) as any;
+    const dep = stmtFindById.get(depositId) as any;
     if (dep) {
       stmtMarkClaimed.run(dep.id);
       log('info', 'Deposit marked claimed', { requestId, depositId: dep.id });
@@ -1229,7 +1229,6 @@ const stmtInsertDeposit = db.prepare(`
 const stmtGetByHash = db.prepare(`SELECT * FROM deposits WHERE identifier_hash = ?`);
 const stmtMarkClaimed = db.prepare(`UPDATE deposits SET claimed = 1 WHERE id = ?`);
 const stmtFindById = db.prepare(`SELECT * FROM deposits WHERE id = ?`);
-const stmtFindByIdOrLeaf = db.prepare(`SELECT * FROM deposits WHERE id = ? OR leaf_index = ?`);
 
 function rowToDeposit(row: any): IndexedDeposit {
   return {
