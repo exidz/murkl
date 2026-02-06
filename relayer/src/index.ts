@@ -104,21 +104,58 @@ const config = loadConfig();
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+function redactMeta(meta?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!meta) return undefined;
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(meta)) {
+    const key = k.toLowerCase();
+    if (key.includes('secret') || key.includes('token') || key.includes('otp') || key.includes('password')) {
+      out[k] = '[REDACTED]';
+      continue;
+    }
+    if (key.includes('email')) {
+      // Avoid leaking user emails into production logs.
+      out[k] = typeof v === 'string' ? v.replace(/(^.).*(@.*$)/, '$1***$2') : '[REDACTED]';
+      continue;
+    }
+    out[k] = v;
+  }
+  return out;
+}
+
+function shouldLog(level: LogLevel): boolean {
+  const env = (process.env.LOG_LEVEL || '').toLowerCase();
+  const nodeEnv = process.env.NODE_ENV || 'development';
+
+  // Defaults:
+  // - production: info+
+  // - dev: debug+
+  const min: LogLevel = (env === 'debug' || env === 'info' || env === 'warn' || env === 'error')
+    ? (env as LogLevel)
+    : (nodeEnv === 'production' ? 'info' : 'debug');
+
+  const order: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+  return order[level] >= order[min];
+}
+
 function log(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
+  if (!shouldLog(level)) return;
+
   const timestamp = new Date().toISOString();
+  const safeMeta = redactMeta(meta);
   const entry = {
     timestamp,
     level,
     message,
-    ...meta
+    ...(safeMeta || {})
   };
-  
-  // In production, send to logging service
+
   if (process.env.NODE_ENV === 'production') {
     console.log(JSON.stringify(entry));
   } else {
     const emoji = { debug: '🔍', info: 'ℹ️', warn: '⚠️', error: '❌' }[level];
-    console.log(`${emoji} [${timestamp}] ${message}`, meta || '');
+    console.log(`${emoji} [${timestamp}] ${message}`, safeMeta || '');
   }
 }
 
@@ -875,21 +912,21 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       [Buffer.from('vault'), pool.toBuffer()],
       config.programId
     );
-    log('info', 'DEBUG: vaultPda derived', { requestId, vaultPda: vaultPda.toBase58() });
+    log('debug', 'vaultPda derived', { requestId, vaultPda: vaultPda.toBase58() });
     
     const [nullifierPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('nullifier'), pool.toBuffer(), nullifier32],
       config.programId
     );
-    log('info', 'DEBUG: nullifierPda derived', { requestId, nullifierPda: nullifierPda.toBase58() });
+    log('debug', 'nullifierPda derived', { requestId, nullifierPda: nullifierPda.toBase58() });
     
     // ========================================
     // Check on-chain nullifier status
     // ========================================
     
-    log('info', 'DEBUG: fetching nullifier account...', { requestId });
+    log('debug', 'fetching nullifier account...', { requestId });
     const nullifierAccount = await connection.getAccountInfo(nullifierPda);
-    log('info', 'DEBUG: nullifier account fetched', { requestId, exists: !!nullifierAccount });
+    log('debug', 'nullifier account fetched', { requestId, exists: !!nullifierAccount });
     if (nullifierAccount) {
       log('warn', 'Nullifier already used on-chain', { requestId });
       return res.status(400).json({ error: 'Funds already claimed' });
@@ -946,12 +983,12 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // Step 2: Write Proof Chunks
     // ========================================
     
-    log('info', 'DEBUG: Writing chunks', { requestId, numChunks, chunkSize: config.chunkSize });
+    log('debug', 'Writing chunks', { requestId, numChunks, chunkSize: config.chunkSize });
     for (let i = 0; i < numChunks; i++) {
       const offset = i * config.chunkSize;
       const chunk = proofBytes.slice(offset, offset + config.chunkSize);
       
-      log('info', `DEBUG: Writing chunk ${i+1}/${numChunks}`, { requestId, offset, chunkLen: chunk.length });
+      log('debug', `Writing chunk ${i + 1}/${numChunks}`, { requestId, offset, chunkLen: chunk.length });
       
       const writeData = Buffer.concat([
         getDiscriminator('upload_chunk'),
@@ -975,9 +1012,9 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       
       try {
         await sendAndConfirmTransaction(connection, writeTx, [relayerKeypair]);
-        log('info', `DEBUG: Chunk ${i+1} written successfully`, { requestId });
+        log('debug', `Chunk ${i + 1} written successfully`, { requestId });
       } catch (chunkErr) {
-        log('error', `DEBUG: Chunk ${i+1} failed`, { requestId, error: String(chunkErr) });
+        log('error', `Chunk ${i + 1} failed`, { requestId, error: String(chunkErr) });
         throw chunkErr;
       }
     }
@@ -989,7 +1026,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // ========================================
     
     // DEBUG: Log exact values being sent to finalize
-    log('info', 'DEBUG: Finalize params', {
+    log('debug', 'Finalize params', {
       requestId,
       commitment: `${commitment32.toString('hex').slice(0, 8)}...`,
       nullifier: `${nullifier32.toString('hex').slice(0, 8)}...`,
@@ -1030,7 +1067,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       const bufData = bufferInfo.data;
       const bufFinalized = bufData[40] === 1;
       const bufCommitment = bufData.slice(41, 73).toString('hex');
-      log('info', 'DEBUG: Buffer state after finalize', { 
+      log('debug', 'Buffer state after finalize', { 
         requestId,
         finalized: bufFinalized,
         bufferCommitment: bufCommitment,
