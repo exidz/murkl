@@ -80,9 +80,15 @@ function loadConfig(): Config {
     process.exit(1);
   }
   
-  const corsOrigins = process.env.CORS_ORIGINS 
-    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
-    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173', 'https://murkl.app', 'https://aimed-beauty-faces-ours.trycloudflare.com'];
+  const env = process.env.NODE_ENV || 'development';
+
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+    : env === 'production'
+      // Production default: only canonical web origins. (No localhost / ephemeral tunnels.)
+      ? ['https://murkl.app', 'https://murkl.dev', 'https://murkl-relayer-production.up.railway.app']
+      // Development default: allow local dev servers.
+      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173'];
   
   return {
     port: parseInt(process.env.PORT || '3001', 10),

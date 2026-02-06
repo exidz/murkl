@@ -164,6 +164,13 @@ pub mod murkl {
         
         // Check buffer size
         require!(data.len() >= VERIFIER_HEADER_SIZE, MurklError::InvalidVerifierBuffer);
+
+        // Enforce that the buffer was initialized for (and finalized by) this relayer.
+        // Without this, anyone can front-run a claim using another relayer's finalized buffer
+        // and steal the relayer fee by simply setting their own `relayer_token`.
+        let buffer_owner = Pubkey::try_from(&data[VERIFIER_OFFSET_OWNER..VERIFIER_OFFSET_OWNER + 32])
+            .map_err(|_| MurklError::InvalidVerifierBuffer)?;
+        require!(buffer_owner == ctx.accounts.relayer.key(), MurklError::Unauthorized);
         
         // Check finalized flag
         let finalized = data[VERIFIER_OFFSET_FINALIZED] == 1;
