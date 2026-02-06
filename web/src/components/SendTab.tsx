@@ -716,6 +716,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 placeholder="0.00"
                 maxDecimals={selectedToken.decimals}
                 autoFocus
+                showCurrencyLabel={false}
               />
 
               {/* Quick amount presets - Venmo style */}

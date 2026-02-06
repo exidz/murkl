@@ -29,6 +29,13 @@ interface Props {
   maxDecimals?: number;
   autoFocus?: boolean;
   disabled?: boolean;
+  /**
+   * Show the currency label below the amount (e.g. "SOL").
+   *
+   * Default: true. For the Venmo-style send screen, you may want this off
+   * because the token selector already communicates the currency.
+   */
+  showCurrencyLabel?: boolean;
 }
 
 // Trigger haptic feedback on supported devices
@@ -76,7 +83,7 @@ const shakeVariants = {
 /**
  * Venmo-style hero amount input.
  *
- * The input IS the visual display — no hidden overlay tricks.
+ * The input IS the visual display - no hidden overlay tricks.
  * This ensures the caret is always properly positioned and visible.
  *
  * Features:
@@ -97,6 +104,7 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
   maxDecimals = 9,
   autoFocus = false,
   disabled = false,
+  showCurrencyLabel = true,
 }, ref) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isShaking, setIsShaking] = useState(false);
@@ -191,7 +199,7 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
 
   return (
     <motion.div
-      className={`amount-input-wrapper ${isFocused ? 'focused' : ''} ${isEmpty ? 'empty' : ''}`}
+      className={`amount-input-wrapper ${isFocused ? 'focused' : ''} ${isEmpty ? 'empty' : ''} ${showCurrencyLabel ? '' : 'no-label'}`}
       variants={shakeVariants}
       animate={isShaking ? 'shake' : 'idle'}
     >
@@ -226,7 +234,7 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
           )}
         </motion.span>
 
-        {/* The actual input — this IS the visual display */}
+        {/* The actual input - this IS the visual display */}
         <motion.input
           ref={inputRef}
           type="text"
@@ -255,22 +263,24 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
         />
       </div>
 
-      {/* Currency label below */}
-      <AnimatePresence mode="wait">
-        <motion.p
-          key={currency}
-          className="amount-label"
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -5 }}
-          transition={{ duration: 0.15 }}
-          aria-hidden="true"
-        >
-          {currency}
-        </motion.p>
-      </AnimatePresence>
+      {/* Currency label below (optional) */}
+      {showCurrencyLabel && (
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={currency}
+            className="amount-label"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            aria-hidden="true"
+          >
+            {currency}
+          </motion.p>
+        </AnimatePresence>
+      )}
 
-      {/* Focus glow — subtle radial behind the input */}
+      {/* Focus glow - subtle radial behind the input */}
       {isFocused && !reducedMotion && (
         <motion.div
           className="amount-focus-glow"

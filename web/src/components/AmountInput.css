@@ -15,6 +15,12 @@
   isolation: isolate;
 }
 
+/* When the currency label is hidden, tighten vertical spacing a bit */
+.amount-input-wrapper.no-label {
+  padding-bottom: 1.5rem;
+  min-height: 160px;
+}
+
 /* Main display container — currency + input side by side */
 .amount-display-container {
   display: flex;
@@ -116,6 +122,10 @@
   transform: translateX(-50%) scaleX(var(--underline-scale-idle));
   transform-origin: center;
   z-index: 0;
+}
+
+.amount-input-wrapper.no-label::after {
+  bottom: 1.5rem;
 }
 
 /* Underline activates on focus */
