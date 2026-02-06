@@ -86,12 +86,16 @@ fi
 
 SURFPOOL_RPC="http://127.0.0.1:${SURFPOOL_PORT}"
 
+TMP_DIR="$ROOT_DIR/.tmp"
+mkdir -p "$TMP_DIR"
+SURFPOOL_LOG="$TMP_DIR/surfpool-${SURFPOOL_PORT}.log"
+
 echo "==> Starting Surfpool (datasource=devnet) on $SURFPOOL_RPC"
 # -y will auto-generate runbooks/manifest if missing.
 # --no-deploy because we will deploy explicitly using solana/anchor.
 # --no-tui to avoid interactive UI.
 set +e
-surfpool start --network devnet --port "$SURFPOOL_PORT" --ws-port "$SURFPOOL_WS_PORT" --no-tui --no-studio --no-deploy -y --log-level warn &
+surfpool start --network devnet --port "$SURFPOOL_PORT" --ws-port "$SURFPOOL_WS_PORT" --no-tui --no-studio --no-deploy -y --log-level warn >"$SURFPOOL_LOG" 2>&1 &
 SURFPOOL_PID=$!
 set -e
 
@@ -99,6 +103,14 @@ set -e
 sleep 0.5
 if ! kill -0 "$SURFPOOL_PID" 2>/dev/null; then
   echo "❌ Surfpool failed to start (ports may be in use). Try setting SURFPOOL_PORT/SURFPOOL_WS_PORT." >&2
+  echo "(See $SURFPOOL_LOG)" >&2
+  exit 1
+fi
+
+# Some Surfpool failures (like port conflicts) can log an error but not exit immediately.
+if grep -qiE "port .*already in use" "$SURFPOOL_LOG" 2>/dev/null; then
+  echo "❌ Surfpool reported port-in-use; refusing to run against an unknown RPC on $SURFPOOL_RPC" >&2
+  echo "Try: SURFPOOL_PORT=8909 SURFPOOL_WS_PORT=8910 bash scripts/e2e-recipient-binding-surfpool.sh" >&2
   exit 1
 fi
 
@@ -107,6 +119,16 @@ for i in {1..120}; do
   if curl -fsS "$SURFPOOL_RPC" -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' >/dev/null 2>&1; then
     echo "==> Surfpool RPC is up"
+
+    # Ensure the port we are talking to is actually owned by the Surfpool we just started.
+    if command -v ss >/dev/null 2>&1; then
+      if ! ss -ltnp 2>/dev/null | grep -qE ":${SURFPOOL_PORT}.*pid=${SURFPOOL_PID}[,)]"; then
+        echo "❌ Port ${SURFPOOL_PORT} is not owned by this Surfpool pid=${SURFPOOL_PID}; aborting to avoid false E2E results" >&2
+        echo "Try: SURFPOOL_PORT=8909 SURFPOOL_WS_PORT=8910 bash scripts/e2e-recipient-binding-surfpool.sh" >&2
+        exit 1
+      fi
+    fi
+
     break
   fi
   sleep 1
