@@ -37,6 +37,7 @@ const RPC_URL = process.env.RPC_URL || 'https://api.devnet.solana.com';
 const PROGRAM_ID = new PublicKey('muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF');
 const POOL = new PublicKey('8MU3WQzxLDHi6Up2ksk255LWrRm17i7UQ6Hap4zeF3qJ');
 const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
 
 function loadKeypair(p: string): Keypair {
   const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -52,6 +53,43 @@ async function anchorDiscriminator(name: string): Promise<Buffer> {
   const nodeCrypto = await import('node:crypto');
   const hash = nodeCrypto.createHash('sha256').update(`global:${name}`).digest();
   return hash.subarray(0, 8);
+}
+
+function derivePoolMerklePda(): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('pool-merkle'), POOL.toBuffer()],
+    PROGRAM_ID,
+  );
+  return pda;
+}
+
+async function ensurePoolMerkleInitialized(connection: Connection, payer: Keypair) {
+  const poolMerkle = derivePoolMerklePda();
+  const info = await connection.getAccountInfo(poolMerkle);
+  if (info) return;
+
+  const disc = await anchorDiscriminator('initialize_pool_merkle');
+  const ix = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: POOL, isSigner: false, isWritable: false },
+      { pubkey: poolMerkle, isSigner: false, isWritable: true },
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT, isSigner: false, isWritable: false },
+    ],
+    data: disc,
+  });
+
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  const tx = new Transaction().add(ix);
+  tx.feePayer = payer.publicKey;
+  tx.recentBlockhash = blockhash;
+  tx.sign(payer);
+
+  const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 5 });
+  await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+  console.log('initialized pool_merkle PDA:', poolMerkle.toBase58(), sig);
 }
 
 async function fetchPoolInfo(connection: Connection, pool: PublicKey): Promise<{ mint: PublicKey; vault: PublicKey; nextLeafIndex: number }> {
@@ -177,6 +215,9 @@ async function main() {
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
     console.log('created recipient B ATA:', recipientAtaB.toBase58(), sig);
   }
+
+  // Ensure PoolMerkle PDA exists (devnet snapshot / Surfpool clones may not have it yet)
+  await ensurePoolMerkleInitialized(connection, payer);
 
   // Deposit params
   const identifier = `twitter:@e2e_${Date.now()}`;
