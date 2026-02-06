@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, memo, type FC } from 'react';
+
+const SOL_ICON_URL = 'https://assets.coingecko.com/coins/images/4128/standard/solana.png?1718769756';
+
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -186,7 +189,17 @@ export const BalanceDisplay: FC<Props> = memo(({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <span className="balance-symbol">◎</span>
+              <span className="balance-symbol" aria-hidden="true">
+                <img
+                  src={SOL_ICON_URL}
+                  alt=""
+                  width={14}
+                  height={14}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ borderRadius: 3, verticalAlign: 'middle' }}
+                />
+              </span>
               {balance !== null ? formatBalance(balance) : '—'}
             </motion.span>
           )}
@@ -267,7 +280,17 @@ export const BalanceDisplay: FC<Props> = memo(({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             >
-              <span className="amount-symbol">◎</span>
+              <span className="amount-symbol" aria-hidden="true">
+                <img
+                  src={SOL_ICON_URL}
+                  alt=""
+                  width={22}
+                  height={22}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ borderRadius: 4, verticalAlign: 'middle' }}
+                />
+              </span>
               <span className="amount-value">
                 {balance !== null ? formatBalance(balance) : '—'}
               </span>

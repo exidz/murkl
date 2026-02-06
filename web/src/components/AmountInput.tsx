@@ -24,6 +24,7 @@ interface Props {
   onSubmit?: () => void;
   currency?: string;
   currencySymbol?: string;
+  /** If currencySymbol is a URL (http/https), it will be rendered as an image. */
   placeholder?: string;
   maxDecimals?: number;
   autoFocus?: boolean;
@@ -196,7 +197,19 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
           }
           aria-hidden="true"
         >
-          {currencySymbol}
+          {currencySymbol.startsWith('http') ? (
+            <img
+              src={currencySymbol}
+              alt=""
+              width={Math.round(fontSize * 0.55)}
+              height={Math.round(fontSize * 0.55)}
+              loading="lazy"
+              decoding="async"
+              style={{ borderRadius: 6, verticalAlign: 'middle' }}
+            />
+          ) : (
+            currencySymbol
+          )}
         </motion.span>
 
         {/* The actual input — this IS the visual display */}

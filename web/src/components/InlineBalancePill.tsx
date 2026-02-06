@@ -45,7 +45,21 @@ export const InlineBalancePill: FC<Props> = memo(({
           <span className="inline-balance-skeleton" aria-label="Checking balance" />
         ) : (
           <span className="inline-balance-value">
-            <span className="inline-balance-icon" aria-hidden="true">{tokenIcon}</span>
+            <span className="inline-balance-icon" aria-hidden="true">
+              {tokenIcon.startsWith('http') ? (
+                <img
+                  src={tokenIcon}
+                  alt=""
+                  width={14}
+                  height={14}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ borderRadius: 3, verticalAlign: 'middle' }}
+                />
+              ) : (
+                tokenIcon
+              )}
+            </span>
             {format(balance)} <span className="inline-balance-symbol">{tokenSymbol}</span>
           </span>
         )}
