@@ -65,7 +65,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
   // Parse URL params for claim link data or voucher code
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    
+
     // Check for voucher code first (takes priority)
     const voucher = params.get('voucher');
     if (voucher) {
@@ -73,44 +73,62 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
       setShowVoucher(true);
       return;
     }
-    
+
     // Otherwise, check for claim link params
     const id = params.get('id');
     const leaf = params.get('leaf');
     const pool = params.get('pool');
 
-    if (id && leaf) {
-      const linkData: ClaimLinkData = {
-        identifier: id,
-        leafIndex: parseInt(leaf, 10),
-        pool: pool || POOL_ADDRESS.toBase58(),
-      };
+    if (!id || !leaf) return;
 
-      setClaimLinkData(linkData);
+    const linkData: ClaimLinkData = {
+      identifier: id,
+      leafIndex: parseInt(leaf, 10),
+      pool: pool || POOL_ADDRESS.toBase58(),
+    };
 
-      // Try to fetch deposit info from relayer for the amount
-      {
-        fetch(`${RELAYER_URL}/deposits?identity=${encodeURIComponent(id)}`)
-          .then(res => res.ok ? res.json() : null)
-          .then(data => {
-            if (data?.deposits) {
-              const match = data.deposits.find(
-                (d: Deposit) => d.leafIndex === linkData.leafIndex && !d.claimed,
-              );
-              if (match) {
-                setClaimLinkData(prev => prev ? {
-                  ...prev,
-                  amount: match.amount,
-                  token: match.token || 'SOL',
-                } : prev);
+    setClaimLinkData(linkData);
+
+    // Try to fetch deposit info from relayer for the amount.
+    // Non-critical — landing works fine without it.
+    const controller = new AbortController();
+    let mounted = true;
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `${RELAYER_URL}/deposits?identity=${encodeURIComponent(id)}`,
+          { signal: controller.signal },
+        );
+        if (!mounted || !res.ok) return;
+
+        const data = await res.json();
+        if (!mounted || !data?.deposits) return;
+
+        const match = (data.deposits as Deposit[]).find(
+          (d) => d.leafIndex === linkData.leafIndex && !d.claimed,
+        );
+
+        if (!mounted || !match) return;
+
+        setClaimLinkData((prev) =>
+          prev
+            ? {
+                ...prev,
+                amount: match.amount,
+                token: match.token || 'SOL',
               }
-            }
-          })
-          .catch(() => {
-            // Non-critical — landing works fine without amount
-          });
+            : prev,
+        );
+      } catch (e) {
+        // Ignore aborts + network failures (non-critical)
       }
-    }
+    })();
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
   }, []);
 
   // Focus password input when sheet opens
