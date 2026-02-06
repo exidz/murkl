@@ -515,7 +515,8 @@ async function verifyDepositTx(params: {
     config.programId
   );
 
-  const tx = await connection.getTransaction(txSignature, {
+  // Use parsed tx for a consistent instruction shape (base58 `data` + `accounts`).
+  const tx = await connection.getParsedTransaction(txSignature, {
     commitment: 'confirmed',
     maxSupportedTransactionVersion: 0,
   } as any);
@@ -523,33 +524,20 @@ async function verifyDepositTx(params: {
   if (!tx) throw new Error('Transaction not found');
   if (tx.meta?.err) throw new Error('Transaction failed');
 
-  // Collect program instructions (both top-level and inner)
-  const message: any = tx.transaction.message;
-  const accountKeys: PublicKey[] = (message.getAccountKeys
-    ? message.getAccountKeys().staticAccountKeys
-    : message.accountKeys
-  ).map((k: any) => (k instanceof PublicKey ? k : new PublicKey(k)));
+  type AnyIx = any;
+  const allIxs: AnyIx[] = [];
 
-  const ixList: Array<{ programIdIndex: number; accountKeyIndexes: number[]; data: string }> = [];
-  for (const ix of (message.compiledInstructions || message.instructions || [])) {
-    ixList.push({
-      programIdIndex: (ix as any).programIdIndex,
-      accountKeyIndexes: (ix as any).accountKeyIndexes || (ix as any).accounts,
-      data: (ix as any).data,
-    });
+  // Top-level instructions
+  for (const ix of (tx.transaction.message.instructions || [])) {
+    allIxs.push(ix as AnyIx);
   }
 
+  // Inner instructions
   const inner = (tx.meta as any)?.innerInstructions as Array<any> | undefined;
   if (inner) {
     for (const innerIx of inner) {
       for (const ix of innerIx.instructions || []) {
-        if ((ix as any).programIdIndex !== undefined) {
-          ixList.push({
-            programIdIndex: (ix as any).programIdIndex,
-            accountKeyIndexes: (ix as any).accountKeyIndexes || (ix as any).accounts,
-            data: (ix as any).data,
-          });
-        }
+        allIxs.push(ix as AnyIx);
       }
     }
   }
@@ -557,21 +545,28 @@ async function verifyDepositTx(params: {
   const depositDisc = getDiscriminator('deposit');
   let matched = false;
 
-  for (const ix of ixList) {
-    const programId = accountKeys[ix.programIdIndex];
+  for (const ix of allIxs) {
+    // We care about PartiallyDecodedInstruction: { programId, accounts, data }
+    const programId: PublicKey | undefined = ix?.programId;
+    const accounts: PublicKey[] | undefined = ix?.accounts;
+    const data: string | undefined = ix?.data;
+
     if (!programId || !programId.equals(config.programId)) continue;
+    if (!accounts || accounts.length < 2) continue;
+    if (!data || typeof data !== 'string') continue;
 
     let dataBuf: Buffer;
     try {
-      dataBuf = Buffer.from(bs58.decode(ix.data));
+      dataBuf = Buffer.from(bs58.decode(data));
     } catch {
+      // Not base58 (or not a raw instruction) — skip
       continue;
     }
 
     if (dataBuf.length < 8 + 8 + 32) continue;
     if (!dataBuf.subarray(0, 8).equals(depositDisc)) continue;
 
-    // Anchor args: amount: u64, commitment: [u8; 32]
+    // Anchor args: amount: u64 (base units), commitment: [u8; 32]
     const ixAmount = u64ToSafeNumber(readU64LE(dataBuf, 8), 'ixAmount');
     const ixCommitment = dataBuf.subarray(16, 48);
 
@@ -579,11 +574,8 @@ async function verifyDepositTx(params: {
     if (!ixCommitment.equals(commitmentBuf)) continue;
 
     // Accounts: [pool, deposit, vault, depositor, depositor_token, token_program, system_program]
-    const acctIdxs = ix.accountKeyIndexes;
-    if (!acctIdxs || acctIdxs.length < 2) continue;
-
-    const ixPool = accountKeys[acctIdxs[0]];
-    const ixDeposit = accountKeys[acctIdxs[1]];
+    const ixPool = accounts[0];
+    const ixDeposit = accounts[1];
     if (!ixPool?.equals(pool)) continue;
     if (!ixDeposit?.equals(expectedDepositPda)) continue;
 
