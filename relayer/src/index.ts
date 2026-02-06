@@ -301,6 +301,15 @@ function trackNullifier(nullifier: string): boolean {
 
 const app = express();
 
+// Railway healthcheck hits /health without Origin.
+// Register /health before CORS so it always returns 200 quickly.
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Trust proxy (Railway/Docker reverse proxy) — required for accurate req.ip in rate limiting
 // Must be set BEFORE any middleware that reads req.ip (rate limiting, logging).
 app.set('trust proxy', 1);
@@ -671,13 +680,6 @@ async function verifyDepositTx(params: {
 // ============================================================================
 // API Routes
 // ============================================================================
-
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ 
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-  });
-});
 
 // Debug: Verify commitment computation — DEVELOPMENT ONLY
 if (process.env.NODE_ENV !== 'production') {
