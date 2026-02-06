@@ -93,12 +93,15 @@ export function useClaimFlow(wasmReady: boolean) {
       }
 
       // Generate proof
-      console.log('[CLAIM] Generating proof with:', {
-        identifier: params.identifier,
-        passwordLength: params.password.length,
-        leafIndex: params.leafIndex,
-        merkleRoot: merkleRoot.slice(0, 16) + '...',
-      });
+      // Never log identifiers/passwords/commitments in production builds.
+      if (import.meta.env.DEV) {
+        console.debug('[CLAIM] Generating proof', {
+          identifierPrefix: params.identifier.split(':')[0],
+          passwordLength: params.password.length,
+          leafIndex: params.leafIndex,
+          merkleRootPrefix: merkleRoot.slice(0, 16) + '...',
+        });
+      }
 
       const recipientAta = await getAssociatedTokenAddress(WSOL_MINT, publicKey);
       const recipientHex = Buffer.from(recipientAta.toBytes()).toString('hex');
@@ -111,11 +114,14 @@ export function useClaimFlow(wasmReady: boolean) {
         recipientHex,
       );
 
-      console.log('[CLAIM] Proof result:', {
-        commitment: proofResult.commitment,
-        nullifier: proofResult.nullifier?.slice(0, 16) + '...',
-        proofSize: proofResult.proof?.length,
-      });
+      if (import.meta.env.DEV) {
+        console.debug('[CLAIM] Proof generated', {
+          // commitment/nullifier are sensitive; only log sizes/prefixes in dev.
+          commitmentPrefix: proofResult.commitment?.slice?.(0, 16) + '...',
+          nullifierPrefix: proofResult.nullifier?.slice(0, 16) + '...',
+          proofSize: proofResult.proof?.length,
+        });
+      }
 
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       setProofProgress(100);

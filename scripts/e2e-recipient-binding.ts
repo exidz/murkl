@@ -36,6 +36,7 @@ const RPC_URL = process.env.RPC_URL || 'https://api.devnet.solana.com';
 const PROGRAM_ID = new PublicKey('muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF');
 const POOL = new PublicKey('8MU3WQzxLDHi6Up2ksk255LWrRm17i7UQ6Hap4zeF3qJ');
 const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
 
 function loadKeypair(p: string): Keypair {
   const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -53,13 +54,52 @@ async function anchorDiscriminator(name: string): Promise<Buffer> {
   return hash.subarray(0, 8);
 }
 
+function derivePoolMerklePda(): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('pool-merkle'), POOL.toBuffer()],
+    PROGRAM_ID,
+  );
+  return pda;
+}
+
+async function ensurePoolMerkleInitialized(connection: Connection, payer: Keypair) {
+  const poolMerkle = derivePoolMerklePda();
+  const info = await connection.getAccountInfo(poolMerkle);
+  if (info) return;
+
+  const disc = await anchorDiscriminator('initialize_pool_merkle');
+  const ix = new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      { pubkey: POOL, isSigner: false, isWritable: false },
+      { pubkey: poolMerkle, isSigner: false, isWritable: true },
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT, isSigner: false, isWritable: false },
+    ],
+    data: disc,
+  });
+
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  const tx = new Transaction().add(ix);
+  tx.feePayer = payer.publicKey;
+  tx.recentBlockhash = blockhash;
+  tx.sign(payer);
+
+  const sig = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 5 });
+  await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+  console.log('initialized pool_merkle PDA:', poolMerkle.toBase58(), sig);
+}
+
 async function fetchPoolInfo(connection: Connection, pool: PublicKey): Promise<{ mint: PublicKey; vault: PublicKey; nextLeafIndex: number }> {
   const info = await connection.getAccountInfo(pool);
   if (!info) throw new Error('Pool not found');
   const data = info.data;
-  const mint = new PublicKey(data.slice(40, 72));
-  const vault = new PublicKey(data.slice(72, 104));
-  const nextLeafIndex = Number(data.readBigUInt64LE(136));
+  // Anchor accounts include an 8-byte discriminator prefix.
+  const DISC = 8;
+  const mint = new PublicKey(data.slice(DISC + 32, DISC + 64));
+  const vault = new PublicKey(data.slice(DISC + 64, DISC + 96));
+  const nextLeafIndex = Number(data.readBigUInt64LE(DISC + 128));
   return { mint, vault, nextLeafIndex };
 }
 
@@ -83,6 +123,11 @@ async function buildDepositTx(params: {
   leafIndexBuf.writeBigUInt64LE(BigInt(leafIndex));
   const [depositPda] = PublicKey.findProgramAddressSync(
     [Buffer.from('deposit'), POOL.toBuffer(), leafIndexBuf],
+    PROGRAM_ID,
+  );
+
+  const [poolMerklePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('pool-merkle'), POOL.toBuffer()],
     PROGRAM_ID,
   );
 
@@ -121,6 +166,7 @@ async function buildDepositTx(params: {
     programId: PROGRAM_ID,
     keys: [
       { pubkey: POOL, isSigner: false, isWritable: true },
+      { pubkey: poolMerklePda, isSigner: false, isWritable: true },
       { pubkey: depositPda, isSigner: false, isWritable: true },
       { pubkey: poolInfo.vault, isSigner: false, isWritable: true },
       { pubkey: depositor, isSigner: true, isWritable: true },
@@ -170,6 +216,9 @@ async function main() {
     console.log('created recipient B ATA:', recipientAtaB.toBase58(), sig);
   }
 
+  // Ensure PoolMerkle PDA exists (devnet snapshot / Surfpool clones may not have it yet)
+  await ensurePoolMerkleInitialized(connection, payer);
+
   // Deposit params
   const identifier = `twitter:@e2e_${Date.now()}`;
   const password = `E2E_${Math.random().toString(16).slice(2)}_${Date.now()}`;
@@ -208,7 +257,11 @@ async function main() {
   console.log('commitment:', redact(commitmentHex));
 
   // Fetch merkle root from relayer
-  const poolInfoRes = await fetch(`${RELAYER_URL}/pool-info?pool=${POOL.toBase58()}`);
+  const ORIGIN = process.env.ORIGIN || 'https://murkl.app';
+
+  const poolInfoRes = await fetch(`${RELAYER_URL}/pool-info?pool=${POOL.toBase58()}`, {
+    headers: { Origin: ORIGIN },
+  });
   if (!poolInfoRes.ok) throw new Error('pool-info failed');
   const poolInfo = await poolInfoRes.json() as any;
   const merkleRootHex = poolInfo.merkleRoot as string;
@@ -228,7 +281,7 @@ async function main() {
   // Attack attempt: submit same proof but claim to recipient B
   const attackRes = await fetch(`${RELAYER_URL}/claim`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
     body: JSON.stringify({
       proof: proofBundle.proof,
       commitment: proofBundle.commitment,
@@ -250,7 +303,7 @@ async function main() {
   // Legit claim: recipient A
   const claimRes = await fetch(`${RELAYER_URL}/claim`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
     body: JSON.stringify({
       proof: proofBundle.proof,
       commitment: proofBundle.commitment,

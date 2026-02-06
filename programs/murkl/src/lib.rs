@@ -44,6 +44,64 @@ const MAX_RELAYER_FEE_BPS: u16 = 100;
 /// Minimum deposit (1 token unit)
 const MIN_DEPOSIT_AMOUNT: u64 = 1;
 
+/// Merkle tree depth for the commitment tree (append-only).
+///
+/// We align with `crates/murkl-prover/src/merkle.rs::TREE_DEPTH`.
+///
+/// NOTE: On-chain we store only an incremental frontier; proofs bind to `pool.merkle_root`.
+const MERKLE_DEPTH: usize = 20;
+
+#[inline]
+fn hash_pair(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
+    let mut buf = [0u8; 64];
+    buf[..32].copy_from_slice(left);
+    buf[32..].copy_from_slice(right);
+    keccak::hash(&buf).0
+}
+
+#[inline]
+fn empty_hashes() -> [[u8; 32]; MERKLE_DEPTH + 1] {
+    let mut e = [[0u8; 32]; MERKLE_DEPTH + 1];
+    for i in 1..=MERKLE_DEPTH {
+        e[i] = hash_pair(&e[i - 1], &e[i - 1]);
+    }
+    e
+}
+
+fn merkle_root(branch: &[[u8; 32]; MERKLE_DEPTH], leaf_count: u64) -> [u8; 32] {
+    let empties = empty_hashes();
+    let mut acc = [0u8; 32];
+    let mut idx = leaf_count as usize;
+
+    for level in 0..MERKLE_DEPTH {
+        if idx & 1 == 1 {
+            acc = hash_pair(&branch[level], &acc);
+        } else {
+            acc = hash_pair(&acc, &empties[level]);
+        }
+        idx >>= 1;
+    }
+
+    acc
+}
+
+fn merkle_append(branch: &mut [[u8; 32]; MERKLE_DEPTH], leaf_count: u64, leaf: &[u8; 32]) -> [u8; 32] {
+    let mut node = *leaf;
+    let mut idx = leaf_count as usize;
+
+    for level in 0..MERKLE_DEPTH {
+        if idx & 1 == 0 {
+            branch[level] = node;
+            break;
+        } else {
+            node = hash_pair(&branch[level], &node);
+            idx >>= 1;
+        }
+    }
+
+    merkle_root(branch, leaf_count + 1)
+}
+
 // ============================================================================
 // Program
 // ============================================================================
@@ -78,13 +136,32 @@ pub mod murkl {
         pool.admin = ctx.accounts.admin.key();
         pool.token_mint = ctx.accounts.token_mint.key();
         pool.vault = ctx.accounts.vault.key();
-        pool.merkle_root = [0u8; 32];
+
+        // Empty tree root
+        pool.merkle_root = empty_hashes()[MERKLE_DEPTH];
         pool.leaf_count = 0;
         pool.config = config;
         pool.paused = false;
         pool.bump = ctx.bumps.pool;
-        
+
         msg!("Pool initialized for mint: {}", pool.token_mint);
+        Ok(())
+    }
+
+
+
+    /// Initialize the `PoolMerkle` PDA for an existing pool.
+    ///
+    /// Backwards compatible: the PDA is derived from the pool address, so any
+    /// payer can fund its creation without gaining privileges.
+    pub fn initialize_pool_merkle(ctx: Context<InitializePoolMerkle>) -> Result<()> {
+        let pool = &ctx.accounts.pool;
+        let pool_merkle = &mut ctx.accounts.pool_merkle;
+
+        pool_merkle.pool = pool.key();
+        pool_merkle.branch = [[0u8; 32]; MERKLE_DEPTH];
+        pool_merkle.bump = ctx.bumps.pool_merkle;
+
         Ok(())
     }
 
@@ -95,6 +172,9 @@ pub mod murkl {
         commitment: [u8; 32],
     ) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
+
+        let pool_merkle = &mut ctx.accounts.pool_merkle;
+        require!(pool_merkle.pool == pool.key(), MurklError::InvalidDepositPool);
         
         require!(!pool.paused, MurklError::PoolPaused);
         require!(amount >= pool.config.min_deposit, MurklError::DepositTooSmall);
@@ -109,8 +189,9 @@ pub mod murkl {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, amount)?;
         
-        // Update merkle root (simplified - append commitment)
-        pool.merkle_root = keccak::hashv(&[&pool.merkle_root, &commitment]).0;
+        // Update commitment Merkle root (incremental frontier)
+        let leaf_index = pool.leaf_count;
+        pool.merkle_root = merkle_append(&mut pool_merkle.branch, leaf_index, &commitment);
         
         // Create deposit record
         let deposit = &mut ctx.accounts.deposit;
@@ -334,8 +415,7 @@ pub struct InitializePool<'info> {
         seeds = [b"pool", token_mint.key().as_ref()],
         bump
     )]
-    pub pool: Account<'info, Pool>,
-    
+    pub pool: Box<Account<'info, Pool>>,
     pub token_mint: Account<'info, Mint>,
     
     #[account(
@@ -353,6 +433,29 @@ pub struct InitializePool<'info> {
     
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct InitializePoolMerkle<'info> {
+    #[account(
+        seeds = [b"pool", pool.token_mint.as_ref()],
+        bump = pool.bump
+    )]
+    pub pool: Box<Account<'info, Pool>>,
+
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + PoolMerkle::SIZE,
+        seeds = [b"pool-merkle", pool.key().as_ref()],
+        bump
+    )]
+    pub pool_merkle: Box<Account<'info, PoolMerkle>>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -363,7 +466,15 @@ pub struct Deposit<'info> {
         seeds = [b"pool", pool.token_mint.as_ref()],
         bump = pool.bump
     )]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
+
+    #[account(
+        mut,
+        seeds = [b"pool-merkle", pool.key().as_ref()],
+        bump = pool_merkle.bump,
+        constraint = pool_merkle.pool == pool.key() @ MurklError::InvalidDepositPool
+    )]
+    pub pool_merkle: Box<Account<'info, PoolMerkle>>,
     
     #[account(
         init,
@@ -403,7 +514,7 @@ pub struct Claim<'info> {
         seeds = [b"pool", pool.token_mint.as_ref()],
         bump = pool.bump
     )]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
     
     #[account(
         mut,
@@ -465,7 +576,7 @@ pub struct AdminAction<'info> {
         bump = pool.bump,
         constraint = pool.admin == admin.key() @ MurklError::Unauthorized
     )]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
     
     pub admin: Signer<'info>,
 }
@@ -498,6 +609,20 @@ pub struct Pool {
 
 impl Pool {
     pub const SIZE: usize = 32 + 32 + 32 + 32 + 8 + PoolConfig::SIZE + 1 + 1;
+}
+
+/// Separate PDA to store the incremental Merkle frontier.
+///
+/// Kept out of `Pool` to avoid Anchor stack-frame limits.
+#[account]
+pub struct PoolMerkle {
+    pub pool: Pubkey,
+    pub branch: [[u8; 32]; MERKLE_DEPTH],
+    pub bump: u8,
+}
+
+impl PoolMerkle {
+    pub const SIZE: usize = 32 + (32 * MERKLE_DEPTH) + 1;
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
@@ -600,4 +725,68 @@ pub enum MurklError {
 
     #[msg("Arithmetic overflow/underflow")]
     MathOverflow,
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rand::{RngCore, SeedableRng};
+    use rand::rngs::StdRng;
+
+    fn naive_root(leaves: &[[u8; 32]]) -> [u8; 32] {
+        let empty = empty_hashes();
+
+        let mut level: Vec<[u8; 32]> = leaves.to_vec();
+        let mut size = 1usize;
+        while size < level.len().max(1) {
+            size <<= 1;
+        }
+        level.resize(size, empty[0]);
+
+        let mut depth = 0usize;
+        while level.len() > 1 {
+            let mut next = Vec::with_capacity(level.len() / 2);
+            for i in (0..level.len()).step_by(2) {
+                next.push(hash_pair(&level[i], &level[i + 1]));
+            }
+            level = next;
+            depth += 1;
+        }
+
+        let mut root = level[0];
+        while depth < MERKLE_DEPTH {
+            root = hash_pair(&root, &empty[depth]);
+            depth += 1;
+        }
+        root
+    }
+
+    #[test]
+    fn merkle_append_matches_naive_for_random_sequences() {
+        let mut rng = StdRng::seed_from_u64(0xC0FFEE);
+
+        for _case in 0..25 {
+            let mut branch = [[0u8; 32]; MERKLE_DEPTH];
+            let mut leaves: Vec<[u8; 32]> = Vec::new();
+
+            let steps = (rng.next_u32() % 64) as usize;
+            for i in 0..steps {
+                let mut leaf = [0u8; 32];
+                rng.fill_bytes(&mut leaf);
+                leaves.push(leaf);
+
+                let got = merkle_append(&mut branch, i as u64, &leaf);
+                let want = naive_root(&leaves);
+                assert_eq!(got, want, "mismatch at step {i}");
+
+                let got2 = merkle_root(&branch, (i + 1) as u64);
+                assert_eq!(got2, want, "root(frontier) mismatch at step {i}");
+            }
+        }
+    }
 }

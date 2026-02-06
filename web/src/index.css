@@ -1,3 +1,16 @@
+/* ============================================
+   index.css — Pre-app global styles
+   
+   Loaded before App.css. Handles:
+   - Font import
+   - HTML/body baseline
+   - Color scheme
+   - Wallet adapter modal (not part of React tree)
+   - Scrollbar styling
+   
+   Design tokens live in App.css (:root).
+   ============================================ */
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
@@ -5,25 +18,18 @@
   line-height: 1.5;
   font-weight: 400;
   color-scheme: dark;
-  /* Design token definitions live in App.css — do not duplicate here */
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
 }
 
 html {
-  background-color: var(--bg-primary);
+  background-color: var(--bg-primary, #0a0a0f);
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: var(--bg-primary, #0a0a0f);
+  color: var(--text-primary, #fff);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -34,14 +40,16 @@ body {
   min-height: 100vh;
 }
 
+/* ── Links — Solana-themed ── */
+
 a {
   font-weight: 500;
-  color: #8b5cf6;
+  color: var(--accent-primary, #3d95ce);
   text-decoration: inherit;
 }
 
 a:hover {
-  color: #a78bfa;
+  color: #5ba8d9;
 }
 
 /* Force dark mode for HeroUI */
@@ -49,42 +57,62 @@ a:hover {
   color-scheme: dark;
 }
 
-/* Wallet adapter modal dark mode */
+/* ============================================
+   Wallet adapter modal — dark theme overrides
+   
+   The modal is rendered outside #root via a portal,
+   so we style it here in the global stylesheet.
+   ============================================ */
+
 .wallet-adapter-modal-wrapper {
   background-color: rgba(10, 10, 15, 0.9) !important;
 }
 
 .wallet-adapter-modal-container {
-  background-color: #1a1a24 !important;
+  background-color: var(--bg-secondary, #14141f) !important;
+  border: 1px solid var(--border, #27272a) !important;
+  border-radius: 20px !important;
 }
 
 .wallet-adapter-modal-title {
-  color: #ffffff !important;
+  color: var(--text-primary, #fff) !important;
 }
 
 .wallet-adapter-modal-list li {
-  background-color: #12121a !important;
+  background-color: var(--bg-tertiary, #1e1e2e) !important;
+  border-radius: 12px !important;
 }
 
 .wallet-adapter-modal-list li:hover {
   background-color: #2a2a3a !important;
 }
 
-/* Scrollbar */
+/* ============================================
+   Scrollbar — subtle, dark
+   ============================================ */
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3a3a4a;
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a4a5a;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Firefox */
+@supports (scrollbar-width: thin) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
 }

@@ -1,16 +1,19 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WalletProvider } from './providers/WalletProvider';
 import { Header } from './components/Header';
-import { SendTab } from './components/SendTab';
-import { ClaimTabNew as ClaimTab } from './components/ClaimTabNew';
 import { TabBar } from './components/TabBar';
 import { Footer } from './components/Footer';
 import { SplashScreen } from './components/SplashScreen';
 import { ToastContainer } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NetworkStatus } from './components/NetworkStatus';
+import { SkeletonAmount, SkeletonList } from './components/Skeleton';
 import './App.css';
+
+// Route-level code splitting (Vercel best practice): keep initial bundle focused.
+const LazySendTab = lazy(() => import('./components/SendTab').then((m) => ({ default: m.SendTab })));
+const LazyClaimTab = lazy(() => import('./components/ClaimTabNew'));
 
 // WASM module
 import init from './wasm/murkl_wasm';
@@ -156,12 +159,30 @@ function AppContent() {
             >
               {tab === 'send' && (
                 <ErrorBoundary scope="SendTab" compact>
-                  <SendTab wasmReady={wasmReady} />
+                  <Suspense
+                    fallback={
+                      <div style={{ padding: 24 }} aria-busy="true" aria-label="Loading send screen">
+                        <SkeletonAmount />
+                        <div style={{ height: 16 }} />
+                        <SkeletonList count={2} variant="text" />
+                      </div>
+                    }
+                  >
+                    <LazySendTab wasmReady={wasmReady} />
+                  </Suspense>
                 </ErrorBoundary>
               )}
               {tab === 'claim' && (
                 <ErrorBoundary scope="ClaimTab" compact>
-                  <ClaimTab wasmReady={wasmReady} onUnclaimedCount={setUnclaimedCount} />
+                  <Suspense
+                    fallback={
+                      <div style={{ padding: 24 }} aria-busy="true" aria-label="Loading claim screen">
+                        <SkeletonList count={3} />
+                      </div>
+                    }
+                  >
+                    <LazyClaimTab wasmReady={wasmReady} onUnclaimedCount={setUnclaimedCount} />
+                  </Suspense>
                 </ErrorBoundary>
               )}
             </motion.div>

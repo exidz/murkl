@@ -74,13 +74,18 @@ function loadConfig(): Config {
   
   const env = process.env.NODE_ENV || 'development';
 
-  const corsOrigins = process.env.CORS_ORIGINS
+  const defaultProdOrigins = ['https://murkl.app', 'https://murkl.dev', 'https://murkl-relayer-production.up.railway.app'];
+  const defaultDevOrigins = ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173'];
+
+  const corsOriginsEnv = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
-    : env === 'production'
-      // Production default: only canonical web origins. (No localhost / ephemeral tunnels.)
-      ? ['https://murkl.app', 'https://murkl.dev', 'https://murkl-relayer-production.up.railway.app']
-      // Development default: allow local dev servers.
-      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173'];
+    : null;
+
+  // If CORS_ORIGINS is set in prod, treat it as an extension (not a replacement)
+  // so we don't accidentally drop the canonical web origins and break clients.
+  const corsOrigins = env === 'production'
+    ? Array.from(new Set([...(corsOriginsEnv ?? []), ...defaultProdOrigins]))
+    : (corsOriginsEnv ?? defaultDevOrigins);
   
   return {
     port: parseInt(process.env.PORT || '3001', 10),
@@ -104,21 +109,58 @@ const config = loadConfig();
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+function redactMeta(meta?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!meta) return undefined;
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(meta)) {
+    const key = k.toLowerCase();
+    if (key.includes('secret') || key.includes('token') || key.includes('otp') || key.includes('password')) {
+      out[k] = '[REDACTED]';
+      continue;
+    }
+    if (key.includes('email')) {
+      // Avoid leaking user emails into production logs.
+      out[k] = typeof v === 'string' ? v.replace(/(^.).*(@.*$)/, '$1***$2') : '[REDACTED]';
+      continue;
+    }
+    out[k] = v;
+  }
+  return out;
+}
+
+function shouldLog(level: LogLevel): boolean {
+  const env = (process.env.LOG_LEVEL || '').toLowerCase();
+  const nodeEnv = process.env.NODE_ENV || 'development';
+
+  // Defaults:
+  // - production: info+
+  // - dev: debug+
+  const min: LogLevel = (env === 'debug' || env === 'info' || env === 'warn' || env === 'error')
+    ? (env as LogLevel)
+    : (nodeEnv === 'production' ? 'info' : 'debug');
+
+  const order: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+  return order[level] >= order[min];
+}
+
 function log(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
+  if (!shouldLog(level)) return;
+
   const timestamp = new Date().toISOString();
+  const safeMeta = redactMeta(meta);
   const entry = {
     timestamp,
     level,
     message,
-    ...meta
+    ...(safeMeta || {})
   };
-  
-  // In production, send to logging service
+
   if (process.env.NODE_ENV === 'production') {
     console.log(JSON.stringify(entry));
   } else {
     const emoji = { debug: '🔍', info: 'ℹ️', warn: '⚠️', error: '❌' }[level];
-    console.log(`${emoji} [${timestamp}] ${message}`, meta || '');
+    console.log(`${emoji} [${timestamp}] ${message}`, safeMeta || '');
   }
 }
 
@@ -263,6 +305,15 @@ function trackNullifier(nullifier: string): boolean {
 // ============================================================================
 
 const app = express();
+
+// Railway healthcheck hits /health without Origin.
+// Register /health before CORS so it always returns 200 quickly.
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Trust proxy (Railway/Docker reverse proxy) — required for accurate req.ip in rate limiting
 // Must be set BEFORE any middleware that reads req.ip (rate limiting, logging).
@@ -635,13 +686,6 @@ async function verifyDepositTx(params: {
 // API Routes
 // ============================================================================
 
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ 
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-  });
-});
-
 // Debug: Verify commitment computation — DEVELOPMENT ONLY
 if (process.env.NODE_ENV !== 'production') {
   app.post('/debug/commitment', (req: Request, res: Response) => {
@@ -875,21 +919,21 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       [Buffer.from('vault'), pool.toBuffer()],
       config.programId
     );
-    log('info', 'DEBUG: vaultPda derived', { requestId, vaultPda: vaultPda.toBase58() });
+    log('debug', 'vaultPda derived', { requestId, vaultPda: vaultPda.toBase58() });
     
     const [nullifierPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('nullifier'), pool.toBuffer(), nullifier32],
       config.programId
     );
-    log('info', 'DEBUG: nullifierPda derived', { requestId, nullifierPda: nullifierPda.toBase58() });
+    log('debug', 'nullifierPda derived', { requestId, nullifierPda: nullifierPda.toBase58() });
     
     // ========================================
     // Check on-chain nullifier status
     // ========================================
     
-    log('info', 'DEBUG: fetching nullifier account...', { requestId });
+    log('debug', 'fetching nullifier account...', { requestId });
     const nullifierAccount = await connection.getAccountInfo(nullifierPda);
-    log('info', 'DEBUG: nullifier account fetched', { requestId, exists: !!nullifierAccount });
+    log('debug', 'nullifier account fetched', { requestId, exists: !!nullifierAccount });
     if (nullifierAccount) {
       log('warn', 'Nullifier already used on-chain', { requestId });
       return res.status(400).json({ error: 'Funds already claimed' });
@@ -946,12 +990,12 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // Step 2: Write Proof Chunks
     // ========================================
     
-    log('info', 'DEBUG: Writing chunks', { requestId, numChunks, chunkSize: config.chunkSize });
+    log('debug', 'Writing chunks', { requestId, numChunks, chunkSize: config.chunkSize });
     for (let i = 0; i < numChunks; i++) {
       const offset = i * config.chunkSize;
       const chunk = proofBytes.slice(offset, offset + config.chunkSize);
       
-      log('info', `DEBUG: Writing chunk ${i+1}/${numChunks}`, { requestId, offset, chunkLen: chunk.length });
+      log('debug', `Writing chunk ${i + 1}/${numChunks}`, { requestId, offset, chunkLen: chunk.length });
       
       const writeData = Buffer.concat([
         getDiscriminator('upload_chunk'),
@@ -975,9 +1019,9 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       
       try {
         await sendAndConfirmTransaction(connection, writeTx, [relayerKeypair]);
-        log('info', `DEBUG: Chunk ${i+1} written successfully`, { requestId });
+        log('debug', `Chunk ${i + 1} written successfully`, { requestId });
       } catch (chunkErr) {
-        log('error', `DEBUG: Chunk ${i+1} failed`, { requestId, error: String(chunkErr) });
+        log('error', `Chunk ${i + 1} failed`, { requestId, error: String(chunkErr) });
         throw chunkErr;
       }
     }
@@ -988,18 +1032,19 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // Step 3: Finalize Buffer
     // ========================================
     
+    // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32], recipient: [u8; 32])
+    const recipient32 = new PublicKey(recipientTokenAccount).toBuffer();
+
     // DEBUG: Log exact values being sent to finalize
-    log('info', 'DEBUG: Finalize params', {
+    log('debug', 'Finalize params', {
       requestId,
       commitment: `${commitment32.toString('hex').slice(0, 8)}...`,
       nullifier: `${nullifier32.toString('hex').slice(0, 8)}...`,
       merkleRoot: `${merkleRoot32.toString('hex').slice(0, 8)}...`,
+      recipient: `${recipient32.toString('hex').slice(0, 8)}...`,
       proofSize: proofBytes.length,
       proofFirst32: `${proofBytes.slice(0, 32).toString('hex').slice(0, 8)}...`, // trace_commitment
     });
-    
-    // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32], recipient: [u8; 32])
-    const recipient32 = new PublicKey(recipientTokenAccount).toBuffer();
     const finalizeData = Buffer.concat([
       getDiscriminator('finalize_and_verify'),
       commitment32,
@@ -1030,7 +1075,7 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       const bufData = bufferInfo.data;
       const bufFinalized = bufData[40] === 1;
       const bufCommitment = bufData.slice(41, 73).toString('hex');
-      log('info', 'DEBUG: Buffer state after finalize', { 
+      log('debug', 'Buffer state after finalize', { 
         requestId,
         finalized: bufFinalized,
         bufferCommitment: bufCommitment,
@@ -1610,25 +1655,32 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // Server & Graceful Shutdown
 // ============================================================================
 
-// Run auth migrations then start server
-runAuthMigrations().then(() => {
-  const server = app.listen(config.port, () => {
-    log('info', 'Murkl Relayer started', {
-      port: config.port,
-      program: config.programId.toBase58(),
-      rpc: config.rpcUrl,
-      nodeEnv: process.env.NODE_ENV || 'development',
-    });
+// Start HTTP server first so Railway /health succeeds quickly.
+// Run auth migrations in the background (they are required for auth flows,
+// but should not block healthcheck/startup).
+const server = app.listen(config.port, () => {
+  log('info', 'Murkl Relayer started', {
+    port: config.port,
+    program: config.programId.toBase58(),
+    rpc: config.rpcUrl,
+    nodeEnv: process.env.NODE_ENV || 'development',
   });
+});
 
-  // Graceful shutdown
-  let shuttingDown = false;
+runAuthMigrations().catch((e) => {
+  log('error', 'Auth migrations failed (continuing to serve /health; auth may be degraded)', {
+    error: String(e),
+  });
+});
 
-  async function shutdown(signal: string): Promise<void> {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    
-    log('info', `Received ${signal}, shutting down gracefully...`);
+// Graceful shutdown
+let shuttingDown = false;
+
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  
+  log('info', `Received ${signal}, shutting down gracefully...`);
     
     server.close(() => {
       log('info', 'HTTP server closed');
@@ -1651,10 +1703,6 @@ runAuthMigrations().then(() => {
     shutdown('uncaughtException');
   });
 
-  process.on('unhandledRejection', (reason) => {
-    log('error', 'Unhandled rejection', { reason: String(reason) });
-  });
-}).catch((err) => {
-  log('error', 'Failed to start server', { error: String(err) });
-  process.exit(1);
+process.on('unhandledRejection', (reason) => {
+  log('error', 'Unhandled rejection', { reason: String(reason) });
 });
