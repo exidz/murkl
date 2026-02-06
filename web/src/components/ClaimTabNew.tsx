@@ -19,6 +19,7 @@ import { useClaimFlow } from '../hooks/useClaimFlow';
 import { useDeposits, depositKeys } from '../hooks/useDeposits';
 import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import { formatTokenAmount } from '../lib/format';
+import { getIdentityMeta } from '../lib/identity';
 import './ClaimTabNew.css';
 
 interface Props {
@@ -418,11 +419,18 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
       {/* Identity header */}
       <div className="identity-header">
         <div className="identity-info">
-          <span className="identity-icon">
-            {identity.provider === 'twitter' ? '𝕏' :
-             identity.provider === 'discord' ? '🎮' : '🔵'}
-          </span>
-          <span className="identity-handle">{identity.handle}</span>
+          {(() => {
+            const meta = getIdentityMeta(identity.handle);
+            return (
+              <>
+                <span className="identity-icon" aria-hidden="true">{meta.icon}</span>
+                <span className="identity-handle">{meta.display}</span>
+                {meta.providerLabel && (
+                  <span className="identity-platform" aria-hidden="true">{meta.providerLabel}</span>
+                )}
+              </>
+            );
+          })()}
         </div>
         <Button variant="ghost" size="sm" onClick={handleSwitchIdentity}>
           Switch
