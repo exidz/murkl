@@ -166,6 +166,36 @@ function sanitizeHex(hex: string): Buffer {
   return Buffer.from(h, 'hex');
 }
 
+/**
+ * Parse a token amount (human units) into base units exactly.
+ *
+ * We reject exponent notation and >decimals fractional precision to avoid
+ * floating-point rounding bugs that can undermine tx verification.
+ */
+function parseAmountToBaseUnits(amount: unknown, decimals: number, label = 'amount'): bigint {
+  const raw = typeof amount === 'string'
+    ? amount.trim()
+    : typeof amount === 'number'
+      ? String(amount)
+      : '';
+
+  if (!raw) throw new Error(`Invalid ${label}`);
+  if (/[eE]/.test(raw)) throw new Error(`Invalid ${label} (no exponent notation)`);
+  if (!/^\d+(\.\d+)?$/.test(raw)) throw new Error(`Invalid ${label}`);
+
+  const [whole, fracRaw = ''] = raw.split('.');
+  if (fracRaw.length > decimals) {
+    throw new Error(`Invalid ${label} (too many decimal places)`);
+  }
+
+  const frac = (fracRaw + '0'.repeat(decimals)).slice(0, decimals);
+  const wholeBi = BigInt(whole);
+  const fracBi = BigInt(frac || '0');
+  const scale = BigInt(10) ** BigInt(decimals);
+  return wholeBi * scale + fracBi;
+}
+
+
 // ============================================================================
 // Relayer Setup
 // ============================================================================
@@ -491,8 +521,8 @@ async function verifyDepositTx(params: {
 
   // On-chain deposit stores amounts in base units (lamports for SOL/WSOL).
   // Our API uses human units for UX, so convert for verification.
-  const amountBaseUnits = Math.round(amount * 1e9);
-  if (!Number.isFinite(amountBaseUnits) || amountBaseUnits <= 0) {
+  const amountBaseUnits = parseAmountToBaseUnits(amount, 9, 'amount');
+  if (amountBaseUnits <= 0n) {
     throw new Error('Invalid amount (base units)');
   }
 
@@ -559,7 +589,7 @@ async function verifyDepositTx(params: {
     if (!dataBuf.subarray(0, 8).equals(depositDisc)) continue;
 
     // Anchor args: amount: u64 (base units), commitment: [u8; 32]
-    const ixAmount = u64ToSafeNumber(readU64LE(dataBuf, 8), 'ixAmount');
+    const ixAmount = readU64LE(dataBuf, 8);
     const ixCommitment = dataBuf.subarray(16, 48);
 
     if (ixAmount !== amountBaseUnits) continue;
@@ -590,13 +620,13 @@ async function verifyDepositTx(params: {
 
   const onchainPool = new PublicKey(data.subarray(8, 40));
   const onchainCommitment = data.subarray(40, 72);
-  const onchainAmount = u64ToSafeNumber(readU64LE(data, 72), 'onchainAmount');
-  const onchainLeafIndex = u64ToSafeNumber(readU64LE(data, 80), 'onchainLeafIndex');
+  const onchainAmount = readU64LE(data, 72);
+  const onchainLeafIndex = readU64LE(data, 80);
 
   if (!onchainPool.equals(pool)) throw new Error('On-chain deposit pool mismatch');
   if (!onchainCommitment.equals(commitmentBuf)) throw new Error('On-chain deposit commitment mismatch');
   if (onchainAmount !== amountBaseUnits) throw new Error('On-chain deposit amount mismatch');
-  if (onchainLeafIndex !== leafIndex) throw new Error('On-chain deposit leafIndex mismatch');
+  if (onchainLeafIndex !== BigInt(leafIndex)) throw new Error('On-chain deposit leafIndex mismatch');
 
   return { depositAccount: expectedDepositPda };
 }
@@ -1053,13 +1083,13 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     if (depData.length < 8 + 32 + 32 + 8) {
       return res.status(400).json({ error: 'Invalid deposit account' });
     }
-    const depositAmount = u64ToSafeNumber(readU64LE(depData, 8 + 32 + 32), 'depositAmount');
+    const depositAmount = readU64LE(depData, 8 + 32 + 32);
 
-    // floor(amount * bps / 10_000)
-    const relayerFeeAmount = Math.floor((depositAmount * feeBps) / 10_000);
+    // floor(amount * bps / 10_000) in base units (u64), avoiding JS number overflow.
+    const relayerFeeAmount = (depositAmount * BigInt(feeBps)) / 10_000n;
 
     const relayerFeeBuffer = Buffer.alloc(8);
-    relayerFeeBuffer.writeBigUInt64LE(BigInt(relayerFeeAmount));
+    relayerFeeBuffer.writeBigUInt64LE(relayerFeeAmount);
     
     const claimData = Buffer.concat([
       getDiscriminator('claim'),
