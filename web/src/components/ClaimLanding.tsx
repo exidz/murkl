@@ -174,6 +174,7 @@ export const ClaimLanding: FC<Props> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const { setVisible: openWalletModal } = useWalletModal();
   const inputRef = useRef<HTMLInputElement>(null);
   const reducedMotion = useReducedMotion();
@@ -258,6 +259,24 @@ export const ClaimLanding: FC<Props> = ({
       setSubmitting(false);
     }
   }, [isReady, connected, submitting, onPasswordSubmit, password]);
+
+  const handlePaste = useCallback(async () => {
+    if (pasting) return;
+    // Clipboard API may be unavailable or blocked in some browsers.
+    if (!('clipboard' in navigator) || typeof navigator.clipboard.readText !== 'function') return;
+
+    setPasting(true);
+    try {
+      const text = await navigator.clipboard.readText();
+      // Keep it simple: trim whitespace and ignore empties.
+      const next = (text || '').trim();
+      if (next) setPassword(next);
+    } catch {
+      // Non-critical: silently ignore.
+    } finally {
+      setPasting(false);
+    }
+  }, [pasting]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && isReady && connected && !submitting) {
@@ -492,15 +511,30 @@ export const ClaimLanding: FC<Props> = ({
                 autoComplete="off"
                 spellCheck={false}
               />
-              <motion.button
-                type="button"
-                className="landing-password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-                whileTap={{ scale: 0.9 }}
-                aria-label={showPassword ? 'Hide code' : 'Show code'}
-              >
-                {showPassword ? '🙈' : '👁️'}
-              </motion.button>
+
+              <div className="landing-password-actions">
+                {/* Paste is a tiny but high-impact mobile UX win */}
+                <motion.button
+                  type="button"
+                  className="landing-password-action"
+                  onClick={handlePaste}
+                  whileTap={reducedMotion ? undefined : { scale: 0.9 }}
+                  aria-label="Paste code"
+                  disabled={pasting}
+                >
+                  {pasting ? '…' : '📋'}
+                </motion.button>
+
+                <motion.button
+                  type="button"
+                  className="landing-password-action"
+                  onClick={() => setShowPassword(!showPassword)}
+                  whileTap={reducedMotion ? undefined : { scale: 0.9 }}
+                  aria-label={showPassword ? 'Hide code' : 'Show code'}
+                >
+                  {showPassword ? '🙈' : '👁️'}
+                </motion.button>
+              </div>
             </div>
 
             <motion.div
