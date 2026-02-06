@@ -3,7 +3,9 @@ seeds = false
 skip-lint = false
 
 [workspace]
-# Note: keep workspace config minimal to avoid Anchor errors in non-interactive environments.
+# Prevent Anchor from treating build artifacts as programs.
+# NOTE: scripts should `mkdir -p programs/target` before invoking Anchor in clean environments.
+exclude = ["programs/target"]
 
 [programs.localnet]
 stark_verifier = "StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw"

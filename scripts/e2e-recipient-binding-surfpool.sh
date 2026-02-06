@@ -69,6 +69,12 @@ for i in {1..120}; do
 done
 
 echo "==> Building programs"
+# Anchor shells out to cargo + Solana SBF tooling; ensure PATH is set in cron environments.
+export PATH="$HOME/.cargo/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+
+# Anchor workspace exclude expects this path to exist.
+mkdir -p "$ROOT_DIR/programs/target"
+
 # anchor build only supports a single -p at a time
 "$ANCHOR_BIN" build -p stark-verifier >/dev/null
 "$ANCHOR_BIN" build -p murkl_program >/dev/null
