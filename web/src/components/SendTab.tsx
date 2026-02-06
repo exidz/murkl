@@ -802,83 +802,87 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             animate="center"
             exit="exit"
           >
-            <button className="back-btn" onClick={goBack}>
-              ← Back
-            </button>
+            <div className="step-body">
+              <button className="back-btn" onClick={goBack}>
+                ← Back
+              </button>
 
-            <div className="step-header">
-              <p className="step-amount">Sending {amount} {selectedToken.symbol}</p>
-              <h2>Who are you sending to?</h2>
-            </div>
-
-            {/* Provider pills */}
-            <div className="provider-pills" role="radiogroup" aria-label="Choose where they’ll claim">
-              {SOCIAL_PROVIDERS.map((p) => (
-                <motion.button
-                  key={p.id}
-                  type="button"
-                  className={`provider-pill ${selectedProvider === p.id ? 'selected' : ''}`}
-                  onClick={() => {
-                    setSelectedProvider(p.id);
-                    setIdentifier('');
-                    identifierInputRef.current?.focus();
-                  }}
-                  role="radio"
-                  aria-checked={selectedProvider === p.id}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <span className="provider-pill-icon" aria-hidden="true">{p.label}</span>
-                  <span className="provider-pill-name">{p.name}</span>
-                </motion.button>
-              ))}
-            </div>
-
-            <div className="input-container">
-              <div className="namespaced-input">
-                <span className="namespace-prefix" aria-hidden="true">
-                  {getProvider(selectedProvider).displayPrefix}
-                </span>
-                <input
-                  ref={identifierInputRef}
-                  type={selectedProvider === 'email' ? 'email' : 'text'}
-                  className="text-input namespaced"
-                  placeholder={getProvider(selectedProvider).placeholder}
-                  value={identifier}
-                  onChange={(e) => {
-                    // Keep the input friendly:
-                    // - For X, we render a visual '@' prefix, so strip leading '@' from the value
-                    //   to avoid the common "@@user" look when users paste their handle.
-                    const raw = e.target.value;
-                    const next =
-                      selectedProvider === 'twitter'
-                        ? raw.replace(/^\s*@+/, '')
-                        : raw;
-                    setIdentifier(next);
-                  }}
-                  onKeyDown={handleKeyDown}
-                  maxLength={256}
-                  autoComplete={selectedProvider === 'email' ? 'email' : 'off'}
-                  spellCheck={false}
-                  aria-label={`${getProvider(selectedProvider).name} account`}
-                />
+              <div className="step-header">
+                <p className="step-amount">Sending {amount} {selectedToken.symbol}</p>
+                <h2>Who should get it?</h2>
               </div>
-              <p className="input-hint">
-                They’ll claim using their {getProvider(selectedProvider).name} login.
-                {getProvider(selectedProvider).example ? (
-                  <> Example: <span className="input-example">{getProvider(selectedProvider).example}</span></>
-                ) : null}
-              </p>
+
+              {/* Provider pills */}
+              <div className="provider-pills" role="radiogroup" aria-label="Choose where they’ll claim">
+                {SOCIAL_PROVIDERS.map((p) => (
+                  <motion.button
+                    key={p.id}
+                    type="button"
+                    className={`provider-pill ${selectedProvider === p.id ? 'selected' : ''}`}
+                    onClick={() => {
+                      setSelectedProvider(p.id);
+                      setIdentifier('');
+                      identifierInputRef.current?.focus();
+                    }}
+                    role="radio"
+                    aria-checked={selectedProvider === p.id}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    <span className="provider-pill-icon" aria-hidden="true">{p.label}</span>
+                    <span className="provider-pill-name">{p.name}</span>
+                  </motion.button>
+                ))}
+              </div>
+
+              <div className="input-container">
+                <div className="namespaced-input">
+                  <span className="namespace-prefix" aria-hidden="true">
+                    {getProvider(selectedProvider).displayPrefix}
+                  </span>
+                  <input
+                    ref={identifierInputRef}
+                    type={selectedProvider === 'email' ? 'email' : 'text'}
+                    className="text-input namespaced"
+                    placeholder={getProvider(selectedProvider).placeholder}
+                    value={identifier}
+                    onChange={(e) => {
+                      // Keep the input friendly:
+                      // - For X, we render a visual '@' prefix, so strip leading '@' from the value
+                      //   to avoid the common "@@user" look when users paste their handle.
+                      const raw = e.target.value;
+                      const next =
+                        selectedProvider === 'twitter'
+                          ? raw.replace(/^\s*@+/, '')
+                          : raw;
+                      setIdentifier(next);
+                    }}
+                    onKeyDown={handleKeyDown}
+                    maxLength={256}
+                    autoComplete={selectedProvider === 'email' ? 'email' : 'off'}
+                    spellCheck={false}
+                    aria-label={`${getProvider(selectedProvider).name} account`}
+                  />
+                </div>
+                <p className="input-hint">
+                  They’ll claim using their {getProvider(selectedProvider).name} login.
+                  {getProvider(selectedProvider).example ? (
+                    <> Example: <span className="input-example">{getProvider(selectedProvider).example}</span></>
+                  ) : null}
+                </p>
+              </div>
             </div>
 
-            <Button 
-              variant="primary"
-              size="lg"
-              fullWidth
-              onClick={goNext}
-              disabled={!identifier}
-            >
-              Continue
-            </Button>
+            <div className="step-footer">
+              <Button 
+                variant="primary"
+                size="lg"
+                fullWidth
+                onClick={goNext}
+                disabled={!identifier}
+              >
+                Continue
+              </Button>
+            </div>
           </motion.div>
         )}
 
@@ -893,90 +897,94 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             animate="center"
             exit="exit"
           >
-            <button className="back-btn" onClick={goBack}>
-              ← Back
-            </button>
+            <div className="step-body">
+              <button className="back-btn" onClick={goBack}>
+                ← Back
+              </button>
 
-            <div className="step-header">
-              <p className="step-amount">
-                Sending {amount} {selectedToken.symbol}
-                {identifier ? <> to {formatDraftRecipient(selectedProvider, identifier)}</> : null}
-              </p>
-              <h2>Set a secret code</h2>
-            </div>
-
-            <div className="input-container">
-              <div className="password-input-row">
-                <input
-                  ref={passwordInputRef}
-                  type="text"
-                  className="text-input"
-                  placeholder="Secret code…"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  maxLength={128}
-                  autoComplete="off"
-                />
-                <motion.button 
-                  className={`regenerate-btn ${isRegenerating ? 'spinning' : ''}`}
-                  onClick={handleRegenerate}
-                  title="Generate new password"
-                  whileTap={{ scale: 0.9 }}
-                  aria-label="Generate random password"
-                >
-                  <motion.span
-                    animate={isRegenerating ? { rotate: 360 } : { rotate: 0 }}
-                    transition={{ duration: 0.4, ease: 'easeOut' }}
-                    style={{ display: 'inline-block' }}
-                  >
-                    🎲
-                  </motion.span>
-                </motion.button>
+              <div className="step-header">
+                <p className="step-amount">
+                  Sending {amount} {selectedToken.symbol}
+                  {identifier ? <> to {formatDraftRecipient(selectedProvider, identifier)}</> : null}
+                </p>
+                <h2>Set a secret code</h2>
               </div>
-              
-              {/* Password strength indicator */}
-              {password.length > 0 && (
-                <motion.div 
-                  className="password-strength"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="strength-bar-track">
-                    {[0, 1, 2, 3].map(i => (
-                      <motion.div
-                        key={i}
-                        className="strength-bar-segment"
-                        initial={{ scaleX: 0 }}
-                        animate={{ 
-                          scaleX: i < passwordStrength.score ? 1 : 0,
-                          backgroundColor: i < passwordStrength.score ? passwordStrength.color : 'var(--bg-tertiary)',
-                        }}
-                        transition={{ duration: 0.2, delay: i * 0.05 }}
-                        style={{ transformOrigin: 'left' }}
-                      />
-                    ))}
-                  </div>
-                  <span className="strength-label" style={{ color: passwordStrength.color }}>
-                    {passwordStrength.label}
-                  </span>
-                </motion.div>
-              )}
-              
-              <p className="input-hint">Send this code separately from the link.</p>
+
+              <div className="input-container">
+                <div className="password-input-row">
+                  <input
+                    ref={passwordInputRef}
+                    type="text"
+                    className="text-input"
+                    placeholder="Secret code…"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    maxLength={128}
+                    autoComplete="off"
+                  />
+                  <motion.button 
+                    className={`regenerate-btn ${isRegenerating ? 'spinning' : ''}`}
+                    onClick={handleRegenerate}
+                    title="Generate new code"
+                    whileTap={{ scale: 0.9 }}
+                    aria-label="Generate a new secret code"
+                  >
+                    <motion.span
+                      animate={isRegenerating ? { rotate: 360 } : { rotate: 0 }}
+                      transition={{ duration: 0.4, ease: 'easeOut' }}
+                      style={{ display: 'inline-block' }}
+                    >
+                      🎲
+                    </motion.span>
+                  </motion.button>
+                </div>
+                
+                {/* Password strength indicator */}
+                {password.length > 0 && (
+                  <motion.div 
+                    className="password-strength"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="strength-bar-track">
+                      {[0, 1, 2, 3].map(i => (
+                        <motion.div
+                          key={i}
+                          className="strength-bar-segment"
+                          initial={{ scaleX: 0 }}
+                          animate={{ 
+                            scaleX: i < passwordStrength.score ? 1 : 0,
+                            backgroundColor: i < passwordStrength.score ? passwordStrength.color : 'var(--bg-tertiary)',
+                          }}
+                          transition={{ duration: 0.2, delay: i * 0.05 }}
+                          style={{ transformOrigin: 'left' }}
+                        />
+                      ))}
+                    </div>
+                    <span className="strength-label" style={{ color: passwordStrength.color }}>
+                      {passwordStrength.label}
+                    </span>
+                  </motion.div>
+                )}
+                
+                <p className="input-hint">Send this code separately from the link.</p>
+              </div>
             </div>
 
-            <Button 
-              variant="primary"
-              size="lg"
-              fullWidth
-              onClick={goNext}
-              disabled={password.length < 8}
-            >
-              Review
-            </Button>
+            <div className="step-footer">
+              <Button 
+                variant="primary"
+                size="lg"
+                fullWidth
+                onClick={goNext}
+                disabled={password.length < 8}
+              >
+                Review
+              </Button>
+            </div>
           </motion.div>
         )}
 
