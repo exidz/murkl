@@ -1399,13 +1399,23 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
 
     // Verify on-chain tx to prevent fake registrations / DB poisoning
     const poolPk = new PublicKey(pool);
-    await verifyDepositTx({
-      txSignature,
-      pool: poolPk,
-      leafIndex: leafIndexNum,
-      amount: amountNum,
-      commitmentHex: commitment,
-    });
+    try {
+      await verifyDepositTx({
+        txSignature,
+        pool: poolPk,
+        leafIndex: leafIndexNum,
+        amount: amountNum,
+        commitmentHex: commitment,
+      });
+    } catch (verErr: any) {
+      const msg = verErr instanceof Error ? verErr.message : String(verErr);
+      log('warn', 'Deposit tx verification failed', {
+        reason: msg,
+        pool: pool.slice(0, 8) + '...',
+        leafIndex: leafIndexNum,
+      });
+      return res.status(400).json({ error: 'Invalid deposit transaction', reason: msg });
+    }
 
     const deposit: IndexedDeposit = {
       id: `${pool}-${leafIndexNum}`,
