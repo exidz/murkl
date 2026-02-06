@@ -87,9 +87,9 @@
   border-color: var(--accent-primary, #3d95ce);
 }
 
-/* Active: accent border, subtle fill */
+/* Active: accent border only (keep center calm — one action per screen) */
 .step-dot-group.active .step-dot {
-  background: var(--accent-primary, #3d95ce);
+  background: var(--bg-primary, #0a0a0f);
   border-color: var(--accent-primary, #3d95ce);
 }
 
@@ -107,18 +107,19 @@
    ======================================== */
 
 .step-dot-label {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 500;
   color: var(--text-muted, #52525b);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  /* Sentence case reads friendlier than all-caps */
+  text-transform: none;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   transition: color 0.25s ease;
   user-select: none;
 }
 
 .step-dot-group.active .step-dot-label {
-  color: var(--accent-primary, #3d95ce);
+  color: var(--text-primary, #fff);
   font-weight: 600;
 }
 
