@@ -1648,25 +1648,32 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // Server & Graceful Shutdown
 // ============================================================================
 
-// Run auth migrations then start server
-runAuthMigrations().then(() => {
-  const server = app.listen(config.port, () => {
-    log('info', 'Murkl Relayer started', {
-      port: config.port,
-      program: config.programId.toBase58(),
-      rpc: config.rpcUrl,
-      nodeEnv: process.env.NODE_ENV || 'development',
-    });
+// Start HTTP server first so Railway /health succeeds quickly.
+// Run auth migrations in the background (they are required for auth flows,
+// but should not block healthcheck/startup).
+const server = app.listen(config.port, () => {
+  log('info', 'Murkl Relayer started', {
+    port: config.port,
+    program: config.programId.toBase58(),
+    rpc: config.rpcUrl,
+    nodeEnv: process.env.NODE_ENV || 'development',
   });
+});
 
-  // Graceful shutdown
-  let shuttingDown = false;
+runAuthMigrations().catch((e) => {
+  log('error', 'Auth migrations failed (continuing to serve /health; auth may be degraded)', {
+    error: String(e),
+  });
+});
 
-  async function shutdown(signal: string): Promise<void> {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    
-    log('info', `Received ${signal}, shutting down gracefully...`);
+// Graceful shutdown
+let shuttingDown = false;
+
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  
+  log('info', `Received ${signal}, shutting down gracefully...`);
     
     server.close(() => {
       log('info', 'HTTP server closed');
@@ -1689,10 +1696,6 @@ runAuthMigrations().then(() => {
     shutdown('uncaughtException');
   });
 
-  process.on('unhandledRejection', (reason) => {
-    log('error', 'Unhandled rejection', { reason: String(reason) });
-  });
-}).catch((err) => {
-  log('error', 'Failed to start server', { error: String(err) });
-  process.exit(1);
+process.on('unhandledRejection', (reason) => {
+  log('error', 'Unhandled rejection', { reason: String(reason) });
 });
