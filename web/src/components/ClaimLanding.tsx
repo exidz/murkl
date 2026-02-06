@@ -96,7 +96,7 @@ function getIdentifierMeta(identifier: string): IdentifierMeta {
     return {
       icon: '𝕏',
       displayName: handle.startsWith('@') ? handle : `@${handle}`,
-      providerLabel: 'Twitter',
+      providerLabel: 'X',
     };
   }
   if (identifier.startsWith('discord:')) {
@@ -414,9 +414,10 @@ export const ClaimLanding: FC<Props> = ({
                   onClick={handleSendOtp}
                   loading={sendingOtp}
                   loadingText="Sending..."
+                  disabled={cooldown > 0}
                   icon={<span>✉️</span>}
                 >
-                  Send verification code
+                  {cooldown > 0 ? `Resend in ${formatCooldown(cooldown)}` : 'Send verification code'}
                 </Button>
                 {otpError && (
                   <p className="landing-otp-error">{otpError}</p>
