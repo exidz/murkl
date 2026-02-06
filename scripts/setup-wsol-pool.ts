@@ -19,7 +19,8 @@ import * as crypto from 'crypto';
 
 const PROGRAM_ID = new PublicKey('74P7nTytTESmeJTH46geZ93GLFq3yAojnvKDxJFFZa92');
 const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
-const RPC_URL = process.env.RPC_URL || 'https://devnet.helius-rpc.com/?api-key=3360b3dd-51d9-44c7-bd9a-b8e53d0b0bfa';
+// Prefer passing a private RPC via RPC_URL env var. Default to public Solana devnet.
+const RPC_URL = process.env.RPC_URL || 'https://api.devnet.solana.com';
 
 function getDiscriminator(name: string): Buffer {
   const hash = crypto.createHash('sha256').update(`global:${name}`).digest();
