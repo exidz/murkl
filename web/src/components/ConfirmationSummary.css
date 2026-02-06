@@ -89,6 +89,13 @@
 .confirmation-token-icon {
   font-size: 2rem;
   opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirmation-token-icon img {
+  display: block;
 }
 
 .confirmation-amount {

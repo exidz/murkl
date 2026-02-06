@@ -115,7 +115,19 @@ export const ConfirmationSummary: FC<Props> = memo(({
               transition={{ delay: 0.15, type: 'spring' }}
               aria-hidden="true"
             >
-              {tokenIcon}
+              {tokenIcon.startsWith('http') ? (
+                <img
+                  src={tokenIcon}
+                  alt=""
+                  width={24}
+                  height={24}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ borderRadius: 6, verticalAlign: 'middle' }}
+                />
+              ) : (
+                tokenIcon
+              )}
             </motion.span>
             <motion.span
               className="confirmation-amount"
@@ -371,7 +383,7 @@ function getRecipientMeta(recipient: string): RecipientMeta {
   // Solana address (32+ chars, base58)
   if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) {
     return {
-      icon: '◎',
+      icon: 'https://assets.coingecko.com/coins/images/4128/standard/solana.png?1718769756',
       platform: 'Solana',
       shortName: `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`,
     };
