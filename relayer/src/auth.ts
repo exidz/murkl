@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import { Resend } from 'resend';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 
 // Load OAuth credentials from secrets
 const secretsDir = path.join(process.env.HOME || '', '.openclaw', '.secrets');
@@ -78,7 +79,12 @@ export const auth = betterAuth({
         console.error('❌ FATAL: BETTER_AUTH_SECRET must be set (refusing to start without it)');
         process.exit(1);
       }
-      return 'murkl-dev-secret-change-in-production-32chars!';
+      // In dev/test, generate an ephemeral secret so we never accidentally
+      // ship with a known default. This will invalidate sessions on restart,
+      // which is fine for local development.
+      const ephemeral = crypto.randomBytes(32).toString('hex');
+      console.warn('⚠️ BETTER_AUTH_SECRET not set; using an ephemeral dev secret (sessions will reset on restart)');
+      return ephemeral;
     }
 
     if (secret.length < 32) {
@@ -162,9 +168,12 @@ export const auth = betterAuth({
   plugins: [
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
-        // Never log OTPs in production (Railway logs are effectively a side-channel).
-        if ((process.env.NODE_ENV || 'development') !== 'production') {
-          console.log(`📧 Sending ${type} OTP to ${email}: ${otp}`);
+        // Never log OTPs (they're essentially passwords). If you need observability,
+        // log only high-level delivery events and redact the recipient.
+        const env = process.env.NODE_ENV || 'development';
+        if (env !== 'production') {
+          const redactedEmail = email.replace(/(^.).*(@.*$)/, '$1***$2');
+          console.log(`📧 Sending ${type} OTP to ${redactedEmail}`);
         }
         
         if (!resend) {
@@ -197,7 +206,10 @@ export const auth = betterAuth({
               </div>
             `,
           });
-          console.log(`✅ OTP email sent to ${email}`, result);
+          if ((process.env.NODE_ENV || 'development') !== 'production') {
+            const redactedEmail = email.replace(/(^.).*(@.*$)/, '$1***$2');
+            console.log(`✅ OTP email sent to ${redactedEmail}`);
+          }
         } catch (err) {
           console.error(`❌ Failed to send OTP email to ${email}:`, err);
           throw err; // Let Better Auth know it failed
