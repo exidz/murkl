@@ -180,8 +180,14 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
   showCurrencyLabel = true,
 }, ref) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const displayRef = useRef<HTMLDivElement>(null);
   const [isShaking, setIsShaking] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [underlinePx, setUnderlinePx] = useState<{ idle: number; focused: number; idleScale: number }>(() => ({
+    idle: 140,
+    focused: 140,
+    idleScale: 0.71,
+  }));
   const prevValueRef = useRef(value);
   const reducedMotion = useReducedMotion();
 
@@ -233,6 +239,36 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
   const fontSize = getFontSize(value);
   const isEmpty = !value;
 
+  // Keep the Venmo-style underline proportional to the visible amount width.
+  // This helps the hero input feel "centered" even for long values.
+  useEffect(() => {
+    const el = displayRef.current;
+    if (!el) return;
+
+    const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+    const update = () => {
+      // scrollWidth is reliable for content width across browsers.
+      const w = el.scrollWidth;
+      // Add a bit of breathing room so the underline extends past the text.
+      const focused = clamp(w + 28, 120, 320);
+      const idle = clamp(Math.round(focused * 0.75), 80, focused);
+      const idleScale = idle / focused;
+      setUnderlinePx({ idle, focused, idleScale });
+    };
+
+    update();
+
+    // ResizeObserver catches font-size changes and icon image load.
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => update());
+      ro.observe(el);
+    }
+
+    return () => ro?.disconnect();
+  }, [value, fontSize, currencySymbol]);
+
   const focusInput = useCallback(() => {
     if (!disabled) inputRef.current?.focus();
   }, [disabled]);
@@ -240,6 +276,11 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
   return (
     <motion.div
       className={`amount-input-wrapper ${isFocused ? 'focused' : ''} ${isEmpty ? 'empty' : ''} ${showCurrencyLabel ? '' : 'no-label'}`}
+      style={{
+        ['--underline-width' as any]: `${underlinePx.idle}px`,
+        ['--underline-width-focused' as any]: `${underlinePx.focused}px`,
+        ['--underline-scale-idle' as any]: underlinePx.idleScale,
+      }}
       variants={shakeVariants}
       animate={isShaking ? 'shake' : 'idle'}
       whileTap={disabled ? undefined : { scale: 0.995 }}
@@ -261,7 +302,7 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
       aria-label={`Amount input${currency ? ` (${currency})` : ''}`}
     >
       {/* Currency symbol */}
-      <div className="amount-display-container">
+      <div className="amount-display-container" ref={displayRef}>
         <motion.span
           className="amount-currency"
           initial={false}
