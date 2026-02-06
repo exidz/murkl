@@ -44,11 +44,63 @@ const MAX_RELAYER_FEE_BPS: u16 = 100;
 /// Minimum deposit (1 token unit)
 const MIN_DEPOSIT_AMOUNT: u64 = 1;
 
-/// Merkle tree depth used by the proof system (circuits::merkle::TREE_DEPTH).
+/// Merkle tree depth for the commitment tree (append-only).
 ///
-/// NOTE: On-chain we only store an incremental frontier; the actual proof
-/// verifies membership against `pool.merkle_root`.
-const MERKLE_DEPTH: usize = 16;
+/// We align with `crates/murkl-prover/src/merkle.rs::TREE_DEPTH`.
+///
+/// NOTE: On-chain we store only an incremental frontier; proofs bind to `pool.merkle_root`.
+const MERKLE_DEPTH: usize = 20;
+
+#[inline]
+fn hash_pair(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
+    let mut buf = [0u8; 64];
+    buf[..32].copy_from_slice(left);
+    buf[32..].copy_from_slice(right);
+    keccak::hash(&buf).0
+}
+
+#[inline]
+fn empty_hashes() -> [[u8; 32]; MERKLE_DEPTH + 1] {
+    let mut e = [[0u8; 32]; MERKLE_DEPTH + 1];
+    for i in 1..=MERKLE_DEPTH {
+        e[i] = hash_pair(&e[i - 1], &e[i - 1]);
+    }
+    e
+}
+
+fn merkle_root(branch: &[[u8; 32]; MERKLE_DEPTH], leaf_count: u64) -> [u8; 32] {
+    let empties = empty_hashes();
+    let mut acc = [0u8; 32];
+    let mut idx = leaf_count as usize;
+
+    for level in 0..MERKLE_DEPTH {
+        if idx & 1 == 1 {
+            acc = hash_pair(&branch[level], &acc);
+        } else {
+            acc = hash_pair(&acc, &empties[level]);
+        }
+        idx >>= 1;
+    }
+
+    acc
+}
+
+fn merkle_append(branch: &mut [[u8; 32]; MERKLE_DEPTH], leaf_count: u64, leaf: &[u8; 32]) -> [u8; 32] {
+    let mut node = *leaf;
+    let mut idx = leaf_count as usize;
+
+    for level in 0..MERKLE_DEPTH {
+        if idx & 1 == 0 {
+            branch[level] = node;
+            break;
+        } else {
+            node = hash_pair(&branch[level], &node);
+            idx >>= 1;
+        }
+    }
+
+    merkle_root(branch, leaf_count + 1)
+}
 
 // ============================================================================
 // Program
@@ -84,18 +136,19 @@ pub mod murkl {
         pool.admin = ctx.accounts.admin.key();
         pool.token_mint = ctx.accounts.token_mint.key();
         pool.vault = ctx.accounts.vault.key();
-        pool.merkle_root = [0u8; 32];
+
+        // Initialize merkle frontier PDA
+        ctx.accounts.pool_merkle.pool = pool.key();
+        ctx.accounts.pool_merkle.branch = [[0u8; 32]; MERKLE_DEPTH];
+        ctx.accounts.pool_merkle.bump = ctx.bumps.pool_merkle;
+
+        // Empty tree root
+        pool.merkle_root = empty_hashes()[MERKLE_DEPTH];
         pool.leaf_count = 0;
         pool.config = config;
         pool.paused = false;
         pool.bump = ctx.bumps.pool;
 
-        // Initialize merkle frontier PDA
-        let pool_merkle = &mut ctx.accounts.pool_merkle;
-        pool_merkle.pool = pool.key();
-        pool_merkle.branch = [[0u8; 32]; MERKLE_DEPTH];
-        pool_merkle.bump = ctx.bumps.pool_merkle;
-        
         msg!("Pool initialized for mint: {}", pool.token_mint);
         Ok(())
     }
@@ -107,6 +160,9 @@ pub mod murkl {
         commitment: [u8; 32],
     ) -> Result<()> {
         let pool = &mut ctx.accounts.pool;
+
+        let pool_merkle = &mut ctx.accounts.pool_merkle;
+        require!(pool_merkle.pool == pool.key(), MurklError::InvalidDepositPool);
         
         require!(!pool.paused, MurklError::PoolPaused);
         require!(amount >= pool.config.min_deposit, MurklError::DepositTooSmall);
@@ -121,8 +177,9 @@ pub mod murkl {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, amount)?;
         
-        // Update merkle root (simplified - append commitment)
-        pool.merkle_root = keccak::hashv(&[&pool.merkle_root, &commitment]).0;
+        // Update commitment Merkle root (incremental frontier)
+        let leaf_index = pool.leaf_count;
+        pool.merkle_root = merkle_append(&mut pool_merkle.branch, leaf_index, &commitment);
         
         // Create deposit record
         let deposit = &mut ctx.accounts.deposit;
@@ -347,16 +404,6 @@ pub struct InitializePool<'info> {
         bump
     )]
     pub pool: Box<Account<'info, Pool>>,
-
-    #[account(
-        init,
-        payer = admin,
-        space = 8 + PoolMerkle::SIZE,
-        seeds = [b"pool-merkle", pool.key().as_ref()],
-        bump
-    )]
-    pub pool_merkle: Box<Account<'info, PoolMerkle>>,
-    
     pub token_mint: Account<'info, Mint>,
     
     #[account(
@@ -387,10 +434,11 @@ pub struct Deposit<'info> {
     pub pool: Box<Account<'info, Pool>>,
 
     #[account(
-        mut,
+        init_if_needed,
+        payer = depositor,
+        space = 8 + PoolMerkle::SIZE,
         seeds = [b"pool-merkle", pool.key().as_ref()],
-        bump = pool_merkle.bump,
-        constraint = pool_merkle.pool == pool.key() @ MurklError::InvalidDepositPool
+        bump
     )]
     pub pool_merkle: Box<Account<'info, PoolMerkle>>,
     
