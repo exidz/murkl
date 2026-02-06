@@ -18,6 +18,7 @@ import {
   Transaction,
   TransactionInstruction,
   SystemProgram,
+  SYSVAR_RENT_PUBKEY,
 } from '@solana/web3.js';
 import {
   NATIVE_MINT,
@@ -86,6 +87,11 @@ async function buildDepositTx(params: {
     PROGRAM_ID,
   );
 
+  const [poolMerklePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('pool-merkle'), POOL.toBuffer()],
+    PROGRAM_ID,
+  );
+
   const userAta = await getAssociatedTokenAddress(poolInfo.mint, depositor);
   const userAtaInfo = await connection.getAccountInfo(userAta);
 
@@ -121,12 +127,14 @@ async function buildDepositTx(params: {
     programId: PROGRAM_ID,
     keys: [
       { pubkey: POOL, isSigner: false, isWritable: true },
+      { pubkey: poolMerklePda, isSigner: false, isWritable: true },
       { pubkey: depositPda, isSigner: false, isWritable: true },
       { pubkey: poolInfo.vault, isSigner: false, isWritable: true },
       { pubkey: depositor, isSigner: true, isWritable: true },
       { pubkey: userAta, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
     ],
     data: ixData,
   });
