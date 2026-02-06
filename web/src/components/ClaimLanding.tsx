@@ -423,7 +423,9 @@ export const ClaimLanding: FC<Props> = ({
                   {cooldown > 0 ? `Resend in ${formatCooldown(cooldown)}` : 'Send code'}
                 </Button>
                 {otpError && (
-                  <p className="landing-otp-error">{otpError}</p>
+                  <p className="landing-otp-error" role="alert" aria-live="polite">
+                    {otpError}
+                  </p>
                 )}
               </motion.div>
             ) : (
@@ -446,7 +448,9 @@ export const ClaimLanding: FC<Props> = ({
                   autoFocus
                 />
                 {otpError && (
-                  <p className="landing-otp-error">{otpError}</p>
+                  <p className="landing-otp-error" role="alert" aria-live="polite">
+                    {otpError}
+                  </p>
                 )}
                 <Button
                   variant="primary"

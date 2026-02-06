@@ -1,33 +1,67 @@
 @import './styles/baseline.css';
 
-/* Venmo-inspired dark theme */
+/* ============================================
+   Murkl Design System — Venmo-inspired dark theme
+   
+   Single source of truth for design tokens.
+   Component-specific styles live in their own CSS files.
+   ============================================ */
+
 :root {
-  /* Background colors */
+  /* ── Surface colors ── */
   --bg-primary: #0a0a0f;
   --bg-secondary: #14141f;
   --bg-tertiary: #1e1e2e;
-  --bg-card: #14141f;
 
-  /* Accent colors - Venmo blue, muted for crypto */
-  --accent-primary: #3d95ce;
+  /* ── Accent palette ── */
+  --accent-primary: #3d95ce;     /* Venmo blue, muted for crypto */
   --accent-success: #22c55e;
   --accent-warning: #f59e0b;
   --accent-error: #ef4444;
 
-  /* Text colors */
+  /* ── Text hierarchy ── */
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
   --text-muted: #52525b;
 
-  /* Borders */
+  /* ── Borders ── */
   --border: #27272a;
   --border-focus: #3d95ce;
 
-  /* Legacy (for gradients/badges) */
+  /* ── Brand (Solana gradient) ── */
   --accent: #9945FF;
   --accent-secondary: #14F195;
   --gradient: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+
+  /* ── Spacing scale ── */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+
+  /* ── Radii ── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 100px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  /* ── Transitions ── */
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
 }
+
+/* ============================================
+   Reset (minimal — index.css handles the rest)
+   ============================================ */
 
 * {
   margin: 0;
@@ -44,63 +78,41 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ============================================
+   App shell layout
+   ============================================ */
+
 .app {
   max-width: 520px;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
+  padding: var(--space-lg) var(--space-md);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-/* Header - Minimal */
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 0.5rem;
-  margin-bottom: 1rem;
+.content {
+  flex: 1;
 }
 
-.header h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  background: var(--gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+/* ============================================
+   Solana wallet adapter overrides
+   
+   The wallet adapter ships its own styles that
+   clash with our dark theme. Override just enough
+   to make it feel native.
+   ============================================ */
 
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.status-indicator {
-  font-size: 1rem;
-  opacity: 0.7;
-}
-
-.status-indicator.loading {
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
-}
-
-/* Wallet button - minimal override */
 .wallet-adapter-button {
   background: var(--bg-tertiary) !important;
   border: 1px solid var(--border) !important;
-  border-radius: 12px !important;
+  border-radius: var(--radius-md) !important;
   font-size: 0.875rem !important;
   height: 42px !important;
-  padding: 0 1rem !important;
+  padding: 0 var(--space-md) !important;
   font-weight: 500 !important;
-  transition: all 0.2s !important;
+  transition: background var(--duration-normal),
+              border-color var(--duration-normal) !important;
 }
 
 .wallet-adapter-button:hover {
@@ -109,76 +121,13 @@ body {
 }
 
 .wallet-adapter-button-start-icon {
-  margin-right: 0.5rem !important;
+  margin-right: var(--space-sm) !important;
 }
 
-/* Old tabs removed - replaced by TabBar component */
+/* ============================================
+   HeroUI / third-party overrides
+   ============================================ */
 
-/* Main content */
-.content {
-  flex: 1;
-}
-
-/* Cards */
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1.5rem;
-}
-
-/* Badges - smaller, subtler */
-.badges {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.badge {
-  font-size: 0.7rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-}
-
-.badge.wasm-ready {
-  color: var(--accent-success);
-  border-color: rgba(34, 197, 94, 0.3);
-}
-
-.badge.wasm-loading {
-  color: var(--accent-warning);
-  border-color: rgba(245, 158, 11, 0.3);
-}
-
-/* Footer - subtle */
-.footer {
-  margin-top: auto;
-  padding-top: 2rem;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-}
-
-.footer a {
-  color: var(--text-secondary);
-  text-decoration: none;
-}
-
-.footer a:hover {
-  text-decoration: underline;
-}
-
-.tech {
-  margin-top: 0.5rem;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-
-/* HeroUI overrides */
 .dark {
   --heroui-background: var(--bg-primary);
 }
@@ -189,17 +138,20 @@ body {
 }
 
 [data-slot="pre"] {
-  background: var(--bg-card) !important;
+  background: var(--bg-secondary) !important;
 }
 
-/* Mobile */
+.react-hot-toast {
+  font-family: inherit !important;
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+
 @media (max-width: 640px) {
   .app {
-    padding: 1rem 0.75rem;
-  }
-
-  .header h1 {
-    font-size: 1.25rem;
+    padding: var(--space-md) 0.75rem;
   }
 
   .wallet-adapter-button {
@@ -207,13 +159,27 @@ body {
     height: 38px !important;
     padding: 0 0.75rem !important;
   }
-
-  .footer {
-    padding-top: 1.5rem;
-  }
 }
 
-/* Toast overrides for dark theme */
-.react-hot-toast {
-  font-family: inherit !important;
+/* ============================================
+   Selection color — brand-aware
+   ============================================ */
+
+::selection {
+  background: rgba(61, 149, 206, 0.3);
+  color: var(--text-primary);
+}
+
+/* ============================================
+   Focus-visible global — keyboard-only outlines
+   ============================================ */
+
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Remove outline on mouse/touch focus */
+:focus:not(:focus-visible) {
+  outline: none;
 }

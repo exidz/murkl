@@ -1338,21 +1338,37 @@
   .success-check::before {
     animation: none;
   }
-  
+
   .claim-amount {
     animation: none;
     background: none;
     -webkit-text-fill-color: initial;
   }
-  
+
   .celebration-emoji {
     animation: none;
+  }
+
+  /* Claim landing: remove shimmer + ambient looping animations */
+  .landing-ambient-glow {
+    animation: none;
+  }
+
+  .landing-icon-pulse {
+    animation: none;
+    opacity: 0; /* hide the ring rather than leaving a static outline */
+  }
+
+  .landing-amount-value {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: initial;
   }
 
   .landing-inline-spinner {
     animation: none;
   }
-  
+
   .landing-password-input,
   .landing-password-hint {
     transition: none;
