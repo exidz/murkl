@@ -81,6 +81,79 @@ const shakeVariants = {
 };
 
 /**
+ * Normalize a human-entered amount string into a canonical form using '.'
+ * as the decimal separator and no grouping separators.
+ *
+ * Handles common paste formats:
+ * - "1,234.56" (comma grouping, dot decimal)
+ * - "1 234,56" (space grouping, comma decimal)
+ * - "1.234,56" (dot grouping, comma decimal)
+ * - "◎ 0.5" (token icon/prefix)
+ */
+export function normalizeAmountInput(raw: string, maxDecimals: number): string {
+  // Keep only digits + separators we understand.
+  let v = raw.replace(/[^0-9.,]/g, '');
+
+  const lastDot = v.lastIndexOf('.');
+  const lastComma = v.lastIndexOf(',');
+
+  // Decide which separator is the decimal separator, if any.
+  // If both exist, whichever appears last is the decimal separator.
+  const hasDot = lastDot !== -1;
+  const hasComma = lastComma !== -1;
+
+  let decimalSep: '.' | ',' | null = null;
+  if (hasDot && hasComma) {
+    decimalSep = lastDot > lastComma ? '.' : ',';
+  } else if (hasDot) {
+    decimalSep = '.';
+  } else if (hasComma) {
+    decimalSep = ',';
+  }
+
+  if (decimalSep) {
+    const idx = decimalSep === '.' ? lastDot : lastComma;
+    const intPart = v.slice(0, idx);
+    const fracPart = v.slice(idx + 1);
+
+    // Strip all separators from integer part (grouping).
+    const intClean = intPart.replace(/[.,]/g, '');
+    // Strip separators from fractional part too (in case user pasted weirdly).
+    const fracClean = fracPart.replace(/[.,]/g, '');
+
+    v = `${intClean}.${fracClean}`;
+  } else {
+    // No decimal separator — strip all grouping separators.
+    v = v.replace(/[.,]/g, '');
+  }
+
+  // Allow only one decimal point.
+  const parts = v.split('.');
+  if (parts.length > 2) {
+    // Keep the first dot and join the rest (rare but possible paste cases).
+    v = `${parts[0]}.${parts.slice(1).join('')}`;
+  }
+
+  const [whole, frac] = v.split('.') as [string, string?];
+
+  // Allow starting with "." → treat as "0."
+  if (v === '.') return '0.';
+
+  // Limit decimal places.
+  if (frac !== undefined && frac.length > maxDecimals) {
+    return `${whole}.${frac.slice(0, maxDecimals)}`;
+  }
+
+  // Prevent leading zeros (except "0." for decimals)
+  if (whole.length > 1 && whole.startsWith('0')) {
+    const nextWhole = whole.replace(/^0+/, '') || '0';
+    return frac !== undefined ? `${nextWhole}.${frac}` : nextWhole;
+  }
+
+  return v;
+}
+
+/**
  * Venmo-style hero amount input.
  *
  * The input IS the visual display - no hidden overlay tricks.
@@ -139,50 +212,13 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
     prevValueRef.current = value;
   }, [value]);
 
-  // Handle input change with validation
+  // Handle input change with normalization + validation
   const handleChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    let newValue = e.target.value;
+    const normalized = normalizeAmountInput(e.target.value, maxDecimals);
 
-    // Be forgiving: people paste values like:
-    // - "1,234.56" (grouping commas)
-    // - "1 234,56" (comma as decimal separator)
-    // - "◎ 0.5" (token icon/prefix)
-    // We normalize to a single '.' decimal separator.
-    newValue = newValue.replace(/[^0-9.,]/g, '');
-
-    const hasDot = newValue.includes('.');
-    const hasComma = newValue.includes(',');
-
-    // If there's a comma but no dot, treat the comma as the decimal separator.
-    // (Common in many locales; feels nicer for paste.)
-    if (hasComma && !hasDot) {
-      // Only the last comma acts as the decimal separator; earlier commas are grouping.
-      const lastComma = newValue.lastIndexOf(',');
-      newValue = `${newValue.slice(0, lastComma).replace(/,/g, '')}.${newValue.slice(lastComma + 1)}`;
-    } else {
-      // Otherwise commas are grouping separators.
-      newValue = newValue.replace(/,/g, '');
-    }
-
-    // Allow only one decimal point
-    const parts = newValue.split('.');
-    if (parts.length > 2) return;
-
-    // Limit decimal places
-    if (parts[1] !== undefined && parts[1].length > maxDecimals) return;
-
-    // Prevent leading zeros (except "0." for decimals)
-    if (parts[0].length > 1 && parts[0].startsWith('0')) {
-      parts[0] = parts[0].replace(/^0+/, '') || '0';
-      newValue = parts.join('.');
-    }
-
-    // Allow starting with "." → treat as "0."
-    if (newValue === '.') {
-      newValue = '0.';
-    }
-
-    onChange(newValue);
+    // If the user pasted something totally invalid, just keep it empty.
+    // (normalizeAmountInput already strips most junk.)
+    onChange(normalized);
   }, [onChange, maxDecimals]);
 
   // Handle enter key
