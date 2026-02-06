@@ -98,6 +98,59 @@ export const auth = betterAuth({
     twitter: {
       clientId: process.env.TWITTER_CLIENT_ID || twitterConfig.clientId,
       clientSecret: process.env.TWITTER_CLIENT_SECRET || twitterConfig.clientSecret,
+      // Work around intermittent failures with api.x.com by using api.twitter.com for userinfo.
+      // Better Auth's default twitter provider uses api.x.com; that has been unreliable recently.
+      async getUserInfo(token: any) {
+        try {
+          const baseHeaders = { Authorization: `Bearer ${token.accessToken}` };
+
+          // Primary profile
+          const profileRes = await fetch(
+            'https://api.twitter.com/2/users/me?user.fields=profile_image_url',
+            { method: 'GET', headers: baseHeaders },
+          );
+          if (!profileRes.ok) return null;
+          const profileJson: any = await profileRes.json();
+          if (!profileJson?.data?.id) return null;
+
+          // Try to fetch email if the app has permission (most apps won't)
+          let emailVerified = false;
+          try {
+            const emailRes = await fetch(
+              'https://api.twitter.com/2/users/me?user.fields=confirmed_email',
+              { method: 'GET', headers: baseHeaders },
+            );
+            if (emailRes.ok) {
+              const emailJson: any = await emailRes.json();
+              if (emailJson?.data?.confirmed_email) {
+                profileJson.data.email = emailJson.data.confirmed_email;
+                emailVerified = true;
+              }
+            }
+          } catch {
+            // ignore email fetch errors
+          }
+
+          // Map user
+          const username = profileJson.data.username;
+          const name = profileJson.data.name;
+          return {
+            user: {
+              id: profileJson.data.id,
+              name: name ?? username,
+              // Better Auth requires an email. If Twitter doesn't provide it,
+              // fall back to a stable synthetic email so account linking works.
+              // NOTE: this is NOT a real email; it only serves as an internal identifier.
+              email: profileJson.data.email || `${username}@twitter.local`,
+              image: profileJson.data.profile_image_url,
+              emailVerified,
+            },
+            data: profileJson,
+          };
+        } catch {
+          return null;
+        }
+      },
       // Store @handle as name, not display name
       mapProfileToUser: (profile: any) => ({
         name: profile.username || profile.data?.username || profile.name,
