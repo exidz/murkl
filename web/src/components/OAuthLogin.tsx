@@ -291,9 +291,8 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
 
         <motion.div
           className="identity-picker"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
+          initial={false}
+          animate={{ opacity: 1 }}
         >
           {linkedIdentities.map((identity) => {
             const meta = PROVIDER_META[identity.provider] || { icon: '🔵', color: '#3d95ce', name: identity.provider };
@@ -303,9 +302,15 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
                 key={identity.identifier}
                 className="identity-option"
                 onClick={() => handlePickIdentity(identity)}
-                variants={itemVariants}
+                initial={false}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
                 whileTap={{ scale: 0.98 }}
-                style={{ '--provider-color': meta.color } as React.CSSProperties}
+                style={{
+                  '--provider-color': meta.color,
+                  background: 'rgba(255,255,255,0.12)',
+                  border: '1px solid rgba(255,255,255,0.22)',
+                  boxShadow: '0 10px 24px rgba(0,0,0,0.45)',
+                } as React.CSSProperties}
               >
                 <div className="identity-option-badge">
                   <span>{meta.icon}</span>
@@ -376,9 +381,8 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
 
           <motion.div
             className="identity-picker"
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
+            initial={false}
+            animate={{ opacity: 1 }}
           >
             {linkedIdentities.map((identity) => {
               const meta = PROVIDER_META[identity.provider] || { icon: '🔵', color: '#3d95ce', name: identity.provider };
@@ -388,9 +392,15 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
                   key={identity.identifier}
                   className="identity-option"
                   onClick={() => handlePickIdentity(identity)}
-                  variants={itemVariants}
+                  initial={false}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
                   whileTap={{ scale: 0.98 }}
-                  style={{ '--provider-color': meta.color } as React.CSSProperties}
+                  style={{
+                    '--provider-color': meta.color,
+                    background: 'rgba(255,255,255,0.12)',
+                    border: '1px solid rgba(255,255,255,0.22)',
+                    boxShadow: '0 10px 24px rgba(0,0,0,0.45)',
+                  } as React.CSSProperties}
                 >
                   <div className="identity-option-badge">
                     <span>{meta.icon}</span>
