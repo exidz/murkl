@@ -100,6 +100,12 @@ elif [[ -n "${SURFPOOL_DATASOURCE_RPC_URL:-}" ]]; then
 fi
 
 if [[ -n "$SURFPOOL_DATASOURCE" ]]; then
+  # Some datasource URLs include auth query params (e.g., Helius). Surfpool may not
+  # preserve the query string internally, so prefer the base origin.
+  if [[ "$SURFPOOL_DATASOURCE" == https://devnet.helius-rpc.com/*\?api-key=* ]]; then
+    SURFPOOL_DATASOURCE="https://devnet.helius-rpc.com"
+  fi
+
   echo "==> Starting Surfpool (custom datasource) on $SURFPOOL_RPC"
   SURFPOOL_UPSTREAM_ARGS=(--rpc-url "$SURFPOOL_DATASOURCE")
 else
