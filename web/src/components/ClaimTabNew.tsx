@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, lazy, Suspense, type FC } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, lazy, Suspense, type FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -49,13 +49,34 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
   // Auth state
   const [identity, setIdentity] = useState<{ provider: string; handle: string } | null>(null);
 
+  // Track if user explicitly wants to switch (prevents auto-login loop)
+  const [wantsSwitch, setWantsSwitch] = useState(false);
+
   // TanStack Query: deposits for authenticated identity
   const { data: deposits = [], isPending: loadingDeposits } = useDeposits(identity?.handle ?? null);
+
+  const { unclaimedDeposits, claimedDeposits } = useMemo(() => {
+    const unclaimed = deposits
+      .filter((d) => !d.claimed)
+      // Newest first
+      .slice()
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const claimed = deposits
+      .filter((d) => d.claimed)
+      .slice()
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return { unclaimedDeposits: unclaimed, claimedDeposits: claimed };
+  }, [deposits]);
 
   // Claim state
   const [claimingDeposit, setClaimingDeposit] = useState<Deposit | null>(null);
   const [password, setPassword] = useState('');
   const [showPasswordSheet, setShowPasswordSheet] = useState<Deposit | null>(null);
+
+  // UI state — keep the feed focused on “what can I do right now?”
+  const [showClaimed, setShowClaimed] = useState(false);
 
   // Refs
   const passwordInputRef = useRef<HTMLInputElement>(null);
@@ -129,7 +150,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
   }, [showPasswordSheet]);
 
   // Handle OAuth login — just set identity; deposits load automatically via useDeposits
-  const handleLogin = useCallback(async (provider: string, handle: string) => {
+  const handleLogin = useCallback((provider: string, handle: string) => {
     setWantsSwitch(false);
     setIdentity({ provider, handle });
   }, []);
@@ -137,9 +158,8 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
   // Report unclaimed deposit count to parent (for TabBar badge)
   useEffect(() => {
     if (!onUnclaimedCount) return;
-    const unclaimed = deposits.filter(d => !d.claimed).length;
-    onUnclaimedCount(unclaimed);
-  }, [deposits, onUnclaimedCount]);
+    onUnclaimedCount(unclaimedDeposits.length);
+  }, [unclaimedDeposits.length, onUnclaimedCount]);
 
   // Show toasts when deposits load
   useEffect(() => {
@@ -227,9 +247,6 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
     reset();
     setClaimingDeposit(null);
   }, [reset]);
-
-  // Track if user explicitly wants to switch (prevents auto-login loop)
-  const [wantsSwitch, setWantsSwitch] = useState(false);
 
   // Switch identity — go back to picker without signing out
   const handleSwitchIdentity = useCallback(() => {
@@ -421,21 +438,73 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
           />
         ) : (
           <div className="deposits-list">
-            {/* Unclaimed first, then claimed — Venmo sorts by actionability */}
-            {[...deposits]
-              .sort((a, b) => {
-                if (a.claimed !== b.claimed) return a.claimed ? 1 : -1;
-                return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-              })
-              .map((deposit, index) => (
-                <DepositCard
-                  key={deposit.id}
-                  deposit={deposit}
-                  index={index}
-                  onClaim={initiateClaim}
-                  disabled={!connected}
-                />
-              ))}
+            {/* Unclaimed first — keep the screen focused on the next action */}
+            {unclaimedDeposits.length > 0 ? (
+              <>
+                <div className="deposits-list-header">
+                  <p className="deposits-list-title">Ready to claim</p>
+                  <p className="deposits-list-subtitle">
+                    {unclaimedDeposits.length} waiting
+                  </p>
+                </div>
+
+                {unclaimedDeposits.map((deposit, index) => (
+                  <DepositCard
+                    key={deposit.id}
+                    deposit={deposit}
+                    index={index}
+                    onClaim={initiateClaim}
+                    disabled={!connected}
+                  />
+                ))}
+              </>
+            ) : (
+              <EmptyState
+                illustration="inbox"
+                title="All caught up"
+                description={
+                  claimedDeposits.length > 0
+                    ? 'No new deposits to claim right now.'
+                    : 'No deposits yet — ask someone to send you one.'
+                }
+                compact
+              />
+            )}
+
+            {/* Claimed deposits — tucked away by default */}
+            {claimedDeposits.length > 0 && (
+              <div className="claimed-section">
+                <button
+                  className="claimed-toggle"
+                  onClick={() => setShowClaimed((v) => !v)}
+                  aria-expanded={showClaimed}
+                >
+                  {showClaimed ? 'Hide' : 'Show'} claimed ({claimedDeposits.length})
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {showClaimed && (
+                    <motion.div
+                      className="claimed-list"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {claimedDeposits.map((deposit, index) => (
+                        <DepositCard
+                          key={deposit.id}
+                          deposit={deposit}
+                          index={index + unclaimedDeposits.length}
+                          onClaim={initiateClaim}
+                          disabled={!connected}
+                        />
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         )}
       </div>

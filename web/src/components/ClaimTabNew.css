@@ -107,6 +107,63 @@
   gap: 0.75rem;
 }
 
+/* Venmo-style list header — friendly + focused */
+.deposits-list-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.25rem 0.25rem 0.5rem;
+}
+
+.deposits-list-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+}
+
+.deposits-list-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, #52525b);
+  font-weight: 600;
+}
+
+/* Claimed section — tucked away by default */
+.claimed-section {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border, #27272a);
+}
+
+.claimed-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0.75rem 0.5rem;
+  border-radius: 12px;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  min-height: 44px;
+}
+
+.claimed-toggle:hover {
+  color: var(--text-primary, #fff);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.claimed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: hidden;
+  padding-top: 0.25rem;
+}
+
 .deposit-card {
   display: flex;
   align-items: center;
