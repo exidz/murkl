@@ -97,22 +97,45 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
     return () => clearInterval(timer);
   }, [cooldown]);
 
+  const LAST_IDENTITY_KEY = 'murkl:last-identity';
+
   // When session exists, fetch linked identities.
-  // If only one → auto-login. If multiple → show picker.
+  // If only one → auto-login.
+  // If multiple → show picker, BUT auto-select the last-used identity if available.
   // Skip if email OTP flow is active (it calls onLogin directly).
   // Skip if showSwitch is true (user wants to change identity).
   useEffect(() => {
     if (session?.user && !isPending && emailStep === 'idle' && !linkedIdentities && !showSwitch) {
       getMurklIdentifier().then((data) => {
         if (!data) return;
-        
-        if (data.identities && data.identities.length > 1) {
-          setLinkedIdentities(data.identities);
-        } else if (data.identities?.length === 1) {
-          onLogin(data.identities[0].provider, data.identities[0].identifier);
-        } else {
-          onLogin(data.provider, data.murklIdentifier);
+
+        const identities = data.identities || [];
+
+        if (identities.length > 1) {
+          // Try to restore last-picked identity (prevents “always picks email on refresh”).
+          try {
+            const last = localStorage.getItem(LAST_IDENTITY_KEY);
+            if (last) {
+              const match = identities.find((i) => i.identifier === last);
+              if (match) {
+                onLogin(match.provider, match.identifier);
+                return;
+              }
+            }
+          } catch {
+            // ignore localStorage issues
+          }
+
+          setLinkedIdentities(identities);
+          return;
         }
+
+        if (identities.length === 1) {
+          onLogin(identities[0].provider, identities[0].identifier);
+          return;
+        }
+
+        onLogin(data.provider, data.murklIdentifier);
       });
     }
   }, [session, isPending, onLogin, emailStep, linkedIdentities, showSwitch]);
@@ -201,12 +224,22 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
   // Handle sign out
   const handleSignOut = useCallback(async () => {
     setLinkedIdentities(null);
+    try {
+      localStorage.removeItem(LAST_IDENTITY_KEY);
+    } catch {
+      // ignore
+    }
     await signOut();
   }, []);
 
   // Pick a linked identity
   const handlePickIdentity = useCallback((identity: MurklIdentity) => {
     setLinkedIdentities(null);
+    try {
+      localStorage.setItem(LAST_IDENTITY_KEY, identity.identifier);
+    } catch {
+      // ignore
+    }
     onLogin(identity.provider, identity.identifier);
   }, [onLogin]);
 
