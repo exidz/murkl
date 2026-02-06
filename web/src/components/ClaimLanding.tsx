@@ -227,6 +227,36 @@ export const ClaimLanding: FC<Props> = ({
     }
   }, [emailAddress, cooldown]);
 
+  // Auto-send OTP when the user arrives from a claim link.
+  // Keeps the flow “one action per screen” by skipping an extra tap.
+  const [autoOtpAttempted, setAutoOtpAttempted] = useState(false);
+  useEffect(() => {
+    if (!connected) return;
+    if (!isEmailIdentifier) return;
+    if (emailVerified) return;
+    if (otpSent) return;
+    if (sendingOtp) return;
+    if (cooldown > 0) return;
+    if (otpError) return; // don’t auto-loop on failures
+    if (autoOtpAttempted) return;
+
+    setAutoOtpAttempted(true);
+    const t = setTimeout(() => {
+      handleSendOtp();
+    }, 250);
+    return () => clearTimeout(t);
+  }, [
+    connected,
+    isEmailIdentifier,
+    emailVerified,
+    otpSent,
+    sendingOtp,
+    cooldown,
+    otpError,
+    autoOtpAttempted,
+    handleSendOtp,
+  ]);
+
   // Verify OTP
   const handleVerifyOtp = useCallback(async () => {
     if (otp.length < 6) return;
