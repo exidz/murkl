@@ -98,7 +98,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
       try {
         const res = await fetch(
           `${RELAYER_URL}/deposits?identity=${encodeURIComponent(id)}`,
-          { signal: controller.signal },
+          { signal: controller.signal, credentials: 'include' },
         );
         if (!mounted || !res.ok) return;
 

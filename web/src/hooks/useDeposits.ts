@@ -16,7 +16,9 @@ export const depositKeys = {
 }
 
 async function fetchDeposits(identity: string): Promise<Deposit[]> {
-  const res = await fetch(`${RELAYER_URL}/deposits?identity=${encodeURIComponent(identity)}`)
+  const res = await fetch(`${RELAYER_URL}/deposits?identity=${encodeURIComponent(identity)}`, {
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error('Failed to fetch deposits')
   const data = await res.json()
   return data.deposits || []

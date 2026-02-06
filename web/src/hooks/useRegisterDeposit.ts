@@ -26,6 +26,7 @@ export function useRegisterDeposit() {
     mutationFn: async (params: RegisterDepositParams) => {
       const res = await fetch(`${RELAYER_URL}/deposits/register`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...params,
