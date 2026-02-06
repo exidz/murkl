@@ -479,9 +479,9 @@
   /* Important: don't rely on `color-mix()` here — some mobile browsers ignore it, */
   /* which makes the whole button effectively transparent until hover. */
   background: var(--bg-secondary, #14141f);
-  background: rgba(255, 255, 255, 0.075);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
   border-radius: 14px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
@@ -499,8 +499,8 @@
 
 .identity-option:hover {
   border-color: var(--provider-color, var(--accent-primary, #3d95ce));
-  background: rgba(255, 255, 255, 0.10);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
 }
 
 .identity-option:active {
