@@ -190,8 +190,11 @@ export const ClaimLanding: FC<Props> = ({
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
-  // Animated count-up for the amount
-  const animatedAmount = useCountUp(data.amount || 0, 1200, 500);
+  const hasAmount = data.amount != null && data.amount > 0;
+
+  // Animated count-up for the amount (if we know it).
+  // If not, we still render the amount area for a consistent, Venmo-like hero layout.
+  const animatedAmount = useCountUp(hasAmount ? data.amount! : 0, 1200, 500);
 
   // Identifier display info
   const identifierMeta = getIdentifierMeta(data.identifier);
@@ -326,6 +329,7 @@ export const ClaimLanding: FC<Props> = ({
   const needsEmailVerification = isEmailIdentifier && !emailVerified;
 
   const tokenSymbol = data.token || 'SOL';
+  const amountText = hasAmount ? animatedAmount : '—';
 
   return (
     <motion.div
@@ -387,21 +391,19 @@ export const ClaimLanding: FC<Props> = ({
           className="landing-title"
           variants={heroItemVariants}
         >
-          {data.amount
-            ? 'You received'
-            : 'Funds waiting for you'}
+          {hasAmount ? 'You received' : 'Money waiting for you'}
         </motion.h2>
 
-        {/* Big amount with count-up + shimmer */}
-        {data.amount != null && data.amount > 0 && (
-          <motion.div
-            className="landing-amount"
-            variants={heroItemVariants}
-          >
-            <span className="landing-amount-value">{animatedAmount}</span>
-            <span className="landing-amount-token">{tokenSymbol}</span>
-          </motion.div>
-        )}
+        {/* Big amount hero (always rendered for consistent Venmo-like layout) */}
+        <motion.div
+          className="landing-amount"
+          variants={heroItemVariants}
+        >
+          <span className={`landing-amount-value ${hasAmount ? '' : 'unknown'}`.trim()}>
+            {amountText}
+          </span>
+          <span className="landing-amount-token">{tokenSymbol}</span>
+        </motion.div>
 
         {/* Recipient badge with provider-aware icon */}
         <motion.div

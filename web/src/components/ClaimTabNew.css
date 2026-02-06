@@ -922,6 +922,14 @@
   animation-delay: 1.8s; /* start after count-up finishes */
 }
 
+/* If we couldn't fetch amount yet, still keep the hero layout but make it clearly “unknown”. */
+.landing-amount-value.unknown {
+  opacity: 0.45;
+  background: none;
+  -webkit-text-fill-color: initial;
+  animation: none;
+}
+
 @keyframes landing-amount-shimmer {
   0%, 100% {
     background-position: 200% center;
