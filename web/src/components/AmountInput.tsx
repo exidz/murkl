@@ -134,8 +134,12 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
   const handleChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     let newValue = e.target.value;
 
-    // Remove non-numeric except decimal
-    newValue = newValue.replace(/[^0-9.]/g, '');
+    // Be forgiving: people paste values like "1,234.56" or "◎ 0.5".
+    // 1) Keep digits + decimal separators
+    // 2) Remove grouping commas
+    // 3) Enforce a single '.' as the decimal separator
+    newValue = newValue.replace(/[^0-9.,]/g, '');
+    newValue = newValue.replace(/,/g, '');
 
     // Allow only one decimal point
     const parts = newValue.split('.');

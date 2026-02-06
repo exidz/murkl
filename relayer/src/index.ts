@@ -39,15 +39,7 @@ import * as crypto from 'crypto';
 import bs58 from 'bs58';
 import { auth, db, getMurklIdentifier, resend, runAuthMigrations } from './auth';
 import { toNodeHandler } from 'better-auth/node';
-import { 
-  initVoucherTable, 
-  createVoucher, 
-  redeemVoucher, 
-  markVoucherClaimed, 
-  getVoucherInfo,
-  cleanupOldVouchers,
-  isValidVoucherCode,
-} from './vouchers';
+
 
 // ============================================================================
 // Configuration & Validation
@@ -304,18 +296,6 @@ const claimLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.ip || 'unknown',
-});
-
-// Voucher redemption rate limiter — prevents brute-force password attacks
-// Very strict: 5 attempts per 15 minutes per IP
-const voucherRedeemLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  message: { error: 'Too many redemption attempts, please try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.ip || 'unknown',
-  skipSuccessfulRequests: true, // Only count failed attempts
 });
 
 app.use(generalLimiter);
@@ -1216,17 +1196,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_deposits_leaf_index ON deposits(leaf_index);
 `);
 
-// Initialize vouchers table
-initVoucherTable(db);
-
-// Periodic cleanup of old claimed vouchers (every 6 hours)
-setInterval(() => {
-  const deleted = cleanupOldVouchers(db, 30);
-  if (deleted > 0) {
-    log('info', 'Cleaned up old vouchers', { deleted });
-  }
-}, 6 * 60 * 60 * 1000);
-
 // Prepared statements for performance
 const stmtInsertDeposit = db.prepare(`
   INSERT OR IGNORE INTO deposits (id, pool, commitment, identifier_hash, amount, token, leaf_index, timestamp, claimed, tx_signature)
@@ -1429,43 +1398,13 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
     };
 
     indexDeposit(deposit);
-    
-    // For email deposits, create a voucher if password was provided
-    // This enables OTP-free claiming via voucher code
-    let voucherCode: string | undefined;
-    if (identifier.startsWith('email:') && (req.body as any).password) {
-      try {
-        voucherCode = createVoucher(db, {
-          identifier,
-          leafIndex: leafIndexNum,
-          pool,
-          password: (req.body as any).password,
-          amount: amountNum,
-          token: tokenStr,
-        });
-        log('info', 'Voucher created for email deposit', { voucherCode, leafIndex: leafIndexNum });
-      } catch (voucherErr) {
-        log('warn', 'Failed to create voucher', { error: String(voucherErr) });
-        // Non-critical — user can still claim via OTP
-      }
-    }
-    
-    // Send notification email if depositing to an email identifier
+
+    // Send notification email if depositing to an email identifier.
+    // Vouchers removed: recipients claim by logging in with this email identity.
     if (identifier.startsWith('email:') && resend) {
       const recipientEmail = identifier.slice('email:'.length);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      
-      // Prefer voucher claim link (fast path). If no voucher was created (e.g. password not
-      // provided to /deposits/register), fall back to the classic id/leaf/pool link.
-      const claimParams = new URLSearchParams({
-        tab: 'claim',
-        ...(voucherCode
-          ? { voucher: voucherCode }
-          : { id: identifier, leaf: String(leafIndexNum), pool }
-        ),
-      });
-      const claimLink = `${frontendUrl}/?${claimParams.toString()}`;
-      
+
       try {
         await resend.emails.send({
           from: process.env.EMAIL_FROM || 'Murkl <noreply@email.siklab.dev>',
@@ -1477,59 +1416,32 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
                 <span style="font-size: 2.5rem;">🐈‍⬛</span>
                 <h1 style="font-size: 1.5rem; font-weight: 700; margin: 0.5rem 0 0;">You received funds!</h1>
               </div>
-              
+
               <div style="background: #14141f; border: 1px solid #27272a; border-radius: 12px; padding: 1.5rem; text-align: center; margin: 1.5rem 0;">
                 <p style="color: #a1a1aa; font-size: 0.9rem; margin: 0 0 0.5rem;">Amount</p>
                 <p style="font-size: 2rem; font-weight: 700; margin: 0; color: #fff;">${amountNum} ${tokenStr}</p>
               </div>
-              
-              <p style="color: #a1a1aa; font-size: 0.95rem; line-height: 1.5; text-align: center;">
-                Someone sent you tokens privately via Murkl.
-              </p>
 
-              ${voucherCode ? `
-              <p style="color: #a1a1aa; font-size: 0.95rem; line-height: 1.5; text-align: center; margin-top: 0.75rem;">
-                Use this <strong style="color: #fff;">claim code</strong> (and the secret code the sender shared) to claim.
-              </p>
-              <div style="background: #14141f; border: 1px solid #3d95ce; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;">
-                <p style="color: #a1a1aa; font-size: 0.8rem; margin: 0 0 0.5rem;">Your claim code</p>
-                <p style="font-size: 1.5rem; font-weight: 700; font-family: monospace; letter-spacing: 0.1em; color: #3d95ce; margin: 0;">${voucherCode}</p>
-              </div>
-              ` : `
               <div style="background: #14141f; border: 1px solid #27272a; border-radius: 12px; padding: 1rem; margin: 1rem 0;">
-                <p style="color: #a1a1aa; font-size: 0.9rem; margin: 0; line-height: 1.4; text-align: center;">
+                <p style="color: #a1a1aa; font-size: 0.95rem; margin: 0; line-height: 1.4; text-align: center;">
                   To claim, open Murkl and sign in with this email. You’ll also need the <strong style="color: #fff;">secret code</strong> the sender shared with you.
                 </p>
               </div>
-              `}
-              
-              <div style="text-align: center; margin: 1.5rem 0;">
-                <a href="${claimLink}" style="display: inline-block; padding: 0.875rem 2rem; background: #3d95ce; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 1rem;">
-                  Claim your ${tokenStr}
-                </a>
-              </div>
-              
-              <div style="background: #14141f; border: 1px solid #27272a; border-radius: 10px; padding: 1rem; margin-top: 1.5rem;">
-                <p style="color: #71717a; font-size: 0.8rem; margin: 0; text-align: center;">
-                  🔒 Your funds are secured by a STARK proof on Solana.<br>
-                  Only someone with the password can claim them.
-                </p>
-              </div>
-              
-              <p style="color: #52525b; font-size: 0.75rem; text-align: center; margin-top: 1.5rem;">
-                <a href="${claimLink}" style="color: #52525b; word-break: break-all;">${claimLink}</a>
+
+              <p style="color: #52525b; font-size: 0.8rem; text-align: center; margin-top: 1.25rem;">
+                Open Murkl: <span style="color: #71717a;">${frontendUrl}</span>
               </p>
             </div>
           `,
         });
-        log('info', 'Claim notification email sent', { to: recipientEmail, leafIndex, hasVoucher: !!voucherCode });
+        log('info', 'Claim notification email sent', { to: recipientEmail, leafIndex: leafIndexNum });
       } catch (emailErr) {
         log('warn', 'Failed to send claim notification email', { error: String(emailErr) });
         // Non-critical — deposit still registered
       }
     }
 
-    res.json({ success: true, depositId: deposit.id, voucherCode });
+    res.json({ success: true, depositId: deposit.id });
   } catch (e: unknown) {
     log('error', 'Deposit registration failed', { error: String(e) });
     res.status(500).json({ error: 'Internal error' });
@@ -1592,112 +1504,8 @@ app.post('/deposits/mark-claimed', async (req: Request, res: Response) => {
 // Voucher System (OTP-free email claiming)
 // ============================================================================
 
-// Get voucher info (without decrypting — just shows amount, token, status)
-app.get('/vouchers/:code', async (req: Request, res: Response) => {
-  try {
-    const code = req.params.code as string;
-    
-    // Strict validation: must match exact voucher code format
-    if (!isValidVoucherCode(code)) {
-      return res.status(400).json({ error: 'Invalid voucher code' });
-    }
-    
-    const info = getVoucherInfo(db, code);
-    
-    if (!info) {
-      return res.status(404).json({ error: 'Voucher not found' });
-    }
-    
-    res.json({
-      code: info.code,
-      amount: info.amount,
-      token: info.token,
-      claimed: info.claimed,
-    });
-  } catch (e: unknown) {
-    log('error', 'Voucher info failed', { error: String(e) });
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
 
-// Redeem voucher (decrypt with password to get claim data)
-// Rate-limited to prevent brute-force password attacks
-app.post('/vouchers/redeem', voucherRedeemLimiter, async (req: Request, res: Response) => {
-  try {
-    const { code, password } = req.body;
-    
-    if (!code || !password) {
-      return res.status(400).json({ error: 'Code and password required' });
-    }
-    
-    // Strict validation: must match exact voucher code format
-    if (!isValidVoucherCode(code)) {
-      return res.status(400).json({ error: 'Invalid voucher code format' });
-    }
-    
-    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
-      return res.status(400).json({ error: 'Invalid password format' });
-    }
-    
-    const result = redeemVoucher(db, code, password);
-    
-    if ('error' in result) {
-      // Constant-time-ish response: don't reveal whether code exists or password is wrong
-      // Add small jitter to prevent timing attacks
-      await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
-      return res.status(400).json({ error: 'Invalid code or password' });
-    }
-    
-    // Return decrypted claim data
-    res.json({
-      success: true,
-      identifier: result.data.identifier,
-      leafIndex: result.data.leafIndex,
-      pool: result.pool,
-      amount: result.amount,
-      token: result.token,
-    });
-  } catch (e: unknown) {
-    log('error', 'Voucher redeem failed', { error: String(e) });
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
 
-// Mark voucher as claimed (called after successful claim)
-// Security: require the voucher password to prevent unauthenticated DoS
-// (without this, anyone could mark arbitrary vouchers as claimed).
-app.post('/vouchers/mark-claimed', voucherRedeemLimiter, async (req: Request, res: Response) => {
-  try {
-    const { code, password } = req.body as { code?: unknown; password?: unknown };
-
-    if (typeof code !== 'string' || !isValidVoucherCode(code)) {
-      return res.status(400).json({ error: 'Invalid voucher code format' });
-    }
-
-    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
-      return res.status(400).json({ error: 'Invalid password format' });
-    }
-
-    // Verify password matches voucher (and that voucher exists / is unclaimed)
-    const redeemed = redeemVoucher(db, code, password);
-    if ('error' in redeemed) {
-      // Do not leak whether the code exists vs wrong password
-      await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
-      return res.status(400).json({ error: 'Invalid code or password' });
-    }
-
-    const success = markVoucherClaimed(db, code);
-    if (!success) {
-      // Extremely rare race (claimed between redeem and update)
-      return res.status(404).json({ error: 'Voucher not found' });
-    }
-
-    res.json({ success: true });
-  } catch (e: unknown) {
-    log('error', 'Mark voucher claimed failed', { error: String(e) });
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
 
 // ============================================================================
 // Pool Info

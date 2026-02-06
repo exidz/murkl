@@ -240,20 +240,14 @@ export function generatePassword(length: number = 16): string {
 export function createShareLink(
   identifier: string,
   leafIndex: number,
-  pool: string,
-  options?: { voucherCode?: string },
+  pool: string
 ): string {
   const params = new URLSearchParams({
     tab: 'claim',
   });
-
-  if (options?.voucherCode) {
-    params.set('voucher', options.voucherCode);
-  } else {
-    params.set('id', identifier);
-    params.set('leaf', leafIndex.toString());
-    params.set('pool', pool);
-  }
+  params.set('id', identifier);
+  params.set('leaf', leafIndex.toString());
+  params.set('pool', pool);
 
   const base = typeof window !== 'undefined' ? window.location.origin : 'https://murkl.app';
   // Always use root path; App.tsx syncs the selected tab and preserves claim params.

@@ -12,7 +12,6 @@ import { Confetti } from './Confetti';
 import { PasswordSheet } from './PasswordSheet';
 import { DepositCard } from './DepositCard';
 import { ClaimLanding, type ClaimLinkData } from './ClaimLanding';
-import { VoucherClaim } from './VoucherClaim';
 import { useClaimFlow } from '../hooks/useClaimFlow';
 import { useDeposits, depositKeys } from '../hooks/useDeposits';
 import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
@@ -43,10 +42,6 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
   // Claim link state (from URL params)
   const [claimLinkData, setClaimLinkData] = useState<ClaimLinkData | null>(null);
   const [showOAuthOverride, setShowOAuthOverride] = useState(false);
-  
-  // Voucher code state (from URL params)
-  const [voucherCode, setVoucherCode] = useState<string | null>(null);
-  const [showVoucher, setShowVoucher] = useState(false);
 
   // Auth state
   const [identity, setIdentity] = useState<{ provider: string; handle: string } | null>(null);
@@ -62,17 +57,9 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
   // Refs
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
-  // Parse URL params for claim link data or voucher code
+  // Parse URL params for claim link data
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-
-    // Check for voucher code first (takes priority)
-    const voucher = params.get('voucher');
-    if (voucher) {
-      setVoucherCode(voucher);
-      setShowVoucher(true);
-      return;
-    }
 
     // Otherwise, check for claim link params
     const id = params.get('id');
@@ -231,58 +218,6 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
       setClaimingDeposit(null);
     }
   }, [claimLinkData, executeClaim]);
-  
-  // Handle voucher redemption (OTP-free email claiming)
-  const handleVoucherRedeem = useCallback(async (data: {
-    identifier: string;
-    leafIndex: number;
-    pool: string;
-    password: string;
-    amount: number;
-    token: string;
-    voucherCode: string;
-  }) => {
-    // Create a synthetic deposit from voucher data
-    const syntheticDeposit: Deposit = {
-      id: `voucher-${data.leafIndex}`,
-      amount: data.amount,
-      token: data.token,
-      leafIndex: data.leafIndex,
-      timestamp: new Date().toISOString(),
-      claimed: false,
-    };
-
-    // Set identity from the voucher
-    setIdentity({ provider: 'voucher', handle: data.identifier });
-    setClaimingDeposit(syntheticDeposit);
-    setShowVoucher(false);
-
-    const success = await executeClaim({
-      identifier: data.identifier,
-      password: data.password,
-      leafIndex: data.leafIndex,
-      pool: data.pool,
-    });
-
-    if (success) {
-      // Mark voucher as claimed on the server
-      fetch(`${RELAYER_URL}/vouchers/mark-claimed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: data.voucherCode, password: data.password }),
-      }).catch(() => {
-        // Non-critical — claim succeeded regardless
-      });
-      
-      // Clean URL params after successful claim
-      const url = new URL(window.location.href);
-      url.searchParams.delete('voucher');
-      window.history.replaceState({}, '', url.toString());
-    } else {
-      setClaimingDeposit(null);
-      setShowVoucher(true); // Return to voucher input on failure
-    }
-  }, [executeClaim]);
 
   // Reset after success
   const handleClaimComplete = useCallback(() => {
@@ -300,24 +235,6 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
   }, []);
 
   // ─── RENDER ───────────────────────────────────────────────
-
-  // Voucher code claim → OTP-free email claiming
-  if (showVoucher && !identity && !showOAuthOverride) {
-    return (
-      <div className="claim-tab-new">
-        <VoucherClaim
-          initialCode={voucherCode || ''}
-          wasmReady={wasmReady}
-          onRedeem={handleVoucherRedeem}
-          onSwitchToOAuth={() => {
-            setShowVoucher(false);
-            setShowOAuthOverride(true);
-          }}
-        />
-      </div>
-    );
-  }
-
   // Claim link landing → show hero experience (skips OAuth)
   if (claimLinkData && !identity && !showOAuthOverride) {
     return (
@@ -333,17 +250,11 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
     );
   }
 
-  // Not logged in → OAuth (with option to use voucher code)
+  // Not logged in → OAuth
   if (!identity) {
     return (
       <div className="claim-tab-new">
         <OAuthLogin onLogin={handleLogin} loading={false} showSwitch={wantsSwitch} />
-        <button 
-          className="voucher-link"
-          onClick={() => setShowVoucher(true)}
-        >
-          Have a claim code? →
-        </button>
       </div>
     );
   }

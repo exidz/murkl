@@ -411,10 +411,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         }
       }
       toast.dismiss(txToastId);
-      
+
       // Register deposit with relayer for indexing + email notification.
-      // If recipient is email, we want the voucherCode so we can show/share the SAME claim link/QR
-      // that the recipient will get in their email.
+      // Note: for email recipients, claiming is login-only (no vouchers / no claim links).
       const registerPayload = {
         identifier: fullIdentifier,
         amount: amountNum,
@@ -423,29 +422,15 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         pool: POOL_ADDRESS.toBase58(),
         commitment: depositResult.commitment,
         txSignature: signature,
-        ...(fullIdentifier.startsWith('email:') && { password }),
       };
 
-      let voucherCode: string | undefined;
-      if (fullIdentifier.startsWith('email:')) {
-        try {
-          const result = await registerDeposit.mutateAsync(registerPayload);
-          voucherCode = result?.voucherCode;
-        } catch {
-          // Non-critical — deposit succeeded; recipient can still claim via id/leaf if needed
-        }
-      } else {
-        // Fire-and-forget for socials
-        registerDeposit.mutate(registerPayload);
-      }
+      // Fire-and-forget (no auth required; relayer verifies on-chain tx)
+      registerDeposit.mutate(registerPayload);
 
-      // Generate share link
-      const shareLink = createShareLink(
-        fullIdentifier,
-        depositResult.leafIndex,
-        POOL_ADDRESS.toBase58(),
-        voucherCode ? { voucherCode } : undefined,
-      );
+      const isEmailRecipient = fullIdentifier.startsWith('email:');
+      const shareLink = isEmailRecipient
+        ? ''
+        : createShareLink(fullIdentifier, depositResult.leafIndex, POOL_ADDRESS.toBase58());
       
       setSuccess({
         signature,
@@ -597,19 +582,27 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <Button 
-              variant="primary"
-              size="lg"
-              fullWidth
-              icon={<span>📤</span>}
-              onClick={() => setShowShareSheet(true)}
-            >
-              Share claim
-            </Button>
-            
-            <p className="success-hint">
-              Send the link and password to {formatRecipient(success.identifier)}
-            </p>
+            {success.shareLink ? (
+              <>
+                <Button 
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  icon={<span>📤</span>}
+                  onClick={() => setShowShareSheet(true)}
+                >
+                  Share claim
+                </Button>
+
+                <p className="success-hint">
+                  Send the link and password to {formatRecipient(success.identifier)}
+                </p>
+              </>
+            ) : (
+              <p className="success-hint">
+                Share the password with {formatRecipient(success.identifier)}
+              </p>
+            )}
           </motion.div>
 
           {/* Quick copy row */}
@@ -626,13 +619,15 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               <span className="quick-copy-icon">{copiedField === 'password' ? '✓' : '🔑'}</span>
               <span>{copiedField === 'password' ? 'Copied!' : 'Copy password'}</span>
             </button>
-            <button 
-              className={`quick-copy-btn ${copiedField === 'link' ? 'copied' : ''}`}
-              onClick={() => copyToClipboard(success.shareLink, 'link')}
-            >
-              <span className="quick-copy-icon">{copiedField === 'link' ? '✓' : '🔗'}</span>
-              <span>{copiedField === 'link' ? 'Copied!' : 'Copy link'}</span>
-            </button>
+            {success.shareLink ? (
+              <button 
+                className={`quick-copy-btn ${copiedField === 'link' ? 'copied' : ''}`}
+                onClick={() => copyToClipboard(success.shareLink, 'link')}
+              >
+                <span className="quick-copy-icon">{copiedField === 'link' ? '✓' : '🔗'}</span>
+                <span>{copiedField === 'link' ? 'Copied!' : 'Copy link'}</span>
+              </button>
+            ) : null}
           </motion.div>
 
           <motion.a 
@@ -664,7 +659,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
         </motion.div>
 
         {/* Share bottom sheet (lazy-loaded) */}
-        {showShareSheet && (
+        {showShareSheet && success.shareLink && (
           <Suspense fallback={null}>
             <LazyShareSheet
               isOpen={showShareSheet}
@@ -718,6 +713,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 onSubmit={goNext}
                 currency={selectedToken.symbol}
                 currencySymbol={selectedToken.icon}
+                placeholder="0.00"
                 maxDecimals={selectedToken.decimals}
                 autoFocus
               />

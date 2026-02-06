@@ -10,8 +10,6 @@ interface RegisterDepositParams {
   pool: string;
   commitment: Uint8Array | string;
   txSignature: string;
-  /** Password for email deposits — enables voucher code creation */
-  password?: string;
 }
 
 function toHex(data: Uint8Array | string): string {
