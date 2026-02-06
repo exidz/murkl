@@ -491,10 +491,18 @@ async function verifyDepositTx(params: {
   txSignature: string;
   pool: PublicKey;
   leafIndex: number;
+  /** Human amount in token units (e.g. 0.01 SOL). */
   amount: number;
   commitmentHex: string;
 }): Promise<{ depositAccount: PublicKey }> {
   const { txSignature, pool, leafIndex, amount, commitmentHex } = params;
+
+  // On-chain deposit stores amounts in base units (lamports for SOL/WSOL).
+  // Our API uses human units for UX, so convert for verification.
+  const amountBaseUnits = Math.round(amount * 1e9);
+  if (!Number.isFinite(amountBaseUnits) || amountBaseUnits <= 0) {
+    throw new Error('Invalid amount (base units)');
+  }
 
   const commitmentBuf = sanitizeHex(commitmentHex);
   if (commitmentBuf.length !== 32) throw new Error('Invalid commitment length');
@@ -567,7 +575,7 @@ async function verifyDepositTx(params: {
     const ixAmount = u64ToSafeNumber(readU64LE(dataBuf, 8), 'ixAmount');
     const ixCommitment = dataBuf.subarray(16, 48);
 
-    if (ixAmount !== amount) continue;
+    if (ixAmount !== amountBaseUnits) continue;
     if (!ixCommitment.equals(commitmentBuf)) continue;
 
     // Accounts: [pool, deposit, vault, depositor, depositor_token, token_program, system_program]
@@ -603,7 +611,7 @@ async function verifyDepositTx(params: {
 
   if (!onchainPool.equals(pool)) throw new Error('On-chain deposit pool mismatch');
   if (!onchainCommitment.equals(commitmentBuf)) throw new Error('On-chain deposit commitment mismatch');
-  if (onchainAmount !== amount) throw new Error('On-chain deposit amount mismatch');
+  if (onchainAmount !== amountBaseUnits) throw new Error('On-chain deposit amount mismatch');
   if (onchainLeafIndex !== leafIndex) throw new Error('On-chain deposit leafIndex mismatch');
 
   return { depositAccount: expectedDepositPda };
