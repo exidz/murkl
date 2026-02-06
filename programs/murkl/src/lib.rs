@@ -44,6 +44,12 @@ const MAX_RELAYER_FEE_BPS: u16 = 100;
 /// Minimum deposit (1 token unit)
 const MIN_DEPOSIT_AMOUNT: u64 = 1;
 
+/// Merkle tree depth used by the proof system (circuits::merkle::TREE_DEPTH).
+///
+/// NOTE: On-chain we only store an incremental frontier; the actual proof
+/// verifies membership against `pool.merkle_root`.
+const MERKLE_DEPTH: usize = 16;
+
 // ============================================================================
 // Program
 // ============================================================================
