@@ -74,13 +74,18 @@ function loadConfig(): Config {
   
   const env = process.env.NODE_ENV || 'development';
 
-  const corsOrigins = process.env.CORS_ORIGINS
+  const defaultProdOrigins = ['https://murkl.app', 'https://murkl.dev', 'https://murkl-relayer-production.up.railway.app'];
+  const defaultDevOrigins = ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173'];
+
+  const corsOriginsEnv = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
-    : env === 'production'
-      // Production default: only canonical web origins. (No localhost / ephemeral tunnels.)
-      ? ['https://murkl.app', 'https://murkl.dev', 'https://murkl-relayer-production.up.railway.app']
-      // Development default: allow local dev servers.
-      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173'];
+    : null;
+
+  // If CORS_ORIGINS is set in prod, treat it as an extension (not a replacement)
+  // so we don't accidentally drop the canonical web origins and break clients.
+  const corsOrigins = env === 'production'
+    ? Array.from(new Set([...(corsOriginsEnv ?? []), ...defaultProdOrigins]))
+    : (corsOriginsEnv ?? defaultDevOrigins);
   
   return {
     port: parseInt(process.env.PORT || '3001', 10),
