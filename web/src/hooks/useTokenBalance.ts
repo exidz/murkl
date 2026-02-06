@@ -1,5 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
+import { PublicKey } from '@solana/web3.js'
+import { getAssociatedTokenAddress } from '@solana/spl-token'
+
+const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112')
 
 export const balanceKeys = {
   all: ['balance'] as const,
@@ -21,9 +25,6 @@ export function useTokenBalance(symbol: string) {
       }
 
       if (symbol === 'WSOL') {
-        const { getAssociatedTokenAddress } = await import('@solana/spl-token')
-        const { PublicKey } = await import('@solana/web3.js')
-        const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112')
         const ata = await getAssociatedTokenAddress(WSOL_MINT, publicKey)
         const ataInfo = await connection.getAccountInfo(ata)
         if (ataInfo) {
