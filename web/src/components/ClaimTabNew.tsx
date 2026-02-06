@@ -162,14 +162,23 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
     onUnclaimedCount(unclaimedDeposits.length);
   }, [unclaimedDeposits.length, onUnclaimedCount]);
 
-  // Show toasts when deposits load
+  // Show a friendly toast once per identity (avoid spam on refetches)
+  const notifiedIdentityRef = useRef<string | null>(null);
   useEffect(() => {
     if (!identity || loadingDeposits) return;
-    // Only toast on initial load (not refetches)
+
+    const handle = identity.handle;
+    if (notifiedIdentityRef.current === handle) return;
+    notifiedIdentityRef.current = handle;
+
+    const unclaimedCount = deposits.filter((d) => !d.claimed).length;
+
     if (deposits.length === 0) {
-      toast.info('No deposits yet — ask someone to send!', { icon: '📭' });
+      toast.info('No deposits yet — ask someone to send you one.', { icon: '📭' });
+    } else if (unclaimedCount > 0) {
+      toast.success(`${unclaimedCount} ready to claim`, { icon: '💰' });
     } else {
-      toast.success(`Found ${deposits.length} deposit(s)!`);
+      toast.success('All caught up', { icon: '✅' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity?.handle, loadingDeposits]);
