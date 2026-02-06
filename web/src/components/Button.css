@@ -62,15 +62,17 @@
   border-color: var(--border-focus, #3d95ce);
 }
 
-/* Ghost - Transparent background */
+/* Ghost - Transparent background (must remain visible on dark backgrounds) */
 .btn-ghost {
   background: transparent;
-  color: var(--text-secondary, #a1a1aa);
+  color: color-mix(in srgb, var(--text-primary, #fff) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border, #27272a) 70%, transparent);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-primary, #fff);
+  border-color: color-mix(in srgb, var(--border-focus, #3d95ce) 70%, transparent);
 }
 
 /* Danger - For destructive actions */
