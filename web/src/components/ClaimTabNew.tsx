@@ -18,6 +18,7 @@ import { ClaimLanding, type ClaimLinkData } from './ClaimLanding';
 import { useClaimFlow } from '../hooks/useClaimFlow';
 import { useDeposits, depositKeys } from '../hooks/useDeposits';
 import { RELAYER_URL, POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
+import { formatTokenAmount } from '../lib/format';
 import './ClaimTabNew.css';
 
 interface Props {
@@ -333,7 +334,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
                 >
-                  {claimingDeposit.amount} {claimingDeposit.token}
+                  {formatTokenAmount(claimingDeposit.amount, { maxDecimals: 6 })} {claimingDeposit.token}
                 </motion.p>
 
                 <motion.p
@@ -389,7 +390,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
               exit={{ opacity: 0, y: -20 }}
             >
               <div className="claiming-header">
-                <p>Claiming {claimingDeposit.amount} {claimingDeposit.token}</p>
+                <p>Claiming {formatTokenAmount(claimingDeposit.amount, { maxDecimals: 6 })} {claimingDeposit.token}</p>
               </div>
               <ProofProgress
                 stage={stage}

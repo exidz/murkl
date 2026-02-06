@@ -7,6 +7,7 @@ import toast from './Toast';
 import { buildDepositTransaction, generatePassword, createShareLink } from '../lib/deposit';
 import { isValidIdentifier, isValidPassword, isValidAmount, sanitizeInput } from '../lib/validation';
 import { POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
+import { formatTokenAmount } from '../lib/format';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { AmountPresets } from './AmountPresets';
 import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
@@ -566,7 +567,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
             >
-              {success.amount} {success.token}
+              {formatTokenAmount(success.amount, { maxDecimals: 6 })} {success.token}
             </motion.p>
             <motion.p
               className="success-to"

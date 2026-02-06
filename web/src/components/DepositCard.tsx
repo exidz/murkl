@@ -2,6 +2,7 @@ import { memo, type FC } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from './Button';
 import { timeAgo } from '../lib/timeAgo';
+import { formatTokenAmount } from '../lib/format';
 import './DepositCard.css';
 
 interface Deposit {
@@ -94,7 +95,7 @@ export const DepositCard: FC<Props> = memo(({ deposit, index, onClaim, disabled 
         <div className="deposit-info">
           <div className="deposit-amount-row">
             <span className="deposit-amount-v2">
-              {deposit.amount} {deposit.token}
+              {formatTokenAmount(deposit.amount, { maxDecimals: 6 })} {deposit.token}
             </span>
             {isClaimed && (
               <span className="deposit-claimed-tag">

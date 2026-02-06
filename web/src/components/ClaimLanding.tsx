@@ -4,6 +4,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Button } from './Button';
 import { OtpInput } from './OtpInput';
 import { sendEmailOTP, verifyEmailOTP } from '../lib/auth-client';
+import { formatTokenAmount } from '../lib/format';
 
 /** Data extracted from a claim link URL */
 export interface ClaimLinkData {
@@ -34,14 +35,15 @@ function useCountUp(target: number, duration = 1200, delay = 400): string {
 
   useEffect(() => {
     if (!target || reducedMotion) {
-      setDisplay(String(target || 0));
+      setDisplay(formatTokenAmount(target || 0, { maxDecimals: 6 }));
       return;
     }
 
-    // Determine decimal places from the target value
-    const decimals = String(target).includes('.')
-      ? String(target).split('.')[1].length
-      : 0;
+    // Determine decimal places from the target value.
+    // Note: JS number → string already trims trailing zeros (e.g. 1.5000 → "1.5"),
+    // which is what we want for a clean Venmo-style readout.
+    const decimalsRaw = String(target).includes('.') ? String(target).split('.')[1].length : 0;
+    const decimals = Math.min(decimalsRaw, 6);
 
     let rafId: number;
     let startTime: number;
@@ -56,7 +58,7 @@ function useCountUp(target: number, duration = 1200, delay = 400): string {
         const eased = 1 - Math.pow(1 - progress, 3);
         const current = eased * target;
 
-        setDisplay(current.toFixed(decimals));
+        setDisplay(formatTokenAmount(current, { maxDecimals: decimals }));
 
         if (progress < 1) {
           rafId = requestAnimationFrame(animate);
