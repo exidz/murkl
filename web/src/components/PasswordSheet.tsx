@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Button } from './Button';
+import { formatTokenAmount } from '../lib/format';
 import './PasswordSheet.css';
 
 interface Deposit {
@@ -68,6 +69,7 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
   inputRef,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
   const touchStartRef = useRef<{ y: number; time: number } | null>(null);
@@ -75,6 +77,8 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
 
   const isReady = password.length >= 8;
   const charProgress = Math.min(password.length / 8, 1);
+
+  const amountText = formatTokenAmount(deposit.amount, { maxDecimals: 6 });
 
   // Lock body scroll when sheet is open
   useEffect(() => {
@@ -146,6 +150,22 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
     setIsDragging(false);
     setDragY(0);
   }, [dragY, isDragging, onClose]);
+
+  const handlePaste = useCallback(async () => {
+    if (pasting) return;
+    if (!('clipboard' in navigator) || typeof navigator.clipboard.readText !== 'function') return;
+
+    setPasting(true);
+    try {
+      const text = await navigator.clipboard.readText();
+      const next = (text || '').trim();
+      if (next) onPasswordChange(next);
+    } catch {
+      // Non-critical; ignore.
+    } finally {
+      setPasting(false);
+    }
+  }, [pasting, onPasswordChange]);
 
   // Toggle password visibility
   const handleToggleVisibility = useCallback(() => {
@@ -240,7 +260,7 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
             </motion.div>
 
             <h3 className="pw-title" id="pw-title">
-              {isReady ? 'Ready to claim' : 'Enter password'}
+              {isReady ? 'Ready to claim' : 'Enter the secret code'}
             </h3>
 
             <motion.div
@@ -249,7 +269,7 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.15, type: 'spring', stiffness: 250 }}
             >
-              <span className="pw-amount-value">{deposit.amount}</span>
+              <span className="pw-amount-value">{amountText}</span>
               <span className="pw-amount-token">{deposit.token}</span>
             </motion.div>
           </motion.div>
@@ -274,25 +294,38 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
                   password.length > 0 && 'has-value',
                   isReady && 'ready',
                 ].filter(Boolean).join(' ')}
-                placeholder="Password..."
+                placeholder="Secret code…"
                 value={password}
                 onChange={(e) => onPasswordChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 autoComplete="off"
                 spellCheck={false}
-                aria-label="Claim password"
+                aria-label="Secret code"
                 aria-describedby="pw-hint"
               />
 
-              <motion.button
-                type="button"
-                className="pw-toggle"
-                onClick={handleToggleVisibility}
-                whileTap={reducedMotion ? undefined : { scale: 0.9 }}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? '🙈' : '👁️'}
-              </motion.button>
+              <div className="pw-input-actions">
+                <motion.button
+                  type="button"
+                  className="pw-toggle"
+                  onClick={handlePaste}
+                  whileTap={reducedMotion ? undefined : { scale: 0.9 }}
+                  aria-label="Paste code"
+                  disabled={pasting}
+                >
+                  {pasting ? '…' : '📋'}
+                </motion.button>
+
+                <motion.button
+                  type="button"
+                  className="pw-toggle"
+                  onClick={handleToggleVisibility}
+                  whileTap={reducedMotion ? undefined : { scale: 0.9 }}
+                  aria-label={showPassword ? 'Hide code' : 'Show code'}
+                >
+                  {showPassword ? '🙈' : '👁️'}
+                </motion.button>
+              </div>
             </div>
 
             {/* Character progress bar — fills to 8 chars then turns green */}
@@ -321,7 +354,7 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                   >
-                    Paste or type the password
+                    Paste or type the code
                   </motion.span>
                 ) : isReady ? (
                   <motion.span
@@ -356,7 +389,7 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
             transition={{ delay: 0.25 }}
           >
             <span className="pw-privacy-icon" aria-hidden="true">🔒</span>
-            <span>Proven privately — your password never leaves your device</span>
+            <span>Your secret code stays on this device</span>
           </motion.div>
 
           {/* Actions — stacked, Claim is the hero */}
@@ -372,15 +405,13 @@ export const PasswordSheet: FC<PasswordSheetProps> = ({
               fullWidth
               onClick={onSubmit}
               disabled={!isReady || !wasmReady}
-              loading={!wasmReady}
-              loadingText="Loading prover..."
             >
-              Claim {deposit.amount} {deposit.token}
+              Claim
             </Button>
 
             {!wasmReady && (
               <p className="pw-wasm-notice">
-                Initializing zero-knowledge prover…
+                Getting things ready…
               </p>
             )}
 
