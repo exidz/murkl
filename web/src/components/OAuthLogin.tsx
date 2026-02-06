@@ -298,13 +298,11 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
             const meta = PROVIDER_META[identity.provider] || { icon: '🔵', color: '#3d95ce', name: identity.provider };
             
             return (
-              <motion.button
+              <button
                 key={identity.identifier}
+                type="button"
                 className="identity-option"
                 onClick={() => handlePickIdentity(identity)}
-                initial={false}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                whileTap={{ scale: 0.98 }}
                 style={{
                   '--provider-color': meta.color,
                   background: 'rgba(255,255,255,0.12)',
@@ -320,7 +318,7 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
                   <span className="identity-option-provider">{meta.name}</span>
                 </div>
                 <span className="identity-option-arrow" aria-hidden="true">→</span>
-              </motion.button>
+              </button>
             );
           })}
         </motion.div>
@@ -388,13 +386,11 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
               const meta = PROVIDER_META[identity.provider] || { icon: '🔵', color: '#3d95ce', name: identity.provider };
 
               return (
-                <motion.button
+                <button
                   key={identity.identifier}
+                  type="button"
                   className="identity-option"
                   onClick={() => handlePickIdentity(identity)}
-                  initial={false}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  whileTap={{ scale: 0.98 }}
                   style={{
                     '--provider-color': meta.color,
                     background: 'rgba(255,255,255,0.12)',
@@ -410,7 +406,7 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
                     <span className="identity-option-provider">{meta.name}</span>
                   </div>
                   <span className="identity-option-arrow" aria-hidden="true">→</span>
-                </motion.button>
+                </button>
               );
             })}
           </motion.div>

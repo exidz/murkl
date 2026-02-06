@@ -236,7 +236,7 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
 
   // ─── RENDER ───────────────────────────────────────────────
   // Claim link landing → show hero experience (skips OAuth)
-  if (claimLinkData && !identity && !showOAuthOverride) {
+  if (claimLinkData && !identity && !showOAuthOverride && !wantsSwitch) {
     return (
       <div className="claim-tab-new">
         <ClaimLanding
