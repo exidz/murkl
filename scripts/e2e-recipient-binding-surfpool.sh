@@ -9,14 +9,24 @@ set -euo pipefail
 #   bash scripts/e2e-recipient-binding-surfpool.sh
 #
 # Notes:
-# - Starts Surfpool locally on :8899 (RPC) / :8900 (WS)
+# - Starts Surfpool locally (default :8899 RPC / :8900 WS)
 # - Deploys local-built programs (stark-verifier + murkl) into Surfpool
-# - Starts local relayer on :3001 pointing at Surfpool RPC
+# - Starts local relayer (default :3002) pointing at Surfpool RPC
 # - Runs scripts/e2e-recipient-binding.ts against the local relayer + Surfpool
+#
+# Tunables (optional env vars):
+# - SURFPOOL_PORT (default 8899)
+# - SURFPOOL_WS_PORT (default 8900)
+# - RELAYER_PORT (default 3002)
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SURFPOOL_RPC="http://127.0.0.1:8899"
-RELAYER_URL="http://127.0.0.1:3002"
+
+SURFPOOL_PORT="${SURFPOOL_PORT:-8899}"
+SURFPOOL_WS_PORT="${SURFPOOL_WS_PORT:-8900}"
+RELAYER_PORT="${RELAYER_PORT:-3002}"
+
+SURFPOOL_RPC="http://127.0.0.1:${SURFPOOL_PORT}"
+RELAYER_URL="http://127.0.0.1:${RELAYER_PORT}"
 
 # Cron/daemon environments may not load shell profile PATH.
 SOLANA_BIN="${SOLANA_BIN:-$HOME/.local/share/solana/install/active_release/bin/solana}"
@@ -45,14 +55,52 @@ cleanup() {
 }
 trap cleanup EXIT
 
+port_is_free() {
+  local port="$1"
+  # Prefer `ss` (available on Ubuntu). Fall back to `lsof` if present.
+  if command -v ss >/dev/null 2>&1; then
+    ! ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}$"
+    return
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    ! lsof -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return
+  fi
+  # If we can't check, assume free.
+  return 0
+}
+
 cd "$ROOT_DIR"
+
+# If default ports are taken (common in cron), slide to the next free pair.
+if ! port_is_free "$SURFPOOL_PORT" || ! port_is_free "$SURFPOOL_WS_PORT"; then
+  for try in {1..20}; do
+    SURFPOOL_PORT=$((SURFPOOL_PORT + 10))
+    SURFPOOL_WS_PORT=$((SURFPOOL_WS_PORT + 10))
+    if port_is_free "$SURFPOOL_PORT" && port_is_free "$SURFPOOL_WS_PORT"; then
+      SURFPOOL_RPC="http://127.0.0.1:${SURFPOOL_PORT}"
+      break
+    fi
+  done
+fi
+
+SURFPOOL_RPC="http://127.0.0.1:${SURFPOOL_PORT}"
 
 echo "==> Starting Surfpool (datasource=devnet) on $SURFPOOL_RPC"
 # -y will auto-generate runbooks/manifest if missing.
 # --no-deploy because we will deploy explicitly using solana/anchor.
 # --no-tui to avoid interactive UI.
-surfpool start --network devnet --port 8899 --ws-port 8900 --no-tui --no-studio --no-deploy -y --log-level warn &
+set +e
+surfpool start --network devnet --port "$SURFPOOL_PORT" --ws-port "$SURFPOOL_WS_PORT" --no-tui --no-studio --no-deploy -y --log-level warn &
 SURFPOOL_PID=$!
+set -e
+
+# If Surfpool dies immediately (e.g., port conflict), fail fast with a helpful message.
+sleep 0.5
+if ! kill -0 "$SURFPOOL_PID" 2>/dev/null; then
+  echo "❌ Surfpool failed to start (ports may be in use). Try setting SURFPOOL_PORT/SURFPOOL_WS_PORT." >&2
+  exit 1
+fi
 
 # Wait for Surfpool RPC to be ready (avoid relying on PATH'd solana).
 for i in {1..120}; do
@@ -79,16 +127,35 @@ mkdir -p "$ROOT_DIR/programs/target"
 "$ANCHOR_BIN" build -p stark-verifier >/dev/null
 "$ANCHOR_BIN" build -p murkl_program >/dev/null
 
+# Avoid solana CLI printing an ephemeral deploy mnemonic by providing explicit buffer signers.
+TMP_DIR="$ROOT_DIR/.tmp"
+mkdir -p "$TMP_DIR"
+BUFFER_STARK="$TMP_DIR/surfpool-buffer-stark.json"
+BUFFER_MURKL="$TMP_DIR/surfpool-buffer-murkl.json"
+
+if [[ ! -f "$BUFFER_STARK" ]]; then
+  solana-keygen new --no-bip39-passphrase --silent -o "$BUFFER_STARK" >/dev/null 2>&1
+fi
+if [[ ! -f "$BUFFER_MURKL" ]]; then
+  solana-keygen new --no-bip39-passphrase --silent -o "$BUFFER_MURKL" >/dev/null 2>&1
+fi
+
 echo "==> Deploying stark-verifier into Surfpool"
-"$SOLANA_BIN" program deploy --url "$SURFPOOL_RPC" programs/target/deploy/stark_verifier.so --program-id "$STARK_PROGRAM_KP" >/dev/null
+"$SOLANA_BIN" program deploy --url "$SURFPOOL_RPC" \
+  --buffer "$BUFFER_STARK" \
+  programs/target/deploy/stark_verifier.so \
+  --program-id "$STARK_PROGRAM_KP" >/dev/null 2>&1
 
 echo "==> Deploying murkl into Surfpool"
-"$SOLANA_BIN" program deploy --url "$SURFPOOL_RPC" programs/target/deploy/murkl_program.so --program-id "$MURKL_PROGRAM_KP" >/dev/null
+"$SOLANA_BIN" program deploy --url "$SURFPOOL_RPC" \
+  --buffer "$BUFFER_MURKL" \
+  programs/target/deploy/murkl_program.so \
+  --program-id "$MURKL_PROGRAM_KP" >/dev/null 2>&1
 
-echo "==> Starting local relayer on :3002 (RPC_URL=$SURFPOOL_RPC)"
+echo "==> Starting local relayer on :$RELAYER_PORT (RPC_URL=$SURFPOOL_RPC)"
 (
   cd relayer
-  NODE_ENV=development PORT=3002 RPC_URL="$SURFPOOL_RPC" PROGRAM_ID=muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF node dist/index.js
+  NODE_ENV=development PORT="$RELAYER_PORT" RPC_URL="$SURFPOOL_RPC" PROGRAM_ID=muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF node dist/index.js
 ) &
 RELAYER_PID=$!
 

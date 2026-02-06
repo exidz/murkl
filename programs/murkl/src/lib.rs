@@ -726,3 +726,67 @@ pub enum MurklError {
     #[msg("Arithmetic overflow/underflow")]
     MathOverflow,
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rand::{RngCore, SeedableRng};
+    use rand::rngs::StdRng;
+
+    fn naive_root(leaves: &[[u8; 32]]) -> [u8; 32] {
+        let empty = empty_hashes();
+
+        let mut level: Vec<[u8; 32]> = leaves.to_vec();
+        let mut size = 1usize;
+        while size < level.len().max(1) {
+            size <<= 1;
+        }
+        level.resize(size, empty[0]);
+
+        let mut depth = 0usize;
+        while level.len() > 1 {
+            let mut next = Vec::with_capacity(level.len() / 2);
+            for i in (0..level.len()).step_by(2) {
+                next.push(hash_pair(&level[i], &level[i + 1]));
+            }
+            level = next;
+            depth += 1;
+        }
+
+        let mut root = level[0];
+        while depth < MERKLE_DEPTH {
+            root = hash_pair(&root, &empty[depth]);
+            depth += 1;
+        }
+        root
+    }
+
+    #[test]
+    fn merkle_append_matches_naive_for_random_sequences() {
+        let mut rng = StdRng::seed_from_u64(0xC0FFEE);
+
+        for _case in 0..25 {
+            let mut branch = [[0u8; 32]; MERKLE_DEPTH];
+            let mut leaves: Vec<[u8; 32]> = Vec::new();
+
+            let steps = (rng.next_u32() % 64) as usize;
+            for i in 0..steps {
+                let mut leaf = [0u8; 32];
+                rng.fill_bytes(&mut leaf);
+                leaves.push(leaf);
+
+                let got = merkle_append(&mut branch, i as u64, &leaf);
+                let want = naive_root(&leaves);
+                assert_eq!(got, want, "mismatch at step {i}");
+
+                let got2 = merkle_root(&branch, (i + 1) as u64);
+                assert_eq!(got2, want, "root(frontier) mismatch at step {i}");
+            }
+        }
+    }
+}
