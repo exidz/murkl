@@ -1449,10 +1449,14 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
       const recipientEmail = identifier.slice('email:'.length);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
       
-      // Include voucher code in claim link if available (skips OTP!)
+      // Prefer voucher claim link (fast path). If no voucher was created (e.g. password not
+      // provided to /deposits/register), fall back to the classic id/leaf/pool link.
       const claimParams = new URLSearchParams({
         tab: 'claim',
-        ...(voucherCode ? { voucher: voucherCode } : { id: identifier, leaf: String(leafIndex), pool }),
+        ...(voucherCode
+          ? { voucher: voucherCode }
+          : { id: identifier, leaf: String(leafIndexNum), pool }
+        ),
       });
       const claimLink = `${frontendUrl}/?${claimParams.toString()}`;
       
@@ -1474,15 +1478,24 @@ app.post('/deposits/register', async (req: Request, res: Response) => {
               </div>
               
               <p style="color: #a1a1aa; font-size: 0.95rem; line-height: 1.5; text-align: center;">
-                Someone sent you tokens privately via Murkl. You'll need the <strong style="color: #fff;">password</strong> they shared with you to claim.
+                Someone sent you tokens privately via Murkl.
               </p>
-              
+
               ${voucherCode ? `
+              <p style="color: #a1a1aa; font-size: 0.95rem; line-height: 1.5; text-align: center; margin-top: 0.75rem;">
+                Use this <strong style="color: #fff;">claim code</strong> (and the secret code the sender shared) to claim.
+              </p>
               <div style="background: #14141f; border: 1px solid #3d95ce; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;">
                 <p style="color: #a1a1aa; font-size: 0.8rem; margin: 0 0 0.5rem;">Your claim code</p>
                 <p style="font-size: 1.5rem; font-weight: 700; font-family: monospace; letter-spacing: 0.1em; color: #3d95ce; margin: 0;">${voucherCode}</p>
               </div>
-              ` : ''}
+              ` : `
+              <div style="background: #14141f; border: 1px solid #27272a; border-radius: 12px; padding: 1rem; margin: 1rem 0;">
+                <p style="color: #a1a1aa; font-size: 0.9rem; margin: 0; line-height: 1.4; text-align: center;">
+                  To claim, open Murkl and sign in with this email. You’ll also need the <strong style="color: #fff;">secret code</strong> the sender shared with you.
+                </p>
+              </div>
+              `}
               
               <div style="text-align: center; margin: 1.5rem 0;">
                 <a href="${claimLink}" style="display: inline-block; padding: 0.875rem 2rem; background: #3d95ce; color: #fff; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 1rem;">
