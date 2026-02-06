@@ -152,9 +152,27 @@
     height: 8px;
   }
 
+  /* Mobile: keep the UI calm — only show the active step label.
+     We visually-hide other labels but keep them accessible to screen readers. */
+  .step-dot-group {
+    position: relative;
+  }
+
   .step-dot-label {
     font-size: 0.6rem;
     letter-spacing: 0.02em;
+  }
+
+  .step-dot-group:not(.active) .step-dot-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 }
 
