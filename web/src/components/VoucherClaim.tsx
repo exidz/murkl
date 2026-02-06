@@ -176,9 +176,11 @@ export const VoucherClaim: FC<Props> = ({
   }, [step, handleLookupVoucher, handleRedeem, password.length]);
 
   // Format code input (uppercase, strip invalid chars)
+  const CODE_MAX_LEN = 12;
+
   const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    // Keep alphanumeric only, preserve case
-    const cleaned = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+    // Keep it simple + shareable: voucher codes are alphanumeric and uppercase.
+    const cleaned = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     setCode(cleaned);
     setError(null);
   }, []);
@@ -210,7 +212,7 @@ export const VoucherClaim: FC<Props> = ({
                 value={code}
                 onChange={handleCodeChange}
                 onKeyDown={handleKeyDown}
-                maxLength={20}
+                maxLength={CODE_MAX_LEN}
                 autoComplete="off"
                 spellCheck={false}
                 autoCapitalize="characters"
@@ -221,7 +223,7 @@ export const VoucherClaim: FC<Props> = ({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                 >
-                  {code.length}/12
+                  {code.length}/{CODE_MAX_LEN}
                 </motion.span>
               )}
             </div>
@@ -313,7 +315,7 @@ export const VoucherClaim: FC<Props> = ({
                 </motion.p>
               )}
 
-              <p className="voucher-password-hint">
+              <p className={`voucher-password-hint ${password.length >= 8 ? 'ready' : ''}`}>
                 {password.length === 0
                   ? 'The sender shared this with you'
                   : password.length < 8
