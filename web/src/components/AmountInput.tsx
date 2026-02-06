@@ -197,11 +197,32 @@ export const AmountInput = forwardRef<AmountInputHandle, Props>(({
   const fontSize = getFontSize(value);
   const isEmpty = !value;
 
+  const focusInput = useCallback(() => {
+    if (!disabled) inputRef.current?.focus();
+  }, [disabled]);
+
   return (
     <motion.div
       className={`amount-input-wrapper ${isFocused ? 'focused' : ''} ${isEmpty ? 'empty' : ''} ${showCurrencyLabel ? '' : 'no-label'}`}
       variants={shakeVariants}
       animate={isShaking ? 'shake' : 'idle'}
+      whileTap={disabled ? undefined : { scale: 0.995 }}
+      onPointerDown={(e) => {
+        // Make the whole hero area tap-to-focus (mobile-friendly).
+        // Avoid preventing normal text selection when the actual input is targeted.
+        if (disabled) return;
+        const el = e.target as HTMLElement | null;
+        if (el && el.tagName === 'INPUT') return;
+        // Prevent the wrapper tap from stealing focus/selection behavior.
+        e.preventDefault();
+        focusInput();
+      }}
+      onClick={() => {
+        // Desktop click fallback (some browsers don't fire pointer events consistently)
+        focusInput();
+      }}
+      role="group"
+      aria-label={`Amount input${currency ? ` (${currency})` : ''}`}
     >
       {/* Currency symbol */}
       <div className="amount-display-container">

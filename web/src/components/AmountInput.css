@@ -6,6 +6,7 @@
 
 .amount-input-wrapper {
   display: flex;
+  cursor: text;
   flex-direction: column;
   align-items: center;
   justify-content: center;
