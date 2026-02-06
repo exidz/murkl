@@ -397,7 +397,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
               const cs = status?.value?.confirmationStatus;
               if (cs === 'confirmed' || cs === 'finalized') {
                 confirmed = true;
-                console.log(`TX confirmed on poll attempt ${i + 1}:`, signature);
+                if (import.meta.env.DEV) {
+                  console.debug(`TX confirmed on poll attempt ${i + 1}:`, signature);
+                }
                 break;
               }
             } catch { /* retry */ }
