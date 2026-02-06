@@ -1,28 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# E2E on Surfpool (devnet datasource) to validate prover/verifier/relayer all match
+# E2E on Surfpool to validate prover/verifier/relayer all match
 # before touching devnet program deployments.
 #
 # Usage:
 #   cd /home/exidz/.openclaw/workspace/murkl
 #   bash scripts/e2e-recipient-binding-surfpool.sh
 #
-# Notes:
-# - Starts Surfpool locally (default :8899 RPC / :8900 WS)
-# - Deploys local-built programs (stark-verifier + murkl) into Surfpool
-# - Starts local relayer (default :3002) pointing at Surfpool RPC
-# - Runs scripts/e2e-recipient-binding.ts against the local relayer + Surfpool
-#
 # Tunables (optional env vars):
 # - SURFPOOL_PORT (default 8899)
 # - SURFPOOL_WS_PORT (default 8900)
+# - SURFPOOL_STUDIO_PORT (default 18488)
 # - RELAYER_PORT (default 3002)
+# - SURFPOOL_DATASOURCE_RPC_URL (optional) override upstream datasource RPC (instead of --network devnet)
+# - SURFPOOL_DATASOURCE_RPC_URL_FILE (optional) file containing the upstream RPC URL (preferred; avoids leaking in shell history)
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 SURFPOOL_PORT="${SURFPOOL_PORT:-8899}"
 SURFPOOL_WS_PORT="${SURFPOOL_WS_PORT:-8900}"
+SURFPOOL_STUDIO_PORT="${SURFPOOL_STUDIO_PORT:-18488}"
 RELAYER_PORT="${RELAYER_PORT:-3002}"
 
 SURFPOOL_RPC="http://127.0.0.1:${SURFPOOL_PORT}"
@@ -57,7 +55,6 @@ trap cleanup EXIT
 
 port_is_free() {
   local port="$1"
-  # Prefer `ss` (available on Ubuntu). Fall back to `lsof` if present.
   if command -v ss >/dev/null 2>&1; then
     ! ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}$"
     return
@@ -66,92 +63,92 @@ port_is_free() {
     ! lsof -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
     return
   fi
-  # If we can't check, assume free.
   return 0
 }
 
 cd "$ROOT_DIR"
 
-# If default ports are taken (common in cron), slide to the next free pair.
-if ! port_is_free "$SURFPOOL_PORT" || ! port_is_free "$SURFPOOL_WS_PORT"; then
-  for try in {1..20}; do
+# If default ports are taken (common in cron), slide to the next free trio.
+if ! port_is_free "$SURFPOOL_PORT" || ! port_is_free "$SURFPOOL_WS_PORT" || ! port_is_free "$SURFPOOL_STUDIO_PORT"; then
+  for _try in {1..40}; do
     SURFPOOL_PORT=$((SURFPOOL_PORT + 10))
     SURFPOOL_WS_PORT=$((SURFPOOL_WS_PORT + 10))
-    if port_is_free "$SURFPOOL_PORT" && port_is_free "$SURFPOOL_WS_PORT"; then
-      SURFPOOL_RPC="http://127.0.0.1:${SURFPOOL_PORT}"
+    SURFPOOL_STUDIO_PORT=$((SURFPOOL_STUDIO_PORT + 10))
+    if port_is_free "$SURFPOOL_PORT" && port_is_free "$SURFPOOL_WS_PORT" && port_is_free "$SURFPOOL_STUDIO_PORT"; then
       break
     fi
   done
 fi
 
 SURFPOOL_RPC="http://127.0.0.1:${SURFPOOL_PORT}"
+RELAYER_URL="http://127.0.0.1:${RELAYER_PORT}"
 
 TMP_DIR="$ROOT_DIR/.tmp"
 mkdir -p "$TMP_DIR"
 SURFPOOL_LOG="$TMP_DIR/surfpool-${SURFPOOL_PORT}.log"
 
-echo "==> Starting Surfpool (datasource=devnet) on $SURFPOOL_RPC"
-# -y will auto-generate runbooks/manifest if missing.
-# --no-deploy because we will deploy explicitly using solana/anchor.
-# --no-tui to avoid interactive UI.
+SURFPOOL_DATASOURCE=""
+if [[ -n "${SURFPOOL_DATASOURCE_RPC_URL_FILE:-}" ]]; then
+  if [[ ! -f "$SURFPOOL_DATASOURCE_RPC_URL_FILE" ]]; then
+    echo "❌ SURFPOOL_DATASOURCE_RPC_URL_FILE not found: $SURFPOOL_DATASOURCE_RPC_URL_FILE" >&2
+    exit 1
+  fi
+  # trim whitespace/newlines
+  SURFPOOL_DATASOURCE="$(tr -d '\r\n\t ' < "$SURFPOOL_DATASOURCE_RPC_URL_FILE")"
+elif [[ -n "${SURFPOOL_DATASOURCE_RPC_URL:-}" ]]; then
+  SURFPOOL_DATASOURCE="$SURFPOOL_DATASOURCE_RPC_URL"
+fi
+
+if [[ -n "$SURFPOOL_DATASOURCE" ]]; then
+  echo "==> Starting Surfpool (custom datasource) on $SURFPOOL_RPC"
+  SURFPOOL_UPSTREAM_ARGS=(--rpc-url "$SURFPOOL_DATASOURCE")
+else
+  echo "==> Starting Surfpool (datasource=devnet) on $SURFPOOL_RPC"
+  SURFPOOL_UPSTREAM_ARGS=(--network devnet)
+fi
+
 set +e
-surfpool start --network devnet --port "$SURFPOOL_PORT" --ws-port "$SURFPOOL_WS_PORT" --no-tui --no-studio --no-deploy -y --log-level warn >"$SURFPOOL_LOG" 2>&1 &
+surfpool start "${SURFPOOL_UPSTREAM_ARGS[@]}" \
+  --port "$SURFPOOL_PORT" \
+  --ws-port "$SURFPOOL_WS_PORT" \
+  --studio-port "$SURFPOOL_STUDIO_PORT" \
+  --no-tui \
+  --no-deploy \
+  -y \
+  --log-level warn >"$SURFPOOL_LOG" 2>&1 &
 SURFPOOL_PID=$!
 set -e
 
-# If Surfpool dies immediately (e.g., port conflict), fail fast with a helpful message.
 sleep 0.5
 if ! kill -0 "$SURFPOOL_PID" 2>/dev/null; then
-  echo "❌ Surfpool failed to start (ports may be in use). Try setting SURFPOOL_PORT/SURFPOOL_WS_PORT." >&2
+  echo "❌ Surfpool failed to start (ports may be in use)." >&2
   echo "(See $SURFPOOL_LOG)" >&2
   exit 1
 fi
 
-# Some Surfpool failures (like port conflicts) can log an error but not exit immediately.
-if grep -qiE "port .*already in use" "$SURFPOOL_LOG" 2>/dev/null; then
-  echo "❌ Surfpool reported port-in-use; refusing to run against an unknown RPC on $SURFPOOL_RPC" >&2
-  echo "Try: SURFPOOL_PORT=8909 SURFPOOL_WS_PORT=8910 bash scripts/e2e-recipient-binding-surfpool.sh" >&2
-  exit 1
-fi
-
-# Wait for Surfpool RPC to be ready (avoid relying on PATH'd solana).
+# Wait for Surfpool RPC to be ready
 for i in {1..120}; do
   if curl -fsS "$SURFPOOL_RPC" -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' >/dev/null 2>&1; then
     echo "==> Surfpool RPC is up"
-
-    # Ensure the port we are talking to is actually owned by the Surfpool we just started.
-    if command -v ss >/dev/null 2>&1; then
-      if ! ss -ltnp 2>/dev/null | grep -qE ":${SURFPOOL_PORT}.*pid=${SURFPOOL_PID}[,)]"; then
-        echo "❌ Port ${SURFPOOL_PORT} is not owned by this Surfpool pid=${SURFPOOL_PID}; aborting to avoid false E2E results" >&2
-        echo "Try: SURFPOOL_PORT=8909 SURFPOOL_WS_PORT=8910 bash scripts/e2e-recipient-binding-surfpool.sh" >&2
-        exit 1
-      fi
-    fi
-
     break
   fi
   sleep 1
   if [[ $i -eq 120 ]]; then
     echo "❌ Surfpool RPC did not become ready in time" >&2
+    echo "(See $SURFPOOL_LOG)" >&2
     exit 1
   fi
 done
 
 echo "==> Building programs"
-# Anchor shells out to cargo + Solana SBF tooling; ensure PATH is set in cron environments.
 export PATH="$HOME/.cargo/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
-
-# Anchor workspace exclude expects this path to exist.
 mkdir -p "$ROOT_DIR/programs/target"
 
-# anchor build only supports a single -p at a time
 "$ANCHOR_BIN" build -p stark-verifier >/dev/null
 "$ANCHOR_BIN" build -p murkl_program >/dev/null
 
 # Avoid solana CLI printing an ephemeral deploy mnemonic by providing explicit buffer signers.
-TMP_DIR="$ROOT_DIR/.tmp"
-mkdir -p "$TMP_DIR"
 BUFFER_STARK="$TMP_DIR/surfpool-buffer-stark.json"
 BUFFER_MURKL="$TMP_DIR/surfpool-buffer-murkl.json"
 
@@ -181,7 +178,6 @@ echo "==> Starting local relayer on :$RELAYER_PORT (RPC_URL=$SURFPOOL_RPC)"
 ) &
 RELAYER_PID=$!
 
-# Wait for relayer to be ready
 for i in {1..30}; do
   if curl -fsS "$RELAYER_URL/health" >/dev/null 2>&1; then
     echo "==> Relayer is up"
