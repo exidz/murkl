@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, type FC } from 'react';
+import { useState, useCallback, useRef, useEffect, lazy, Suspense, type FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,8 +8,11 @@ import { ProofProgress } from './ProofProgress';
 import { SkeletonCard } from './Skeleton';
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
-import { Confetti } from './Confetti';
 import { PasswordSheet } from './PasswordSheet';
+
+// Confetti is lazy-loaded (success screen only)
+const LazyConfetti = lazy(() => import('./Confetti'));
+
 import { DepositCard } from './DepositCard';
 import { ClaimLanding, type ClaimLinkData } from './ClaimLanding';
 import { useClaimFlow } from '../hooks/useClaimFlow';
@@ -273,7 +276,9 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
               exit={{ opacity: 0 }}
             >
               {/* Celebration confetti! */}
-              <Confetti active={true} count={50} duration={3500} />
+              <Suspense fallback={null}>
+                <LazyConfetti active={true} count={50} duration={3500} />
+              </Suspense>
 
               {/* Animated success header */}
               <div className="success-header">

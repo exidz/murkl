@@ -10,7 +10,7 @@ import { POOL_ADDRESS, getExplorerUrl } from '../lib/constants';
 import { AmountInput, type AmountInputHandle } from './AmountInput';
 import { AmountPresets } from './AmountPresets';
 import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
-import { Confetti } from './Confetti';
+// Confetti is lazy-loaded (success screen only)
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
@@ -25,6 +25,7 @@ import './SendTab.css';
 const LazyHowItWorks = lazy(() => import('./HowItWorks'));
 const LazyShareSheet = lazy(() => import('./ShareSheet'));
 const LazyRecentSendsSheet = lazy(() => import('./RecentSendsSheet'));
+const LazyConfetti = lazy(() => import('./Confetti'));
 
 // Token-specific preset amounts
 const TOKEN_PRESETS: Record<string, { value: number; label: string }[]> = {
@@ -522,7 +523,9 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
   if (step === 'success' && success) {
     return (
       <div className="send-tab">
-        <Confetti active={true} count={60} duration={4000} />
+        <Suspense fallback={null}>
+          <LazyConfetti active={true} count={60} duration={4000} />
+        </Suspense>
         
         <motion.div 
           className="success-view"
