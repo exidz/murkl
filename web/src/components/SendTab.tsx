@@ -734,6 +734,7 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 tokens={SUPPORTED_TOKENS}
                 selected={selectedToken}
                 onChange={handleTokenChange}
+                variant="compact"
               />
 
 

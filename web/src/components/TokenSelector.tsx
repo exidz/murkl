@@ -1,4 +1,4 @@
-import { useCallback, type FC, useMemo } from 'react';
+import { useCallback, type FC } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './TokenSelector.css';
 
@@ -16,6 +16,12 @@ interface Props {
   onChange: (token: Token) => void;
   onMaxClick?: (balance: number) => void;
   balance?: number | null;
+  /**
+   * UI density.
+   * - compact: pills only (recommended for Venmo-style amount screen)
+   * - verbose: shows helper copy under the pills
+   */
+  variant?: 'compact' | 'verbose';
   disabled?: boolean;
 }
 
@@ -51,6 +57,7 @@ export const TokenSelector: FC<Props> = ({
   onChange,
   onMaxClick,
   balance,
+  variant = 'compact',
   disabled = false,
 }) => {
   const handleSelect = useCallback(
@@ -65,13 +72,15 @@ export const TokenSelector: FC<Props> = ({
   const showBalanceRow = balance !== undefined;
   const isBalanceLoading = balance === null;
 
-  const selectedLabel = useMemo(() => formatTokenName(selected), [selected]);
+  const showHelper = variant === 'verbose';
+  const selectedLabel = showHelper ? formatTokenName(selected) : '';
 
-  const helperText = useMemo(() => {
-    if (selected.symbol === 'SOL') return `Native SOL from your wallet.`;
-    if (selected.symbol === 'WSOL') return `Uses your Wrapped SOL (WSOL) token balance.`;
+  const helperText = (() => {
+    if (!showHelper) return '';
+    if (selected.symbol === 'SOL') return 'From your wallet balance.';
+    if (selected.symbol === 'WSOL') return 'From your WSOL token balance.';
     return '';
-  }, [selected.symbol]);
+  })();
 
   return (
     <div className="token-selector">
