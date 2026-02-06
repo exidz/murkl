@@ -83,6 +83,12 @@ pub mod murkl {
         pool.config = config;
         pool.paused = false;
         pool.bump = ctx.bumps.pool;
+
+        // Initialize merkle frontier PDA
+        let pool_merkle = &mut ctx.accounts.pool_merkle;
+        pool_merkle.pool = pool.key();
+        pool_merkle.branch = [[0u8; 32]; MERKLE_DEPTH];
+        pool_merkle.bump = ctx.bumps.pool_merkle;
         
         msg!("Pool initialized for mint: {}", pool.token_mint);
         Ok(())
@@ -334,7 +340,16 @@ pub struct InitializePool<'info> {
         seeds = [b"pool", token_mint.key().as_ref()],
         bump
     )]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
+
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + PoolMerkle::SIZE,
+        seeds = [b"pool-merkle", pool.key().as_ref()],
+        bump
+    )]
+    pub pool_merkle: Box<Account<'info, PoolMerkle>>,
     
     pub token_mint: Account<'info, Mint>,
     
@@ -363,7 +378,15 @@ pub struct Deposit<'info> {
         seeds = [b"pool", pool.token_mint.as_ref()],
         bump = pool.bump
     )]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
+
+    #[account(
+        mut,
+        seeds = [b"pool-merkle", pool.key().as_ref()],
+        bump = pool_merkle.bump,
+        constraint = pool_merkle.pool == pool.key() @ MurklError::InvalidDepositPool
+    )]
+    pub pool_merkle: Box<Account<'info, PoolMerkle>>,
     
     #[account(
         init,
@@ -403,7 +426,7 @@ pub struct Claim<'info> {
         seeds = [b"pool", pool.token_mint.as_ref()],
         bump = pool.bump
     )]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
     
     #[account(
         mut,
@@ -465,7 +488,7 @@ pub struct AdminAction<'info> {
         bump = pool.bump,
         constraint = pool.admin == admin.key() @ MurklError::Unauthorized
     )]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
     
     pub admin: Signer<'info>,
 }
@@ -498,6 +521,20 @@ pub struct Pool {
 
 impl Pool {
     pub const SIZE: usize = 32 + 32 + 32 + 32 + 8 + PoolConfig::SIZE + 1 + 1;
+}
+
+/// Separate PDA to store the incremental Merkle frontier.
+///
+/// Kept out of `Pool` to avoid Anchor stack-frame limits.
+#[account]
+pub struct PoolMerkle {
+    pub pool: Pubkey,
+    pub branch: [[u8; 32]; MERKLE_DEPTH],
+    pub bump: u8,
+}
+
+impl PoolMerkle {
+    pub const SIZE: usize = 32 + (32 * MERKLE_DEPTH) + 1;
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
