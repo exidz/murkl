@@ -18,7 +18,6 @@ import {
   Transaction,
   TransactionInstruction,
   SystemProgram,
-  SYSVAR_RENT_PUBKEY,
 } from '@solana/web3.js';
 import {
   NATIVE_MINT,
@@ -172,7 +171,6 @@ async function buildDepositTx(params: {
       { pubkey: userAta, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
     ],
     data: ixData,
   });

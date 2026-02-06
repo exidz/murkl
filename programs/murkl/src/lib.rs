@@ -137,11 +137,6 @@ pub mod murkl {
         pool.token_mint = ctx.accounts.token_mint.key();
         pool.vault = ctx.accounts.vault.key();
 
-        // Initialize merkle frontier PDA
-        ctx.accounts.pool_merkle.pool = pool.key();
-        ctx.accounts.pool_merkle.branch = [[0u8; 32]; MERKLE_DEPTH];
-        ctx.accounts.pool_merkle.bump = ctx.bumps.pool_merkle;
-
         // Empty tree root
         pool.merkle_root = empty_hashes()[MERKLE_DEPTH];
         pool.leaf_count = 0;
@@ -150,6 +145,23 @@ pub mod murkl {
         pool.bump = ctx.bumps.pool;
 
         msg!("Pool initialized for mint: {}", pool.token_mint);
+        Ok(())
+    }
+
+
+
+    /// Initialize the `PoolMerkle` PDA for an existing pool.
+    ///
+    /// Backwards compatible: the PDA is derived from the pool address, so any
+    /// payer can fund its creation without gaining privileges.
+    pub fn initialize_pool_merkle(ctx: Context<InitializePoolMerkle>) -> Result<()> {
+        let pool = &ctx.accounts.pool;
+        let pool_merkle = &mut ctx.accounts.pool_merkle;
+
+        pool_merkle.pool = pool.key();
+        pool_merkle.branch = [[0u8; 32]; MERKLE_DEPTH];
+        pool_merkle.bump = ctx.bumps.pool_merkle;
+
         Ok(())
     }
 
@@ -421,6 +433,29 @@ pub struct InitializePool<'info> {
     
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct InitializePoolMerkle<'info> {
+    #[account(
+        seeds = [b"pool", pool.token_mint.as_ref()],
+        bump = pool.bump
+    )]
+    pub pool: Box<Account<'info, Pool>>,
+
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + PoolMerkle::SIZE,
+        seeds = [b"pool-merkle", pool.key().as_ref()],
+        bump
+    )]
+    pub pool_merkle: Box<Account<'info, PoolMerkle>>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -434,11 +469,10 @@ pub struct Deposit<'info> {
     pub pool: Box<Account<'info, Pool>>,
 
     #[account(
-        init_if_needed,
-        payer = depositor,
-        space = 8 + PoolMerkle::SIZE,
+        mut,
         seeds = [b"pool-merkle", pool.key().as_ref()],
-        bump
+        bump = pool_merkle.bump,
+        constraint = pool_merkle.pool == pool.key() @ MurklError::InvalidDepositPool
     )]
     pub pool_merkle: Box<Account<'info, PoolMerkle>>,
     
