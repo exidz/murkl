@@ -190,7 +190,9 @@ export const ClaimLanding: FC<Props> = ({
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
-  const hasAmount = data.amount != null && data.amount > 0;
+  // If we can fetch the amount from the relayer, show it (even if it’s 0).
+  // Otherwise, render a stable “loading” placeholder so the hero layout doesn’t jump.
+  const hasAmount = data.amount != null;
 
   // Animated count-up for the amount (if we know it).
   // If not, we still render the amount area for a consistent, Venmo-like hero layout.
@@ -329,7 +331,7 @@ export const ClaimLanding: FC<Props> = ({
   const needsEmailVerification = isEmailIdentifier && !emailVerified;
 
   const tokenSymbol = data.token || 'SOL';
-  const amountText = hasAmount ? animatedAmount : '—';
+  const amountText = hasAmount ? animatedAmount : '…';
 
   return (
     <motion.div
@@ -399,7 +401,10 @@ export const ClaimLanding: FC<Props> = ({
           className="landing-amount"
           variants={heroItemVariants}
         >
-          <span className={`landing-amount-value ${hasAmount ? '' : 'unknown'}`.trim()}>
+          <span
+            className={`landing-amount-value ${hasAmount ? '' : 'unknown loading'}`.trim()}
+            aria-live="polite"
+          >
             {amountText}
           </span>
           <span className="landing-amount-token">{tokenSymbol}</span>

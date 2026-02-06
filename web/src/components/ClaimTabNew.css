@@ -922,12 +922,23 @@
   animation-delay: 1.8s; /* start after count-up finishes */
 }
 
-/* If we couldn't fetch amount yet, still keep the hero layout but make it clearly “unknown”. */
+/* If we couldn't fetch amount yet, still keep the hero layout but make it clearly “loading”. */
 .landing-amount-value.unknown {
   opacity: 0.45;
   background: none;
   -webkit-text-fill-color: initial;
   animation: none;
+}
+
+/* Gentle loading pulse for the unknown amount placeholder (no shimmer/jank). */
+.landing-amount-value.loading {
+  letter-spacing: 0.02em;
+  animation: landing-amount-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes landing-amount-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.6; }
 }
 
 @keyframes landing-amount-shimmer {
