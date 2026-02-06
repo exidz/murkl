@@ -5,7 +5,7 @@ import {
   type ReactNode,
   type MouseEvent,
 } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import './Button.css';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -80,6 +80,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   'aria-label': ariaLabel,
 }, ref) => {
   const rippleRef = useRef<HTMLSpanElement>(null);
+  const reducedMotion = useReducedMotion();
   const isDisabled = disabled || loading;
 
   // Handle click with ripple effect and haptic feedback
@@ -91,8 +92,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
       triggerHaptic(variant === 'primary' ? [10, 5, 10] : 10);
     }
 
-    // Ripple effect
-    if (rippleRef.current) {
+    // Ripple effect (skip if user prefers reduced motion)
+    if (!reducedMotion && rippleRef.current) {
       const button = e.currentTarget;
       const rect = button.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -105,7 +106,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
       // Force reflow to restart animation
       void ripple.offsetWidth;
       ripple.classList.add('active');
-      
+
       // Clean up after animation completes
       const cleanup = () => {
         ripple.classList.remove('active');
@@ -115,7 +116,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
     }
 
     onClick?.(e);
-  }, [isDisabled, haptic, variant, onClick]);
+  }, [isDisabled, haptic, variant, onClick, reducedMotion]);
 
   const buttonClasses = [
     'btn',
@@ -134,9 +135,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
       disabled={isDisabled}
       onClick={handleClick}
       aria-label={ariaLabel}
-      whileHover={!isDisabled ? { scale: 1.02, y: -1 } : undefined}
-      whileTap={!isDisabled ? { scale: 0.98 } : undefined}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      whileHover={!isDisabled && !reducedMotion ? { scale: 1.02, y: -1 } : undefined}
+      whileTap={!isDisabled && !reducedMotion ? { scale: 0.98 } : undefined}
+      transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 25 }}
     >
       {/* Ripple effect container */}
       <span className="btn-ripple" ref={rippleRef} aria-hidden="true" />
