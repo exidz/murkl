@@ -257,7 +257,11 @@ async function main() {
   console.log('commitment:', redact(commitmentHex));
 
   // Fetch merkle root from relayer
-  const poolInfoRes = await fetch(`${RELAYER_URL}/pool-info?pool=${POOL.toBase58()}`);
+  const ORIGIN = process.env.ORIGIN || 'https://murkl.app';
+
+  const poolInfoRes = await fetch(`${RELAYER_URL}/pool-info?pool=${POOL.toBase58()}`, {
+    headers: { Origin: ORIGIN },
+  });
   if (!poolInfoRes.ok) throw new Error('pool-info failed');
   const poolInfo = await poolInfoRes.json() as any;
   const merkleRootHex = poolInfo.merkleRoot as string;
@@ -277,7 +281,7 @@ async function main() {
   // Attack attempt: submit same proof but claim to recipient B
   const attackRes = await fetch(`${RELAYER_URL}/claim`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
     body: JSON.stringify({
       proof: proofBundle.proof,
       commitment: proofBundle.commitment,
@@ -299,7 +303,7 @@ async function main() {
   // Legit claim: recipient A
   const claimRes = await fetch(`${RELAYER_URL}/claim`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
     body: JSON.stringify({
       proof: proofBundle.proof,
       commitment: proofBundle.commitment,
