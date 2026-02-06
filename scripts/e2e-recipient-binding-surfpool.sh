@@ -18,6 +18,19 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SURFPOOL_RPC="http://127.0.0.1:8899"
 RELAYER_URL="http://127.0.0.1:3002"
 
+# Cron/daemon environments may not load shell profile PATH.
+SOLANA_BIN="${SOLANA_BIN:-$HOME/.local/share/solana/install/active_release/bin/solana}"
+ANCHOR_BIN="${ANCHOR_BIN:-$HOME/.cargo/bin/anchor}"
+
+if [[ ! -x "$SOLANA_BIN" ]]; then
+  echo "❌ solana CLI not found at $SOLANA_BIN (set SOLANA_BIN)" >&2
+  exit 1
+fi
+if [[ ! -x "$ANCHOR_BIN" ]]; then
+  echo "❌ anchor not found at $ANCHOR_BIN (set ANCHOR_BIN)" >&2
+  exit 1
+fi
+
 STARK_PROGRAM_KP="/home/exidz/.openclaw/.secrets/StArKSLbAn43UCcujFMc5gKc8rY2BVfSbguMfyLTMtw.json"
 MURKL_PROGRAM_KP="/home/exidz/.openclaw/.secrets/muRkDGaY4yCc6rEYWhmJAnQ1abdCbUJNCr4L1Cmd1UF.json"
 
@@ -41,14 +54,15 @@ echo "==> Starting Surfpool (datasource=devnet) on $SURFPOOL_RPC"
 surfpool start --network devnet --port 8899 --ws-port 8900 --no-tui --no-studio --no-deploy -y --log-level warn &
 SURFPOOL_PID=$!
 
-# Wait for Surfpool RPC to be ready
-for i in {1..60}; do
-  if solana cluster-version --url "$SURFPOOL_RPC" >/dev/null 2>&1; then
+# Wait for Surfpool RPC to be ready (avoid relying on PATH'd solana).
+for i in {1..120}; do
+  if curl -fsS "$SURFPOOL_RPC" -H 'Content-Type: application/json' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' >/dev/null 2>&1; then
     echo "==> Surfpool RPC is up"
     break
   fi
   sleep 1
-  if [[ $i -eq 60 ]]; then
+  if [[ $i -eq 120 ]]; then
     echo "❌ Surfpool RPC did not become ready in time" >&2
     exit 1
   fi
@@ -56,14 +70,14 @@ done
 
 echo "==> Building programs"
 # anchor build only supports a single -p at a time
-anchor build -p stark-verifier >/dev/null
-anchor build -p murkl_program >/dev/null
+"$ANCHOR_BIN" build -p stark-verifier >/dev/null
+"$ANCHOR_BIN" build -p murkl_program >/dev/null
 
 echo "==> Deploying stark-verifier into Surfpool"
-solana program deploy --url "$SURFPOOL_RPC" programs/target/deploy/stark_verifier.so --program-id "$STARK_PROGRAM_KP" >/dev/null
+"$SOLANA_BIN" program deploy --url "$SURFPOOL_RPC" programs/target/deploy/stark_verifier.so --program-id "$STARK_PROGRAM_KP" >/dev/null
 
 echo "==> Deploying murkl into Surfpool"
-solana program deploy --url "$SURFPOOL_RPC" programs/target/deploy/murkl_program.so --program-id "$MURKL_PROGRAM_KP" >/dev/null
+"$SOLANA_BIN" program deploy --url "$SURFPOOL_RPC" programs/target/deploy/murkl_program.so --program-id "$MURKL_PROGRAM_KP" >/dev/null
 
 echo "==> Starting local relayer on :3002 (RPC_URL=$SURFPOOL_RPC)"
 (
