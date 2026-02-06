@@ -85,7 +85,7 @@ export const TokenSelector: FC<Props> = ({
   })();
 
   return (
-    <div className="token-selector">
+    <div className={`token-selector ${variant === 'compact' ? 'token-selector--compact' : 'token-selector--verbose'}`}>
       <div className="token-tabs" role="radiogroup" aria-label="Choose token">
         {tokens.map((token) => {
           const isSelected = token.symbol === selected.symbol;
@@ -128,9 +128,11 @@ export const TokenSelector: FC<Props> = ({
                 </span>
                 <span className="token-symbol">{tokenShort}</span>
               </span>
-              <span className="token-tab-sub" aria-hidden="true">
-                {tokenLabel}
-              </span>
+              {variant === 'verbose' && (
+                <span className="token-tab-sub" aria-hidden="true">
+                  {tokenLabel}
+                </span>
+              )}
             </button>
           );
         })}
