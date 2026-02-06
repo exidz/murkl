@@ -1335,17 +1335,14 @@ app.get('/deposits', async (req: Request, res: Response) => {
   }
 });
 
-// Register deposit (called after successful deposit tx) — requires auth
+// Register deposit (called after successful deposit tx)
+//
+// NOTE: This endpoint intentionally does NOT require auth.
+// The sender may not be logged in, and the recipient definitely won't be logged
+// in yet (especially for email). We rely on on-chain transaction verification
+// (verifyDepositTx) + rate limiting to prevent spam/DB poisoning.
 app.post('/deposits/register', async (req: Request, res: Response) => {
   try {
-    // Require authenticated session to prevent fake deposit injection
-    const session = await auth.api.getSession({
-      headers: req.headers as Record<string, string>,
-    });
-    if (!session?.user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    
     const { identifier, amount, token, leafIndex, pool, commitment, txSignature } = req.body as {
       identifier?: unknown;
       amount?: unknown;
