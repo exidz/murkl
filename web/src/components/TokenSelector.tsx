@@ -25,10 +25,12 @@ interface Props {
   disabled?: boolean;
 }
 
+const SOL_ICON_URL = 'https://assets.coingecko.com/coins/images/4128/standard/solana.png?1718769756';
+
 export const SUPPORTED_TOKENS: Token[] = [
-  { symbol: 'SOL', name: 'SOL', icon: '◎', decimals: 9 },
+  { symbol: 'SOL', name: 'SOL', icon: SOL_ICON_URL, decimals: 9 },
   // Wrapped SOL (WSOL) is an SPL token representation of SOL.
-  { symbol: 'WSOL', name: 'Wrapped SOL', icon: '◎', decimals: 9, mint: 'So11111111111111111111111111111111111111112' },
+  { symbol: 'WSOL', name: 'Wrapped SOL', icon: SOL_ICON_URL, decimals: 9, mint: 'So11111111111111111111111111111111111111112' },
 ];
 
 const formatBalance = (bal: number): string => {
@@ -110,7 +112,19 @@ export const TokenSelector: FC<Props> = ({
               )}
               <span className="token-tab-content">
                 <span className="token-icon" aria-hidden="true">
-                  {token.icon}
+                  {token.icon.startsWith('http') ? (
+                    <img
+                      src={token.icon}
+                      alt=""
+                      width={18}
+                      height={18}
+                      loading="lazy"
+                      decoding="async"
+                      style={{ borderRadius: 4 }}
+                    />
+                  ) : (
+                    token.icon
+                  )}
                 </span>
                 <span className="token-symbol">{tokenShort}</span>
               </span>

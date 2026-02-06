@@ -20,10 +20,12 @@ interface Props {
   disabled?: boolean;
 }
 
+const SOL_ICON_URL = 'https://assets.coingecko.com/coins/images/4128/standard/solana.png?1718769756';
+
 // Token icon mapping — Venmo shows app-specific icons per payment type
 const TOKEN_ICONS: Record<string, { icon: string; color: string }> = {
-  SOL: { icon: '◎', color: '#9945FF' },
-  WSOL: { icon: '◎', color: '#14F195' },
+  SOL: { icon: SOL_ICON_URL, color: '#9945FF' },
+  WSOL: { icon: SOL_ICON_URL, color: '#14F195' },
 };
 
 const DEFAULT_TOKEN = { icon: '🪙', color: '#f59e0b' };
@@ -70,7 +72,21 @@ export const DepositCard: FC<Props> = memo(({ deposit, index, onClaim, disabled 
           className={`deposit-token-icon ${isClaimed ? '' : 'active'}`}
           style={{ '--token-color': tokenInfo.color } as React.CSSProperties}
         >
-          <span className="token-symbol">{tokenInfo.icon}</span>
+          <span className="token-symbol">
+            {tokenInfo.icon.startsWith('http') ? (
+              <img
+                src={tokenInfo.icon}
+                alt=""
+                width={18}
+                height={18}
+                loading="lazy"
+                decoding="async"
+                style={{ borderRadius: 4 }}
+              />
+            ) : (
+              tokenInfo.icon
+            )}
+          </span>
           {!isClaimed && <div className="token-pulse" aria-hidden="true" />}
         </div>
 
