@@ -1025,18 +1025,19 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // Step 3: Finalize Buffer
     // ========================================
     
+    // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32], recipient: [u8; 32])
+    const recipient32 = new PublicKey(recipientTokenAccount).toBuffer();
+
     // DEBUG: Log exact values being sent to finalize
     log('debug', 'Finalize params', {
       requestId,
       commitment: `${commitment32.toString('hex').slice(0, 8)}...`,
       nullifier: `${nullifier32.toString('hex').slice(0, 8)}...`,
       merkleRoot: `${merkleRoot32.toString('hex').slice(0, 8)}...`,
+      recipient: `${recipient32.toString('hex').slice(0, 8)}...`,
       proofSize: proofBytes.length,
       proofFirst32: `${proofBytes.slice(0, 32).toString('hex').slice(0, 8)}...`, // trace_commitment
     });
-    
-    // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32], recipient: [u8; 32])
-    const recipient32 = new PublicKey(recipientTokenAccount).toBuffer();
     const finalizeData = Buffer.concat([
       getDiscriminator('finalize_and_verify'),
       commitment32,
