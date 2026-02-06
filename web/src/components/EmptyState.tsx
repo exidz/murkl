@@ -1,5 +1,6 @@
 import { type FC, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
+import { Button } from './Button';
 import './EmptyState.css';
 
 type IllustrationKey = 'inbox' | 'wallet' | 'send' | 'lock' | 'success' | 'search';
@@ -253,23 +254,26 @@ export const EmptyState: FC<Props> = ({
           transition={{ delay: 0.25 }}
         >
           {action && (
-            <motion.button
-              className="empty-action-primary"
-              onClick={action.onClick}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              onClick={() => action.onClick()}
             >
               {action.label}
-            </motion.button>
+            </Button>
           )}
-          
+
           {secondaryAction && (
-            <button
-              className="empty-action-secondary"
-              onClick={secondaryAction.onClick}
+            <Button
+              variant="ghost"
+              size="md"
+              fullWidth
+              onClick={() => secondaryAction.onClick()}
+              className="empty-secondary"
             >
               {secondaryAction.label}
-            </button>
+            </Button>
           )}
         </motion.div>
       )}

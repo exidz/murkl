@@ -85,55 +85,20 @@
   gap: 0.75rem;
   margin-top: 1.5rem;
   width: 100%;
-  max-width: 240px;
+  max-width: 260px;
 }
 
 .empty-state.compact .empty-actions {
   margin-top: 1rem;
 }
 
-/* Primary action button */
-.empty-action-primary {
-  width: 100%;
-  padding: 0.875rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  background: var(--accent-primary);
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
+/* Secondary action: keep it subtle (still full-width for mobile ergonomics) */
+.empty-secondary {
+  opacity: 0.9;
 }
 
-.empty-action-primary:hover {
-  background: color-mix(in srgb, var(--accent-primary) 90%, white);
-}
-
-.empty-action-primary:active {
-  transform: scale(0.98);
-}
-
-.empty-action-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Secondary action (link-style) */
-.empty-action-secondary {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.empty-action-secondary:hover {
-  color: var(--accent-primary);
-  text-decoration: underline;
+.empty-secondary:hover {
+  opacity: 1;
 }
 
 /* Feature list (for connect states) */
@@ -179,8 +144,7 @@
     font-size: 0.85rem;
   }
 
-  .empty-action-primary {
-    padding: 0.75rem 1.25rem;
-    font-size: 0.95rem;
+  .empty-actions {
+    max-width: 240px;
   }
 }
