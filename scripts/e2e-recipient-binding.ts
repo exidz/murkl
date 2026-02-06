@@ -95,9 +95,11 @@ async function fetchPoolInfo(connection: Connection, pool: PublicKey): Promise<{
   const info = await connection.getAccountInfo(pool);
   if (!info) throw new Error('Pool not found');
   const data = info.data;
-  const mint = new PublicKey(data.slice(40, 72));
-  const vault = new PublicKey(data.slice(72, 104));
-  const nextLeafIndex = Number(data.readBigUInt64LE(136));
+  // Anchor accounts include an 8-byte discriminator prefix.
+  const DISC = 8;
+  const mint = new PublicKey(data.slice(DISC + 32, DISC + 64));
+  const vault = new PublicKey(data.slice(DISC + 64, DISC + 96));
+  const nextLeafIndex = Number(data.readBigUInt64LE(DISC + 128));
   return { mint, vault, nextLeafIndex };
 }
 
