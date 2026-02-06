@@ -260,17 +260,23 @@ app.use(helmet({
 // CORS with whitelist
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.) in dev
-    if (!origin && process.env.NODE_ENV !== 'production') {
+    const env = process.env.NODE_ENV || 'development';
+
+    // In production, require an explicit Origin match.
+    // Allowing `!origin` effectively disables the origin allowlist for non-browser clients
+    // and can widen the attack surface for cookie-authenticated endpoints.
+    if (!origin) {
+      if (env !== 'production') return callback(null, true);
+      log('warn', 'CORS blocked (missing Origin)', { origin: null });
+      return callback(new Error('CORS origin required'));
+    }
+
+    if (config.corsOrigins.includes(origin)) {
       return callback(null, true);
     }
-    
-    if (!origin || config.corsOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      log('warn', 'CORS blocked', { origin });
-      callback(new Error('CORS not allowed'));
-    }
+
+    log('warn', 'CORS blocked', { origin });
+    return callback(new Error('CORS not allowed'));
   },
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
