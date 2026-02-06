@@ -106,6 +106,11 @@ for i in {1..30}; do
 done
 
 echo "==> Running E2E recipient-binding test"
+if [[ ! -d "$ROOT_DIR/node_modules" ]]; then
+  echo "==> Installing root deps (npm ci)"
+  npm ci >/dev/null
+fi
+
 RELAYER_URL="$RELAYER_URL" RPC_URL="$SURFPOOL_RPC" npx tsx scripts/e2e-recipient-binding.ts
 
 echo "✅ Surfpool E2E completed"
