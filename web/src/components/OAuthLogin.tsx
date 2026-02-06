@@ -101,17 +101,23 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
 
   // When session exists, fetch linked identities.
   // If only one → auto-login.
-  // If multiple → show picker, BUT auto-select the last-used identity if available.
+  // If multiple →
+  //   - normal mode: auto-select the last-used identity if available, else show picker
+  //   - switch mode (showSwitch=true): always show picker (so you can reselect without signing out)
   // Skip if email OTP flow is active (it calls onLogin directly).
-  // Skip if showSwitch is true (user wants to change identity).
   useEffect(() => {
-    if (session?.user && !isPending && emailStep === 'idle' && !linkedIdentities && !showSwitch) {
+    if (session?.user && !isPending && emailStep === 'idle' && !linkedIdentities) {
       getMurklIdentifier().then((data) => {
         if (!data) return;
 
         const identities = data.identities || [];
 
         if (identities.length > 1) {
+          if (showSwitch) {
+            setLinkedIdentities(identities);
+            return;
+          }
+
           // Try to restore last-picked identity (prevents “always picks email on refresh”).
           try {
             const last = localStorage.getItem(LAST_IDENTITY_KEY);
@@ -327,53 +333,113 @@ export const OAuthLogin: FC<Props> = ({ onLogin, loading, showSwitch }) => {
     );
   }
 
-  // ─── RENDER: Signed in but wants to switch ─────────────────
-
+  // ─── RENDER: Signed in and user wants to re-pick identity ──
+  // For multi-linked accounts, this should go back to the identity picker
+  // WITHOUT requiring a sign-out.
   if (session?.user && showSwitch) {
+    if (linkedIdentities && linkedIdentities.length > 1) {
+      // Reuse the same identity picker UI
+      return (
+        <div className="oauth-login">
+          <div className="oauth-header">
+            <motion.div 
+              className="oauth-icon"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+            >
+              {session.user.image ? (
+                <img 
+                  src={session.user.image} 
+                  alt={session.user.name || 'User'} 
+                  className="oauth-avatar"
+                />
+              ) : (
+                '👤'
+              )}
+            </motion.div>
+            <motion.h3
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              Choose identity
+            </motion.h3>
+            <motion.p 
+              className="oauth-subtitle"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+            >
+              Pick which account to use
+            </motion.p>
+          </div>
+
+          <motion.div
+            className="identity-picker"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            {linkedIdentities.map((identity) => {
+              const meta = PROVIDER_META[identity.provider] || { icon: '🔵', color: '#3d95ce', name: identity.provider };
+
+              return (
+                <motion.button
+                  key={identity.identifier}
+                  className="identity-option"
+                  onClick={() => handlePickIdentity(identity)}
+                  variants={itemVariants}
+                  whileTap={{ scale: 0.98 }}
+                  style={{ '--provider-color': meta.color } as React.CSSProperties}
+                >
+                  <div className="identity-option-badge">
+                    <span>{meta.icon}</span>
+                  </div>
+                  <div className="identity-option-text">
+                    <span className="identity-option-id">{identity.identifier}</span>
+                    <span className="identity-option-provider">{meta.name}</span>
+                  </div>
+                  <span className="identity-option-arrow" aria-hidden="true">→</span>
+                </motion.button>
+              );
+            })}
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.25 }}
+          >
+            <Button variant="ghost" onClick={handleSignOut}>
+              Sign out
+            </Button>
+          </motion.div>
+        </div>
+      );
+    }
+
+    // Single identity: nothing to pick; just keep session.
     return (
       <div className="oauth-login">
         <div className="oauth-header">
-          <motion.div 
-            className="oauth-icon"
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-          >
-            {session.user.image ? (
-              <img 
-                src={session.user.image} 
-                alt={session.user.name || 'User'} 
-                className="oauth-avatar"
-              />
-            ) : (
-              '👤'
-            )}
-          </motion.div>
           <motion.h3
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
           >
-            Switch account
+            Only one identity linked
           </motion.h3>
-          <motion.p 
+          <motion.p
             className="oauth-subtitle"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
+            transition={{ delay: 0.05 }}
           >
-            Signed in as {session.user.name || session.user.email}
+            You can keep using your current account.
           </motion.p>
         </div>
-        
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Button variant="primary" fullWidth onClick={handleSignOut}>
-            Sign out & switch
-          </Button>
-        </motion.div>
+        <Button variant="ghost" onClick={handleSignOut}>
+          Sign out
+        </Button>
       </div>
     );
   }

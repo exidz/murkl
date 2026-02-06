@@ -476,15 +476,24 @@
   align-items: center;
   gap: 0.875rem;
   padding: 1rem 1.25rem;
-  /* Ensure visibility even if theme vars are very dark/transparent */
-  background: color-mix(in srgb, var(--bg-secondary, #14141f) 80%, #14141f);
-  border: 1px solid color-mix(in srgb, var(--border, #27272a) 80%, #27272a);
+  /* Important: don't rely on `color-mix()` here — some mobile browsers ignore it, */
+  /* which makes the whole button effectively transparent until hover. */
+  background: var(--bg-secondary, #14141f);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
   text-align: left;
   color: var(--text-primary, #fff);
   -webkit-tap-highlight-color: transparent;
+}
+
+@supports (background: color-mix(in srgb, white 50%, black)) {
+  .identity-option {
+    background: color-mix(in srgb, var(--bg-secondary, #14141f) 80%, #14141f);
+    border-color: color-mix(in srgb, var(--border, #27272a) 80%, #27272a);
+  }
 }
 
 .identity-option:hover {

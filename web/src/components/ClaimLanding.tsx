@@ -215,7 +215,8 @@ export const ClaimLanding: FC<Props> = ({
     try {
       await sendEmailOTP(emailAddress);
       setOtpSent(true);
-      setCooldown(300); // 5 minute cooldown
+      // UX: short resend cooldown (most apps use ~30–90s). Server should still rate-limit.
+      setCooldown(60);
     } catch {
       setOtpError('Failed to send code. Try again.');
     } finally {
@@ -405,7 +406,7 @@ export const ClaimLanding: FC<Props> = ({
                 exit={{ opacity: 0, y: -10 }}
               >
                 <p className="landing-email-hint">
-                  Verify you own <strong>{emailAddress}</strong> to claim
+                  We’ll email a 6‑digit code to <strong>{emailAddress}</strong>
                 </p>
                 <Button
                   variant="primary"
@@ -417,7 +418,7 @@ export const ClaimLanding: FC<Props> = ({
                   disabled={cooldown > 0}
                   icon={<span>✉️</span>}
                 >
-                  {cooldown > 0 ? `Resend in ${formatCooldown(cooldown)}` : 'Send verification code'}
+                  {cooldown > 0 ? `Resend in ${formatCooldown(cooldown)}` : 'Send code'}
                 </Button>
                 {otpError && (
                   <p className="landing-otp-error">{otpError}</p>
@@ -432,7 +433,7 @@ export const ClaimLanding: FC<Props> = ({
                 exit={{ opacity: 0, y: -10 }}
               >
                 <p className="landing-email-hint">
-                  Enter the code sent to <strong>{emailAddress}</strong>
+                  Enter the 6‑digit code we sent to <strong>{emailAddress}</strong>
                 </p>
                 <OtpInput
                   value={otp}
