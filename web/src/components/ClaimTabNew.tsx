@@ -481,9 +481,9 @@ export const ClaimTabNew: FC<Props> = ({ wasmReady, onUnclaimedCount }) => {
           </span>
           <span className="identity-handle">{identity.handle}</span>
         </div>
-        <button className="btn btn-ghost" onClick={handleSwitchIdentity} style={{ flexShrink: 0 }}>
+        <Button variant="ghost" size="sm" onClick={handleSwitchIdentity}>
           Switch
-        </button>
+        </Button>
       </div>
 
       {/* Deposits section */}

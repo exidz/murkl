@@ -50,8 +50,8 @@
   min-width: 0;
 }
 
-/* Buttons */
-.btn {
+/* Buttons (legacy; do not use — Button.tsx owns .btn styles) */
+.claim-legacy-btn {
   padding: 0.75rem 1.25rem;
   font-size: 1rem;
   font-weight: 600;
@@ -62,37 +62,37 @@
   min-height: 44px;
 }
 
-.btn-primary {
+.claim-legacy-btn-primary {
   background: var(--accent-primary, #3d95ce);
   color: white;
 }
 
-.btn-primary:hover:not(:disabled) {
+.claim-legacy-btn-primary:hover:not(:disabled) {
   filter: brightness(1.1);
 }
 
-.btn-primary:active:not(:disabled) {
+.claim-legacy-btn-primary:active:not(:disabled) {
   transform: scale(0.98);
 }
 
-.btn-primary:disabled {
+.claim-legacy-btn-primary:disabled {
   background: var(--text-muted, #52525b);
   cursor: not-allowed;
 }
 
-.btn-secondary {
+.claim-legacy-btn-secondary {
   background: var(--bg-tertiary, #1e1e2e);
   color: var(--text-primary, #fff);
   border: 1px solid var(--border, #27272a);
 }
 
-.btn-ghost {
+.claim-legacy-btn-ghost {
   background: transparent;
   color: var(--text-secondary, #a1a1aa);
   padding: 0.5rem 0.75rem;
 }
 
-.btn-ghost:hover {
+.claim-legacy-btn-ghost:hover {
   color: var(--text-primary, #fff);
 }
 
@@ -481,31 +481,31 @@
   font-weight: 500;
 }
 
-/* Button spinner */
-.btn-spinner {
+/* Button spinner (legacy; avoid clashing with Button.css) */
+.claim-legacy-btn-spinner {
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: white;
   border-radius: 50%;
-  animation: btn-spin 0.8s linear infinite;
+  animation: claim-legacy-btn-spin 0.8s linear infinite;
   margin-right: 0.5rem;
 }
 
-@keyframes btn-spin {
+@keyframes claim-legacy-btn-spin {
   to { transform: rotate(360deg); }
 }
 
-.sheet-actions {
+.claim-legacy-sheet-actions {
   display: flex;
   gap: 1rem;
 }
 
-.sheet-actions .btn {
+.claim-legacy-sheet-actions .btn {
   flex: 1;
 }
 
-.sheet-actions .btn-ghost {
+.claim-legacy-sheet-actions .btn-ghost {
   background: var(--bg-tertiary, #1e1e2e);
 }
 
