@@ -783,11 +783,18 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Claim already submitted' });
     }
     
+    const redactHex = (s: string, keep = 8) => {
+      if (!s) return s;
+      const h = s.startsWith('0x') ? s.slice(2) : s;
+      if (h.length <= keep) return h;
+      return `${h.slice(0, keep)}...`;
+    };
+
     log('info', 'Processing claim', {
       requestId,
-      commitment,
-      nullifier,
-      merkleRoot: merkleRoot || 'from-pool',
+      commitment: redactHex(commitment),
+      nullifier: redactHex(nullifier),
+      merkleRoot: merkleRoot ? redactHex(merkleRoot) : 'from-pool',
       leafIndex,
       recipient: recipientTokenAccount.slice(0, 8) + '...',
     });
@@ -962,11 +969,11 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // DEBUG: Log exact values being sent to finalize
     log('info', 'DEBUG: Finalize params', {
       requestId,
-      commitment: commitment32.toString('hex'),
-      nullifier: nullifier32.toString('hex'),
-      merkleRoot: merkleRoot32.toString('hex'),
+      commitment: `${commitment32.toString('hex').slice(0, 8)}...`,
+      nullifier: `${nullifier32.toString('hex').slice(0, 8)}...`,
+      merkleRoot: `${merkleRoot32.toString('hex').slice(0, 8)}...`,
       proofSize: proofBytes.length,
-      proofFirst32: proofBytes.slice(0, 32).toString('hex'), // trace_commitment
+      proofFirst32: `${proofBytes.slice(0, 32).toString('hex').slice(0, 8)}...`, // trace_commitment
     });
     
     // finalize_and_verify(commitment: [u8; 32], nullifier: [u8; 32], merkle_root: [u8; 32], recipient: [u8; 32])

@@ -36,6 +36,10 @@ pub const LOG_BLOWUP: u32 = 4;
 pub const LOG_FOLDING_FACTOR: u32 = 2; // Fold by 4 each round
 pub const BLOWUP_FACTOR: usize = 1 << LOG_BLOWUP;
 
+/// Debug-only logs for Fiat–Shamir transcript inputs.
+/// Keep false in production to avoid unnecessary data exposure + log spam.
+pub const DEBUG_FS_LOGS: bool = false;
+
 // Buffer layout (raw, no Anchor discriminator):
 // [0..32]: owner
 // [32..36]: size (u32 LE)
@@ -624,6 +628,13 @@ pub fn verify_stark_proof(
     let mut channel = Channel::new();
     
     // 3. Mix public inputs (binds proof to claimed statement)
+    if DEBUG_FS_LOGS {
+        msg!("FS mix commitment: {:02x}{:02x}{:02x}{:02x}...", commitment[0], commitment[1], commitment[2], commitment[3]);
+        msg!("FS mix nullifier: {:02x}{:02x}{:02x}{:02x}...", nullifier[0], nullifier[1], nullifier[2], nullifier[3]);
+        msg!("FS mix merkle_root: {:02x}{:02x}{:02x}{:02x}...", merkle_root[0], merkle_root[1], merkle_root[2], merkle_root[3]);
+        msg!("FS mix recipient: {:02x}{:02x}{:02x}{:02x}...", recipient[0], recipient[1], recipient[2], recipient[3]);
+    }
+
     channel.mix_digest(commitment);
     channel.mix_digest(nullifier);
     channel.mix_digest(merkle_root);
@@ -631,6 +642,9 @@ pub fn verify_stark_proof(
     channel.mix_digest(recipient);
     
     // 4. Verify trace commitment phase
+    if DEBUG_FS_LOGS {
+        msg!("FS mix trace_commitment: {:02x}{:02x}{:02x}{:02x}...", proof.trace_commitment[0], proof.trace_commitment[1], proof.trace_commitment[2], proof.trace_commitment[3]);
+    }
     channel.mix_digest(&proof.trace_commitment);
     
     // Get random coefficient for constraint composition
