@@ -183,7 +183,7 @@ export const TokenSelector: FC<Props> = ({
               disabled={disabled}
               aria-label={`Use maximum balance of ${formatBalance(balance as number)} ${formatTokenShort(selected)}`}
             >
-              Max
+              Use max
             </button>
           )}
         </motion.div>

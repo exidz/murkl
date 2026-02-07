@@ -89,12 +89,7 @@
   backdrop-filter: blur(6px);
 }
 
-/* Balance context at top of amount step */
-.send-balance {
-  align-self: center;
-  margin-bottom: 0.5rem;
-}
-
+/* Balance context is now shown via TokenSelector balance row */
 .back-btn {
   background: none;
   border: none;

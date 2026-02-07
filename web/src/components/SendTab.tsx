@@ -15,7 +15,7 @@ import { TokenSelector, SUPPORTED_TOKENS, type Token } from './TokenSelector';
 import { EmptyState } from './EmptyState';
 import { Button } from './Button';
 import { ConfirmationSummary } from './ConfirmationSummary';
-import { InlineBalancePill } from './InlineBalancePill';
+// (InlineBalancePill removed; TokenSelector now shows balance)
 import { StepProgress } from './StepProgress';
 import { TxStatusOverlay, type TxStage } from './TxStatusOverlay';
 import { useTokenBalance } from '../hooks/useTokenBalance';
@@ -709,13 +709,14 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
             exit="exit"
           >
             <div className="step-body">
-              {/* Balance context - Venmo-style */}
-              <InlineBalancePill
-                tokenSymbol={selectedToken.symbol}
-                tokenIcon={selectedToken.icon}
+              {/* Choose token + see balance first (keeps the amount screen calm) */}
+              <TokenSelector
+                tokens={SUPPORTED_TOKENS}
+                selected={selectedToken}
+                onChange={handleTokenChange}
+                variant="compact"
                 balance={tokenBalance}
-                onUseMax={handleMaxClick}
-                className="send-balance"
+                onMaxClick={handleMaxClick}
               />
 
               <AmountInput
@@ -731,19 +732,12 @@ export const SendTab: FC<Props> = ({ wasmReady }) => {
                 showCurrencyLabel={false}
               />
 
-              {/* Quick amount presets - Venmo style */}
+              {/* Quick amount presets */}
               <AmountPresets
                 onSelect={handleAmountChange}
                 currentValue={amount}
                 currency={selectedToken.symbol}
                 presets={TOKEN_PRESETS[selectedToken.symbol] || TOKEN_PRESETS.SOL}
-              />
-
-              <TokenSelector
-                tokens={SUPPORTED_TOKENS}
-                selected={selectedToken}
-                onChange={handleTokenChange}
-                variant="compact"
               />
 
 
