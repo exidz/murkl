@@ -139,11 +139,10 @@ export const auth = betterAuth({
 
           // Map user
           const username = profileJson.data.username;
-          const name = profileJson.data.name;
           return {
             user: {
               id: profileJson.data.id,
-              name: name ?? username,
+              name: username,
               // Better Auth requires an email. If Twitter doesn't provide it,
               // fall back to a stable synthetic email so account linking works.
               // NOTE: this is NOT a real email; it only serves as an internal identifier.
