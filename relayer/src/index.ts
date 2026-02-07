@@ -347,9 +347,12 @@ app.use(cors({
     // Allowing `!origin` effectively disables the origin allowlist for non-browser clients
     // and can widen the attack surface for cookie-authenticated endpoints.
     if (!origin) {
+      // NOTE: Browsers do NOT send an Origin header on top-level navigations (e.g. GET /).
+      // Blocking missing Origin breaks the web app root route behind Railway.
+      // We still keep the explicit allowlist for requests that *do* send Origin.
       if (env !== 'production') return callback(null, true);
-      log('warn', 'CORS blocked (missing Origin)', { origin: null });
-      return callback(new Error('CORS origin required'));
+      log('warn', 'CORS: missing Origin (allowing)', { origin: null });
+      return callback(null, true);
     }
 
     if (config.corsOrigins.includes(origin)) {
