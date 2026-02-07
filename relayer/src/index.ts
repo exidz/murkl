@@ -649,9 +649,9 @@ async function verifyDepositTx(params: {
     if (ixAmount !== amountBaseUnits) continue;
     if (!ixCommitment.equals(commitmentBuf)) continue;
 
-    // Accounts: [pool, deposit, vault, depositor, depositor_token, token_program, system_program]
+    // Accounts: [pool, pool_merkle, deposit, vault, depositor, depositor_token, token_program, system_program]
     const ixPool = accounts[0];
-    const ixDeposit = accounts[1];
+    const ixDeposit = accounts[2]; // index 2 after pool_merkle was added
     if (!ixPool?.equals(pool)) continue;
     if (!ixDeposit?.equals(expectedDepositPda)) continue;
 
