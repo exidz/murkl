@@ -151,6 +151,12 @@ export async function buildDepositTransaction(
   // Check if user ATA exists
   const userAtaInfo = await connection.getAccountInfo(userAta);
   
+  // Derive pool_merkle PDA
+  const [poolMerklePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('pool-merkle'), pool.toBuffer()],
+    PROGRAM_ID
+  );
+
   // Derive deposit PDA (leaf_count is u64 = 8 bytes)
   const leafIndexBuffer = Buffer.alloc(8);
   leafIndexBuffer.writeBigUInt64LE(BigInt(leafIndex));
@@ -200,13 +206,16 @@ export async function buildDepositTransaction(
   // If wrapSol=false for WSOL pool, user is depositing existing WSOL directly
   
   // Add deposit instruction
+  // Account order must match on-chain Deposit struct:
+  // pool, pool_merkle, deposit, vault, depositor, depositor_token, token_program, system_program
   const ix = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
       { pubkey: pool, isSigner: false, isWritable: true },
+      { pubkey: poolMerklePda, isSigner: false, isWritable: true },
       { pubkey: depositPda, isSigner: false, isWritable: true },
       { pubkey: poolInfo.vault, isSigner: false, isWritable: true },
-      { pubkey: depositor, isSigner: true, isWritable: true },  // depositor BEFORE depositor_token
+      { pubkey: depositor, isSigner: true, isWritable: true },
       { pubkey: userAta, isSigner: false, isWritable: true },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false },

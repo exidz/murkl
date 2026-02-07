@@ -1096,15 +1096,28 @@ app.post('/claim', claimLimiter, async (req: Request, res: Response) => {
     // recipient is already the ATA address (recipientTokenAccount from request)
     const recipientAta = recipient;
     
-    // Check if recipient ATA exists (it should already exist, provided by client)
+    // Check if recipient ATA exists; create it if missing (relayer pays rent).
     const ataInfo = await connection.getAccountInfo(recipientAta);
     const claimTx = new Transaction();
     
     if (!ataInfo) {
-      // If ATA doesn't exist, we can't create it without knowing the wallet owner
-      // Client should provide an existing ATA
-      log('error', 'Recipient ATA does not exist', { requestId, recipientAta: recipientAta.toBase58() });
-      return res.status(400).json({ error: 'Recipient token account does not exist. Please create it first.' });
+      // Derive the wallet owner from the request (or from the ATA address).
+      // The frontend sends `recipientWallet` alongside `recipientTokenAccount`.
+      const recipientWalletStr = req.body.recipientWallet;
+      if (!recipientWalletStr || !isValidBase58(recipientWalletStr)) {
+        log('error', 'Recipient ATA does not exist and no wallet provided', { requestId, recipientAta: recipientAta.toBase58() });
+        return res.status(400).json({ error: 'Recipient token account does not exist. Provide recipientWallet to auto-create.' });
+      }
+      const recipientWallet = new PublicKey(recipientWalletStr);
+      log('info', 'Creating recipient ATA', { requestId, wallet: recipientWallet.toBase58().slice(0, 8), mint: tokenMint.toBase58().slice(0, 8) });
+      claimTx.add(
+        createAssociatedTokenAccountInstruction(
+          relayerKeypair.publicKey,
+          recipientAta,
+          recipientWallet,
+          tokenMint
+        )
+      );
     }
     
     const relayerAta = await getAssociatedTokenAddress(tokenMint, relayerKeypair.publicKey);

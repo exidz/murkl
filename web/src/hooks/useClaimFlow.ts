@@ -146,6 +146,7 @@ export function useClaimFlow(wasmReady: boolean) {
           commitment: proofResult.commitment,
           nullifier: proofResult.nullifier,
           recipientTokenAccount: recipientATA.toBase58(),
+          recipientWallet: publicKey.toBase58(),
           poolAddress,
           leafIndex: params.leafIndex,
           feeBps: 50,
